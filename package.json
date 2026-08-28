@@ -2,6 +2,9 @@
   "name": "fenice-fleet-control",
   "version": "1.0.0",
   "private": true,
+  "engines": {
+    "node": ">=20.11 <25"
+  },
   "description": "Fenice Fleet Control - Plataforma de control GPS y gestion logistica para Fenice SpA",
   "scripts": {
     "predev": "node scripts/clean-stale-build.mjs",
