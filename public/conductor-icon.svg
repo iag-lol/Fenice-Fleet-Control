@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192" role="img" aria-label="Fenice Mi ruta">
+  <rect width="192" height="192" rx="42" fill="#0b5c75"/>
+  <path d="M40 118h14a14 14 0 0 0 28 0h28a14 14 0 0 0 28 0h14V86l-18-24h-30V62H40z" fill="#ffffff"/>
+  <circle cx="68" cy="118" r="9" fill="#0b5c75"/>
+  <circle cx="124" cy="118" r="9" fill="#0b5c75"/>
+</svg>

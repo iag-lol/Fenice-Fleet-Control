@@ -1,0 +1,262 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/**
+ * Sistema visual de Fenice Fleet Control.
+ *
+ * Superficie clara empresarial: fondo neutro frio, tarjetas blancas y azul
+ * marino para el texto. La jerarquia la dan la elevacion y el espacio, no el
+ * color de fondo. Los acentos azul/cyan se reservan para datos vivos y
+ * acciones; el color plano nunca decora.
+ */
+
+:root {
+  --font-sans: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+
+  /* Superficies, de la mas clara (fondo de pagina) a la mas contrastada. */
+  --surface-950: #eef2f7;
+  --surface-900: #ffffff;
+  --surface-850: #ffffff;
+  --surface-800: #f4f7fa;
+  --surface-750: #e9eef5;
+  --surface-700: #dbe3ec;
+
+  --line: #e2e8f0;
+  --line-strong: #cbd5e1;
+
+  /* Texto: principal, secundario y terciario. */
+  --ink: #0f1c2e;
+  --ink-muted: #475569;
+  --ink-faint: #5b6a7e;
+
+  --brand-300: #4fc7de;
+  --brand-400: #22aecb;
+  --brand-500: #0d90ae;
+  --brand-700: #0b5c75;
+
+  /* Estados, ajustados para contrastar sobre blanco. */
+  --status-active: #15803d;
+  --status-warning: #b45309;
+  --status-dormant: #dc2626;
+  --status-offline: #64748b;
+  --status-moving: #0e7490;
+
+  /* Velo de los paneles modales: oscuro incluso en tema claro. */
+  --overlay: rgba(15, 28, 46, 0.45);
+
+  /* Elevacion: en tema claro la jerarquia la da la sombra, no el borde. */
+  --shadow-card: 0 1px 2px rgba(15, 28, 46, 0.04), 0 1px 3px rgba(15, 28, 46, 0.06);
+  --shadow-float: 0 4px 12px rgba(15, 28, 46, 0.08), 0 2px 4px rgba(15, 28, 46, 0.05);
+  --shadow-panel: 0 10px 30px rgba(15, 28, 46, 0.14), 0 3px 8px rgba(15, 28, 46, 0.08);
+
+  /* Altura real del viewport en movil, corregida por el shell. */
+  --app-vh: 100vh;
+  color-scheme: light;
+}
+
+* {
+  border-color: var(--line);
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  background-color: var(--surface-950);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  /* Ningun layout debe generar scroll horizontal, en ningun ancho. */
+  overflow-x: hidden;
+}
+
+/* --- Scrollbars discretos, coherentes con la superficie ------------------ */
+@supports (scrollbar-width: thin) {
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: #c2ccd9 transparent;
+  }
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background-color: #c2ccd9;
+  border-radius: 999px;
+  border: 3px solid transparent;
+  background-clip: content-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background-color: #a4b2c4;
+  background-clip: content-box;
+}
+
+/* --- Accesibilidad ------------------------------------------------------- */
+:focus-visible {
+  outline: 2px solid var(--brand-500);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* --- Utilidades del shell ------------------------------------------------ */
+@layer utilities {
+  /* Respeta notch e isla dinamica en iOS. */
+  .safe-top {
+    padding-top: env(safe-area-inset-top, 0px);
+  }
+  .safe-bottom {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  .safe-x {
+    padding-left: env(safe-area-inset-left, 0px);
+    padding-right: env(safe-area-inset-right, 0px);
+  }
+
+  /* Altura de aplicacion: evita el salto por la barra de URL en movil. */
+  .h-app {
+    height: var(--app-vh);
+  }
+  .min-h-app {
+    min-height: var(--app-vh);
+  }
+
+  /* Objetivo tactil minimo de 44 px exigido en movil. */
+  .tap {
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  .numeric {
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.01em;
+  }
+
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+}
+
+@layer components {
+  .panel {
+    @apply rounded-lg border border-line bg-surface-850;
+    box-shadow: var(--shadow-card);
+  }
+
+  .panel-header {
+    @apply flex items-center justify-between gap-3 border-b border-line px-4 py-3;
+  }
+
+  .field-label {
+    @apply mb-1.5 block text-2xs font-semibold uppercase tracking-wider text-ink-faint;
+  }
+
+  .skeleton {
+    @apply relative overflow-hidden rounded bg-surface-750;
+  }
+  .skeleton::after {
+    content: '';
+    @apply absolute inset-0 -translate-x-full;
+    background-image: linear-gradient(
+      90deg,
+      transparent,
+      rgba(255, 255, 255, 0.7),
+      transparent
+    );
+    animation: shimmer 1.6s infinite;
+  }
+
+  /* Elevacion reutilizable para tarjetas y superficies flotantes. */
+  .elevated {
+    box-shadow: var(--shadow-card);
+  }
+  .floating {
+    box-shadow: var(--shadow-float);
+  }
+}
+
+@keyframes shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+/* --- MapLibre: integracion con el sistema visual -------------------------- */
+.maplibregl-map {
+  font-family: var(--font-sans);
+}
+
+.maplibregl-ctrl-group {
+  background: rgba(255, 255, 255, 0.96) !important;
+  border: 1px solid var(--line-strong) !important;
+  border-radius: 8px !important;
+  box-shadow: var(--shadow-float) !important;
+  backdrop-filter: blur(8px);
+}
+
+.maplibregl-ctrl-group button {
+  width: 34px !important;
+  height: 34px !important;
+}
+
+/* En movil los controles del mapa se usan con el pulgar, muchas veces con el
+   telefono en una mano dentro de la cabina: 44 px es el minimo utilizable. */
+@media (max-width: 639px) {
+  .maplibregl-ctrl-group button {
+    width: 44px !important;
+    height: 44px !important;
+  }
+}
+
+.maplibregl-ctrl-group button + button {
+  border-top: 1px solid var(--line) !important;
+}
+
+/* Los iconos nativos de MapLibre ya son oscuros: no se invierten. */
+
+.maplibregl-ctrl-attrib {
+  background: rgba(255, 255, 255, 0.82) !important;
+  border-radius: 6px 0 0 0 !important;
+  font-size: 10px !important;
+}
+
+.maplibregl-ctrl-attrib a {
+  color: var(--ink-faint) !important;
+}
+
+.maplibregl-popup-content {
+  background: transparent !important;
+  padding: 0 !important;
+  box-shadow: none !important;
+}
+
+.maplibregl-popup-tip {
+  display: none !important;
+}
+
+.maplibregl-canvas:focus {
+  outline: none;
+}

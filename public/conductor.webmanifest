@@ -1,0 +1,16 @@
+{
+  "name": "Fenice · Mi ruta",
+  "short_name": "Mi ruta",
+  "description": "Paradas, carga y entregas de la jornada.",
+  "start_url": "/conductor/",
+  "scope": "/conductor/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#eef2f7",
+  "theme_color": "#0b5c75",
+  "lang": "es-CL",
+  "icons": [
+    { "src": "/conductor-icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "/conductor-icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "maskable" }
+  ]
+}

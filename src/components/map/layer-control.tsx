@@ -1,0 +1,138 @@
+'use client';
+
+import {
+  AlertTriangle,
+  Building2,
+  Flame,
+  Layers,
+  Landmark,
+  Package,
+  Route as RouteIcon,
+  Shield,
+  Truck,
+} from 'lucide-react';
+import { useState } from 'react';
+
+import { Badge } from '@/components/ui/badge';
+import { Select } from '@/components/ui/input';
+import { cn } from '@/lib/cn';
+import { useMapStore, type MapLayerId } from '@/stores/map-store';
+import type { HeatmapMode } from '@/types/views';
+
+const LAYERS: { id: MapLayerId; label: string; icon: typeof Truck; hint: string }[] = [
+  { id: 'camiones', label: 'Camiones', icon: Truck, hint: 'Posicion y estado de la flota' },
+  { id: 'clientes', label: 'Clientes', icon: Building2, hint: 'Pines por estado comercial' },
+  { id: 'rutas', label: 'Rutas', icon: RouteIcon, hint: 'Planificada, ejecutada y paradas' },
+  { id: 'geocercas', label: 'Geocercas', icon: Shield, hint: 'Perimetros de entrega y zonas' },
+  { id: 'calor', label: 'Mapa de calor', icon: Flame, hint: 'Concentracion territorial' },
+  { id: 'pedidos', label: 'Pedidos pendientes', icon: Package, hint: 'OT sin entregar' },
+  { id: 'alertas', label: 'Alertas', icon: AlertTriangle, hint: 'Incidencias georreferenciadas' },
+  { id: 'comunas', label: 'Comunas', icon: Landmark, hint: 'Limites administrativos' },
+];
+
+const HEATMAP_OPTIONS: { value: HeatmapMode; label: string }[] = [
+  { value: 'clients', label: 'Concentracion de clientes' },
+  { value: 'orders', label: 'Concentracion de pedidos' },
+  { value: 'visits', label: 'Concentracion de visitas' },
+  { value: 'dormant', label: 'Concentracion de clientes dormidos' },
+];
+
+/** Selector de capas. Permite combinar libremente todas las capas del mapa. */
+export function LayerControl({ inline }: { inline?: boolean }) {
+  const layers = useMapStore((s) => s.layers);
+  const toggleLayer = useMapStore((s) => s.toggleLayer);
+  const heatmapMode = useMapStore((s) => s.heatmapMode);
+  const setHeatmapMode = useMapStore((s) => s.setHeatmapMode);
+
+  const activeCount = Object.values(layers).filter(Boolean).length;
+  const [open, setOpen] = useState(inline ?? false);
+
+  const body = (
+    <div className="space-y-2">
+      <ul className="space-y-0.5">
+        {LAYERS.map((layer) => {
+          const Icon = layer.icon;
+          const enabled = layers[layer.id];
+
+          return (
+            <li key={layer.id}>
+              <button
+                type="button"
+                onClick={() => toggleLayer(layer.id)}
+                role="switch"
+                aria-checked={enabled}
+                className={cn(
+                  'flex w-full items-center gap-2.5 rounded-md px-2 py-2 text-left transition-colors',
+                  enabled ? 'bg-brand-500/12 text-ink' : 'text-ink-muted hover:bg-surface-800',
+                )}
+              >
+                <Icon className={cn('h-4 w-4 shrink-0', enabled ? 'text-brand-700' : 'text-ink-faint')} />
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-[13px]">{layer.label}</span>
+                  <span className="block truncate text-2xs text-ink-faint">{layer.hint}</span>
+                </span>
+                <span
+                  className={cn(
+                    'flex h-4 w-7 shrink-0 items-center rounded-full p-0.5 transition-colors',
+                    enabled ? 'bg-brand-500' : 'bg-surface-700',
+                  )}
+                >
+                  <span
+                    className={cn(
+                      'h-3 w-3 rounded-full bg-white transition-transform',
+                      enabled && 'translate-x-3',
+                    )}
+                  />
+                </span>
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+
+      {layers.calor ? (
+        <div className="border-t border-line pt-2">
+          <label className="field-label">Modo del mapa de calor</label>
+          <Select
+            value={heatmapMode}
+            onChange={(event) => setHeatmapMode(event.target.value as HeatmapMode)}
+            options={HEATMAP_OPTIONS}
+          />
+        </div>
+      ) : null}
+    </div>
+  );
+
+  if (inline) return body;
+
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((value) => !value)}
+        aria-expanded={open}
+        className="tap flex items-center gap-2 rounded-md border border-line-strong bg-surface-900/95 px-3 text-[13px] text-ink shadow-float backdrop-blur transition-colors hover:border-brand-500 sm:h-9 sm:min-h-0"
+      >
+        <Layers className="h-4 w-4 text-brand-700" />
+        <span className="hidden sm:inline">Capas</span>
+        <Badge tone="brand" size="sm">
+          {activeCount}
+        </Badge>
+      </button>
+
+      {open ? (
+        <>
+          <button
+            type="button"
+            aria-label="Cerrar capas"
+            className="fixed inset-0 z-10 cursor-default"
+            onClick={() => setOpen(false)}
+          />
+          <div className="absolute right-0 top-full z-20 mt-2 w-[280px] animate-slide-up rounded-lg border border-line-strong bg-surface-900/98 p-2 shadow-panel backdrop-blur">
+            {body}
+          </div>
+        </>
+      ) : null}
+    </div>
+  );
+}

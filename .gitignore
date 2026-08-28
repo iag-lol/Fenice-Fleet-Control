@@ -1,0 +1,16 @@
+# Dependencias
+node_modules/
+
+# Build de Next
+.next/
+out/
+*.tsbuildinfo
+
+# Entorno: NUNCA subir credenciales de Traccar ni de la base de Fenice
+.env
+.env.local
+.env*.local
+
+# Sistema
+.DS_Store
+*.log
