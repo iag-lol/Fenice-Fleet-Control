@@ -263,16 +263,30 @@ export function GeofenceEditorView() {
               </>
             ) : null}
 
-            <p className="ml-auto text-2xs text-ink-faint">
+            {/*
+              Guia paso a paso. En un telefono no hay puntero que sobrevuele
+              el mapa, asi que entre el primer toque y el segundo no ocurre
+              nada visible: sin esta indicacion el dibujo parece averiado.
+            */}
+            <p
+              className={cn(
+                'w-full text-xs sm:ml-auto sm:w-auto sm:text-2xs',
+                drawing.mode === 'none' ? 'text-ink-faint' : 'font-medium text-brand-700',
+              )}
+            >
               {drawing.mode === 'circle'
-                ? drawing.draftRadius === null
-                  ? 'Pulsa el centro de la geocerca'
-                  : `Radio ${formatDistance(drawing.draftRadius)} — pulsa para confirmar`
+                ? drawing.draftRadius !== null
+                  ? `Radio ${formatDistance(drawing.draftRadius)} — toca para confirmar`
+                  : drawing.centerPlaced
+                    ? 'Centro fijado. Toca donde termina el radio.'
+                    : 'Paso 1: toca el centro de la geocerca'
                 : drawing.mode === 'polygon'
-                  ? `${drawing.draftVertexCount} vertice(s) — doble clic para cerrar`
+                  ? drawing.draftVertexCount === 0
+                    ? 'Paso 1: toca cada esquina del perimetro'
+                    : `${drawing.draftVertexCount} vertice(s) — pulsa "Cerrar" al terminar`
                   : drawing.geometry
-                    ? 'Geometria lista'
-                    : 'Elige un modo de dibujo'}
+                    ? 'Geometria lista. Ponle nombre y guardala.'
+                    : 'Elige Circular o Poligonal para empezar a dibujar'}
             </p>
           </div>
 

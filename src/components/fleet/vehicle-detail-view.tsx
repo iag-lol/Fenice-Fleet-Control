@@ -205,6 +205,7 @@ export function VehicleDetailView({ vehicleId }: { vehicleId: string }) {
               <ErrorBoundary section="el mapa del vehiculo">
                 <FleetMap
                   className="absolute inset-0"
+                  autoFit
                     layerOverride={{ camiones: true, rutas: true, clientes: false, geocercas: false, calor: false, pedidos: false, alertas: false, comunas: false }}
                   minimalControls={false}
                   vehicles={[

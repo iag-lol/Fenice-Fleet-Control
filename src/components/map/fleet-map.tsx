@@ -83,6 +83,17 @@ export interface FleetMapProps {
    * para que el consumidor sepa CUANDO puede empezar a usarla.
    */
   onMapReady?: (map: MapLibreMap) => void;
+  /**
+   * Encuadra el mapa sobre su contenido al cargarlo.
+   *
+   * Los mapas embebidos (ficha de vehiculo, de ruta, reproduccion) abrian en
+   * la vista general de Santiago, donde un solo camion es un punto de dos
+   * pixeles perdido entre calles: parecia que no se dibujaba. Con esto el
+   * mapa empieza mirando lo que tiene que mostrar.
+   *
+   * NO se aplica al mapa operacional, cuya vista general es intencionada.
+   */
+  autoFit?: boolean;
 }
 
 interface AnimatedVehicle {
@@ -101,6 +112,7 @@ function lerpAngle(from: number, to: number, t: number): number {
 }
 
 export function FleetMap({
+  autoFit = false,
   vehicles,
   clients,
   routes,
@@ -183,6 +195,29 @@ export function FleetMap({
     };
 
     map.on('load', onLoad);
+
+    /**
+     * El gesto del operador manda sobre el seguimiento automatico.
+     *
+     * Mientras se sigue a un camion la camara se reposiciona en cada cuadro.
+     * Sin esto, arrastrar el mapa era imposible: la vista volvia sola al
+     * vehiculo y parecia que el mapa estaba bloqueado. En cuanto el operador
+     * mueve, hace zoom o gira, se suelta el seguimiento y el mapa vuelve a
+     * ser suyo.
+     *
+     * Se comprueba `originalEvent` para distinguir el gesto humano de los
+     * desplazamientos que provoca el propio seguimiento.
+     */
+    const soltarSeguimiento = (event: { originalEvent?: unknown }): void => {
+      if (!event.originalEvent) return;
+      if (useMapStore.getState().followingVehicleId === null) return;
+      useMapStore.getState().followVehicle(null);
+    };
+
+    map.on('dragstart', soltarSeguimiento);
+    map.on('zoomstart', soltarSeguimiento);
+    map.on('rotatestart', soltarSeguimiento);
+
     map.on('error', (event) => {
       // Un tile que falla no debe romper el mapa; solo se registra.
       console.warn('[mapa]', event.error?.message ?? 'error desconocido');
@@ -563,6 +598,57 @@ export function FleetMap({
       effectiveLayers.comunas,
     );
   }, [ready, effectiveLayers]);
+
+  /**
+   * Encuadre inicial sobre el contenido.
+   *
+   * Se ejecuta UNA sola vez, cuando llega el primer contenido con coordenadas.
+   * Reencuadrar en cada actualizacion pelearia con el operador: bastaria que
+   * el camion se moviera para que el mapa saltara mientras se intenta mirar
+   * otra cosa.
+   */
+  const autoFitDone = useRef(false);
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !ready || !autoFit || autoFitDone.current) return;
+
+    const puntos: [number, number][] = [];
+    for (const vehicle of vehicles) {
+      if (vehicle.position) puntos.push([vehicle.position.lng, vehicle.position.lat]);
+    }
+    for (const route of routes) {
+      for (const p of route.plannedPath) puntos.push([p.lng, p.lat]);
+      for (const stop of route.stops) puntos.push([stop.lng, stop.lat]);
+    }
+    for (const client of clients) puntos.push([client.lng, client.lat]);
+    if (puntos.length === 0) return;
+
+    autoFitDone.current = true;
+
+    // Un solo punto no tiene extension: se centra a un zoom de calle, que es
+    // lo util para ver donde esta exactamente un camion.
+    if (puntos.length === 1) {
+      map.jumpTo({ center: puntos[0]!, zoom: 15 });
+      return;
+    }
+
+    let [oeste, sur] = puntos[0]!;
+    let [este, norte] = puntos[0]!;
+    for (const [lng, lat] of puntos) {
+      oeste = Math.min(oeste, lng);
+      este = Math.max(este, lng);
+      sur = Math.min(sur, lat);
+      norte = Math.max(norte, lat);
+    }
+
+    map.fitBounds(
+      [
+        [oeste, sur],
+        [este, norte],
+      ],
+      { padding: 64, maxZoom: 15.5, duration: 0 },
+    );
+  }, [ready, autoFit, vehicles, routes, clients]);
 
   // --- Encuadre solicitado -------------------------------------------------
   useEffect(() => {

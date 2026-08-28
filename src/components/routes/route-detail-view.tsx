@@ -141,6 +141,7 @@ export function RouteDetailView({ routeId }: { routeId: string }) {
             <div className="relative h-[380px] sm:h-[480px]">
               <ErrorBoundary section="el mapa de la ruta">
                 <FleetMap
+                  autoFit
                   className="absolute inset-0"
                     layerOverride={{ rutas: true, camiones: true, clientes: false, geocercas: false, calor: false, pedidos: false, alertas: false, comunas: false }}
                   vehicles={

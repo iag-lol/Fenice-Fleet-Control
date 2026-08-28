@@ -34,6 +34,15 @@ export interface GeofenceDrawingState {
   geometry: GeofenceGeometry | null;
   /** Radio en curso, en metros, mientras se dibuja un circulo. */
   draftRadius: number | null;
+  /**
+   * `true` cuando ya se fijo el centro y falta el radio.
+   *
+   * En un telefono no hay puntero que sobrevuele el mapa, asi que el radio no
+   * se previsualiza al mover: entre el primer toque y el segundo no ocurria
+   * NADA en pantalla y parecia que el dibujo no funcionaba. Este indicador
+   * permite decirle al operador en que paso esta.
+   */
+  centerPlaced: boolean;
   /** Vertices colocados mientras se dibuja un poligono. */
   draftVertexCount: number;
   startCircle: () => void;
@@ -53,6 +62,7 @@ export function useGeofenceDrawing(map: MapLibreMap | null): GeofenceDrawingStat
   const [mode, setMode] = useState<DrawingMode>('none');
   const [geometry, setGeometry] = useState<GeofenceGeometry | null>(null);
   const [draftRadius, setDraftRadius] = useState<number | null>(null);
+  const [centerPlaced, setCenterPlaced] = useState(false);
   const [draftVertexCount, setDraftVertexCount] = useState(0);
 
   const centerRef = useRef<LatLng | null>(null);
@@ -152,6 +162,7 @@ export function useGeofenceDrawing(map: MapLibreMap | null): GeofenceDrawingStat
       if (modeRef.current === 'circle') {
         if (centerRef.current === null) {
           centerRef.current = point;
+          setCenterPlaced(true);
           paint(null, [point]);
           return;
         }
@@ -167,6 +178,7 @@ export function useGeofenceDrawing(map: MapLibreMap | null): GeofenceDrawingStat
         setDraftRadius(radius);
         paint(shape, [centerRef.current]);
         setMode('none');
+        setCenterPlaced(false);
         centerRef.current = null;
         return;
       }
@@ -224,12 +236,14 @@ export function useGeofenceDrawing(map: MapLibreMap | null): GeofenceDrawingStat
     verticesRef.current = [];
     setDraftRadius(null);
     setDraftVertexCount(0);
+    setCenterPlaced(false);
   }, []);
 
   return {
     mode,
     geometry,
     draftRadius,
+    centerPlaced,
     draftVertexCount,
 
     startCircle: useCallback(() => {

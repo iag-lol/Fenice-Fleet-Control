@@ -173,6 +173,7 @@ export function RouteReplay({
         <ErrorBoundary section="la reproduccion de la ruta">
           <FleetMap
             className="absolute inset-0"
+            autoFit
             minimalControls
             layerOverride={{
               rutas: true,

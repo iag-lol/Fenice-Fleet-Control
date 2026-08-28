@@ -96,6 +96,26 @@ interface MapState {
   highlightRoute: (routeId: string | null) => void;
 
   /**
+   * Aislar en el mapa lo que se esta mirando.
+   *
+   * Con un vehiculo o una ruta enfocados, el resto de la flota y de la
+   * cartera se oculta. Un mapa con todo encima sirve para vigilar; para
+   * mirar UNA cosa, estorba. Se puede desactivar desde el propio mapa, para
+   * que nunca sea una desaparicion inexplicable.
+   */
+  isolate: boolean;
+  setIsolate: (isolate: boolean) => void;
+
+  /**
+   * Comuna a la que se restringe la vista.
+   *
+   * Distinta de `inspectedCommuneCode`: consultar una comuna no obliga a
+   * ocultar el resto del territorio, pero se puede pedir que si.
+   */
+  scopedCommuneCode: string | null;
+  scopeToCommune: (code: string | null) => void;
+
+  /**
    * Comuna abierta en el panel territorial.
    *
    * Distinta del filtro: se puede consultar una comuna sin restringir la
@@ -167,6 +187,21 @@ export const useMapStore = create<MapState>((set, get) => ({
 
   highlightedRouteId: null,
   highlightRoute: (routeId) => set({ highlightedRouteId: routeId }),
+
+  isolate: true,
+  setIsolate: (isolate) => set({ isolate }),
+
+  scopedCommuneCode: null,
+  scopeToCommune: (code) =>
+    set({
+      scopedCommuneCode: code,
+      // Enfocar una comuna abre tambien su ficha: son la misma intencion.
+      inspectedCommuneCode: code,
+      // Y libera cualquier aislamiento previo, que competiria con este.
+      selection: null,
+      followingVehicleId: null,
+      highlightedRouteId: null,
+    }),
 
   inspectedCommuneCode: null,
   inspectCommune: (code) => set({ inspectedCommuneCode: code }),

@@ -3,7 +3,9 @@
 import type { ReactNode } from 'react';
 
 import { Header } from '@/components/shell/header';
-import { MobileTabBar } from '@/components/shell/mobile-nav';
+import { MobileMenuSheet, MobileTabBar } from '@/components/shell/mobile-nav';
+import { PwaProvider } from '@/components/shell/pwa-provider';
+import { AlertToasts } from '@/features/medium/notifications/alert-toasts';
 import { Sidebar } from '@/components/shell/sidebar';
 import { useAppHeight } from '@/hooks/use-app-height';
 import { cn } from '@/lib/cn';
@@ -40,6 +42,13 @@ export function AppShell({ children, fullBleed }: AppShellProps) {
       </div>
 
       <MobileTabBar />
+      <MobileMenuSheet />
+
+      {/* Avisos: flotantes dentro de la aplicacion y, con permiso, del
+          sistema operativo. Se montan aqui para que lleguen en cualquier
+          pantalla, no solo en el centro de alertas. */}
+      <AlertToasts />
+      <PwaProvider />
     </div>
   );
 }

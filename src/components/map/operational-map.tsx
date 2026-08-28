@@ -11,10 +11,17 @@ import {
   Package,
   Target,
   Truck,
-  X,
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
+import {
+  isScoped,
+  scopePoints,
+  scopeRoutes,
+  scopeVehicles,
+  type ScopeInput,
+} from '@/lib/engines/map-scope';
+import { FocusBanner } from '@/components/map/focus-banner';
 import { ClientFiltersPanel, applyClientFilters } from '@/components/map/client-filters-panel';
 import { CommunePanel, type CommuneWithSummary } from '@/components/map/commune-panel';
 import { ClientPanel } from '@/components/map/client-panel';
@@ -68,6 +75,9 @@ export function OperationalMap() {
   const highlightRoute = useMapStore((s) => s.highlightRoute);
   const inspectedCommuneCode = useMapStore((s) => s.inspectedCommuneCode);
   const inspectCommune = useMapStore((s) => s.inspectCommune);
+  const isolate = useMapStore((s) => s.isolate);
+  const scopedCommuneCode = useMapStore((s) => s.scopedCommuneCode);
+  const scopeToCommune = useMapStore((s) => s.scopeToCommune);
 
   const {
     data: snapshot,
@@ -145,6 +155,46 @@ export function OperationalMap() {
       position: positions.get(v.vehicle.id) ?? v.position,
     }));
   }, [snapshot, positions]);
+
+  /**
+   * Enfoque activo.
+   *
+   * Concentra el mapa en lo que el operador esta mirando. Se puede apagar
+   * desde el propio mapa, para que nunca sea una desaparicion inexplicable.
+   */
+  const scope: ScopeInput = useMemo(() => {
+    if (!isolate) {
+      return { vehicleId: null, routeId: null, communeBoundary: null };
+    }
+    const comuna = scopedCommuneCode
+      ? (communesData?.communes.find((c) => c.code === scopedCommuneCode) ?? null)
+      : null;
+
+    return {
+      vehicleId: currentSelection?.type === 'vehicle' ? currentSelection.id : null,
+      routeId: highlightedRouteId,
+      communeBoundary: comuna?.boundary ?? null,
+    };
+  }, [isolate, scopedCommuneCode, communesData, currentSelection, highlightedRouteId]);
+
+  const scopeActivo = isScoped(scope);
+
+  const routesEnfocadas = useMemo(
+    () => (snapshot ? scopeRoutes(snapshot.routes, scope) : []),
+    [snapshot, scope],
+  );
+  const vehiculosEnfocados = useMemo(
+    () => scopeVehicles(vehicles, scope, snapshot?.routes ?? []),
+    [vehicles, scope, snapshot],
+  );
+  const clientesEnfocados = useMemo(
+    () => scopePoints(visibleClients, scope, snapshot?.routes ?? []),
+    [visibleClients, scope, snapshot],
+  );
+  const pedidosEnfocados = useMemo(
+    () => scopePoints(snapshot?.pendingWorkOrders ?? [], scope, snapshot?.routes ?? []),
+    [snapshot, scope],
+  );
 
   const heatmapPoints = useMemo(() => {
     if (!territory) return [];
@@ -227,12 +277,12 @@ export function OperationalMap() {
         <ErrorBoundary section="el mapa operacional">
           <FleetMap
             className="absolute inset-0"
-            vehicles={layers.camiones ? vehicles : []}
-            clients={visibleClients}
-            routes={snapshot.routes}
+            vehicles={layers.camiones ? vehiculosEnfocados : []}
+            clients={clientesEnfocados}
+            routes={routesEnfocadas}
             geofences={snapshot.geofences}
             alerts={snapshot.alerts}
-            workOrders={snapshot.pendingWorkOrders}
+            workOrders={pedidosEnfocados}
             communes={communeFeatures}
             heatmapPoints={heatmapPoints}
             onSelectVehicle={openDetail}
@@ -243,10 +293,16 @@ export function OperationalMap() {
         </ErrorBoundary>
       )}
 
-      {/* --- Barra superior de controles --- */}
-      <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex items-start justify-between gap-2 p-2.5 sm:p-3">
-        <div className="pointer-events-auto flex flex-wrap items-center gap-2">
-          <div className="flex items-center gap-2 whitespace-nowrap rounded-md border border-line-strong bg-surface-900/95 px-2.5 py-1.5 text-2xs shadow-float backdrop-blur">
+      {/*
+        --- Barra superior de controles ---
+
+        En movil se apila: el resumen de flota arriba y los controles debajo.
+        En una sola fila, el resumen y los cuatro botones sumaban mas de 390 px
+        y el ultimo control quedaba cortado fuera de la pantalla.
+      */}
+      <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex flex-col items-start gap-2 p-2.5 sm:flex-row sm:items-start sm:justify-between sm:p-3">
+        <div className="pointer-events-auto flex max-w-full flex-wrap items-center gap-2">
+          <div className="flex items-center gap-1.5 whitespace-nowrap rounded-md border border-line-strong bg-surface-900/95 px-2.5 py-1.5 text-2xs shadow-float backdrop-blur sm:gap-2">
             <Truck className="h-3.5 w-3.5 text-brand-700" />
             <span className="numeric font-medium text-ink">{vehicleCounts.enRuta}</span>
             <span className="text-ink-faint">en ruta</span>
@@ -323,23 +379,37 @@ export function OperationalMap() {
         </div>
       ) : null}
 
-      {/* --- Ruta resaltada --- */}
-      {highlightedRouteId ? (
-        <div className="pointer-events-auto absolute bottom-24 left-2.5 z-10 flex items-center gap-2 rounded-md border border-brand-500/40 bg-surface-900/95 px-3 py-2 text-xs shadow-float backdrop-blur sm:bottom-4">
-          <span className="text-ink-muted">
-            Ruta resaltada:{' '}
-            <span className="numeric font-medium text-brand-700">
-              {snapshot?.routes.find((r) => r.routeId === highlightedRouteId)?.code ?? highlightedRouteId}
-            </span>
-          </span>
-          <button
-            type="button"
-            onClick={() => highlightRoute(null)}
-            aria-label="Quitar resaltado de ruta"
-            className="rounded p-0.5 text-ink-faint hover:bg-surface-800 hover:text-ink"
-          >
-            <X className="h-3.5 w-3.5" />
-          </button>
+      {/* --- Que se esta mirando --- */}
+      {scopeActivo || currentSelection?.type === 'vehicle' || highlightedRouteId || scopedCommuneCode ? (
+        <div className="absolute bottom-24 left-2.5 z-20 sm:bottom-4">
+          <FocusBanner
+            vehiclePlate={
+              currentSelection?.type === 'vehicle'
+                ? (vehicles.find((v) => v.vehicleId === currentSelection.id)?.plate ?? null)
+                : null
+            }
+            routeCode={
+              highlightedRouteId
+                ? (snapshot?.routes.find((r) => r.routeId === highlightedRouteId)?.code ??
+                  highlightedRouteId)
+                : null
+            }
+            communeName={
+              scopedCommuneCode
+                ? (communesData?.communes.find((c) => c.code === scopedCommuneCode)?.name ?? null)
+                : null
+            }
+            hiddenCount={
+              Math.max(0, vehicles.length - vehiculosEnfocados.length) +
+              Math.max(0, visibleClients.length - clientesEnfocados.length)
+            }
+            onClearVehicle={() => {
+              selection(null);
+              followVehicle(null);
+            }}
+            onClearRoute={() => highlightRoute(null)}
+            onClearCommune={() => scopeToCommune(null)}
+          />
         </div>
       ) : null}
 

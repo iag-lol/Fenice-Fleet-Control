@@ -1,6 +1,6 @@
 'use client';
 
-import { AlertTriangle, Building2, Filter, Package, Truck, X } from 'lucide-react';
+import { AlertTriangle, Building2, Eye, EyeOff, Filter, Package, Truck, X } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
 import { Stat } from '@/components/common/kpi';
@@ -36,9 +36,12 @@ export function CommunePanel({
   const filters = useMapStore((s) => s.filters);
   const setFilters = useMapStore((s) => s.setFilters);
   const focusOn = useMapStore((s) => s.focusOn);
+  const scopedCommuneCode = useMapStore((s) => s.scopedCommuneCode);
+  const scopeToCommune = useMapStore((s) => s.scopeToCommune);
 
   const summary = commune.summary;
   const isFiltered = filters.communeCodes.includes(commune.code);
+  const enfocada = scopedCommuneCode === commune.code;
 
   const toggleFilter = (): void => {
     setFilters({
@@ -142,7 +145,28 @@ export function CommunePanel({
         </>
       )}
 
-      <div className="grid grid-cols-2 gap-2 p-3">
+      <div className="space-y-2 p-3">
+        {/*
+          Enfocar la comuna deja en el mapa SOLO lo que hay dentro de su
+          limite oficial: clientes, ordenes de trabajo, vehiculos y rutas. Se
+          resuelve por geometria, no por el codigo de comuna guardado en cada
+          ficha, para que un vehiculo en movimiento cuente donde esta de
+          verdad y no donde estaba asignado.
+        */}
+        <Button
+          block
+          size="sm"
+          variant={enfocada ? 'primary' : 'secondary'}
+          icon={enfocada ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+          onClick={() => {
+            scopeToCommune(enfocada ? null : commune.code);
+            if (!enfocada) focusOn(commune.center, 12);
+          }}
+        >
+          {enfocada ? 'Dejar de ver solo esta comuna' : 'Ver solo esta comuna'}
+        </Button>
+
+      <div className="grid grid-cols-2 gap-2">
         <Button
           size="sm"
           variant={isFiltered ? 'primary' : 'secondary'}
@@ -162,6 +186,7 @@ export function CommunePanel({
         >
           Ver detalle
         </Button>
+      </div>
       </div>
     </div>
   );

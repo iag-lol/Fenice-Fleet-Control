@@ -13,10 +13,24 @@ export const metadata: Metadata = {
   applicationName: 'Fenice Fleet Control',
   // La plataforma es de uso interno: no debe indexarse.
   robots: { index: false, follow: false },
+  // Instalable como aplicacion en telefono y en escritorio.
+  manifest: '/app.webmanifest',
+  appleWebApp: {
+    capable: true,
+    title: 'Fenice',
+    statusBarStyle: 'default',
+  },
+  icons: {
+    icon: [
+      { url: '/icon.svg', type: 'image/svg+xml' },
+      { url: '/icon-192.png', sizes: '192x192', type: 'image/png' },
+    ],
+    apple: [{ url: '/icon-192.png', sizes: '192x192' }],
+  },
 };
 
 export const viewport: Viewport = {
-  themeColor: '#ffffff',
+  themeColor: '#0b5c75',
   width: 'device-width',
   initialScale: 1,
   // `viewportFit: cover` habilita las variables de area segura en iOS.

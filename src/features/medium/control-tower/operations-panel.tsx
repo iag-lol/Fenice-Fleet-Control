@@ -119,7 +119,13 @@ export function OperationsPanel({
 
   return (
     <div className="flex h-full flex-col bg-surface-900">
-      {/* --- Pestanas --- */}
+      {/*
+        Pestanas en UNA linea.
+        Apiladas en tres (icono, etiqueta, cifra) median 62 px de alto; sumadas
+        al buscador se comian la mitad de la hoja movil y dejaban dos filas de
+        lista visibles. En una linea ocupan 44 px, que sigue siendo objetivo
+        tactil valido, y la cifra viaja como distintivo junto al nombre.
+      */}
       <div className="flex border-b border-line">
         {TABS.map((entry) => {
           const Icon = entry.icon;
@@ -130,29 +136,41 @@ export function OperationsPanel({
               key={entry.id}
               type="button"
               onClick={() => setTab(entry.id)}
+              aria-current={active ? 'true' : undefined}
               className={cn(
-                'flex flex-1 flex-col items-center gap-1 border-b-2 px-2 py-2.5 transition-colors',
+                'flex min-h-11 flex-1 items-center justify-center gap-1.5 border-b-2 px-1 transition-colors',
                 active
                   ? 'border-brand-600 text-brand-700'
                   : 'border-transparent text-ink-faint hover:text-ink',
               )}
             >
-              <Icon className="h-4 w-4" />
-              <span className="text-2xs font-medium">{entry.label}</span>
-              <span className="numeric text-2xs opacity-70">{counts[entry.id]}</span>
+              <Icon className="h-4 w-4 shrink-0" />
+              <span className="truncate text-2xs font-medium">{entry.label}</span>
+              <span
+                className={cn(
+                  'numeric shrink-0 rounded px-1 text-[10px] font-semibold',
+                  active ? 'bg-brand-500/15 text-brand-700' : 'bg-surface-750 text-ink-faint',
+                )}
+              >
+                {counts[entry.id]}
+              </span>
             </button>
           );
         })}
       </div>
 
-      <div className="border-b border-line p-2.5">
-        <SearchInput
-          value={search}
-          onChange={(event) => setSearch(event.target.value)}
-          onClear={() => setSearch('')}
-          placeholder="Filtrar en el panel"
-        />
-      </div>
+      {/* El buscador solo aparece cuando hay bastante que filtrar: con cuatro
+          elementos en la lista ocupa mas espacio del que ahorra. */}
+      {counts[tab] > 6 ? (
+        <div className="border-b border-line p-2">
+          <SearchInput
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            onClear={() => setSearch('')}
+            placeholder="Filtrar en el panel"
+          />
+        </div>
+      ) : null}
 
       <div className="min-h-0 flex-1 overflow-y-auto">
         {tab === 'vehiculos' ? (

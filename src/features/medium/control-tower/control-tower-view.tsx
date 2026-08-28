@@ -31,6 +31,15 @@ import type { MapSnapshot } from '@/types/views';
  * no el mapa, y dos entradas para lo mismo confundian sin aportar.
  */
 
+/**
+ * Alturas de la hoja movil, como fraccion de la pantalla.
+ *
+ * Arranca en la minima: en un telefono el mapa es lo que no cabe en ningun
+ * otro sitio, y la lista siempre esta a un toque.
+ */
+const SHEET_HEIGHTS = ['30%', '55%', '88%'] as const;
+type SheetStep = 0 | 1 | 2;
+
 const MIN_PANEL = 280;
 const MAX_PANEL = 560;
 const DEFAULT_PANEL = 360;
@@ -46,6 +55,7 @@ export function ControlTowerView() {
 
   const [panelWidth, setPanelWidth] = useState(DEFAULT_PANEL);
   const [panelOpen, setPanelOpen] = useState(true);
+  const [sheetStep, setSheetStep] = useState<SheetStep>(0);
   const [hydrated, setHydrated] = useState(false);
   const draggingRef = useRef(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -179,14 +189,33 @@ export function ControlTowerView() {
         </>
       ) : null}
 
-      {/* --- Movil: el panel vive bajo el mapa, deslizable --- */}
+      {/*
+        --- Movil: hoja bajo el mapa, con tres alturas ---
+
+        Una altura fija no sirve para las dos cosas que se hacen aqui: mirar
+        el mapa (quiero la hoja pequena) y revisar la lista (quiero la hoja
+        grande). Se arranca en la altura minima para que el mapa mande, y el
+        tirador cicla entre las tres.
+      */}
       {!isDesktop && hasOperationsPanel ? (
-        <div className="pointer-events-none absolute inset-x-0 bottom-0 z-30 h-[42%] md:hidden">
-          <div className="pointer-events-auto h-full overflow-hidden rounded-t-xl border-t border-line bg-surface-900 shadow-panel">
-            <div className="flex justify-center pt-1.5">
-              <span className="h-1 w-10 rounded-full bg-line-strong" aria-hidden />
-            </div>
-            {panel}
+        <div
+          className="pointer-events-none absolute inset-x-0 bottom-0 z-30 transition-[height] duration-200 md:hidden"
+          style={{ height: SHEET_HEIGHTS[sheetStep] }}
+        >
+          <div className="pointer-events-auto flex h-full flex-col overflow-hidden rounded-t-2xl border-t border-line bg-surface-900 shadow-panel">
+            <button
+              type="button"
+              onClick={() => setSheetStep((step) => ((step + 1) % SHEET_HEIGHTS.length) as SheetStep)}
+              aria-label={
+                sheetStep === SHEET_HEIGHTS.length - 1
+                  ? 'Reducir el panel'
+                  : 'Ampliar el panel'
+              }
+              className="flex min-h-11 w-full shrink-0 items-center justify-center"
+            >
+              <span className="h-1.5 w-11 rounded-full bg-line-strong" aria-hidden />
+            </button>
+            <div className="min-h-0 flex-1">{panel}</div>
           </div>
         </div>
       ) : null}
