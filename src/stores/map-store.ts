@@ -107,6 +107,17 @@ interface MapState {
   setIsolate: (isolate: boolean) => void;
 
   /**
+   * Agrupar los clientes cercanos en un solo circulo.
+   *
+   * Con quinientos clientes en pantalla los pines se solapan y no se lee
+   * nada, por eso viene activado. Pero para trabajar sobre un sector concreto
+   * hace falta ver cada domicilio: desagrupar es justamente lo que permite
+   * contar y pinchar uno a uno.
+   */
+  clusterClients: boolean;
+  setClusterClients: (cluster: boolean) => void;
+
+  /**
    * Comuna a la que se restringe la vista.
    *
    * Distinta de `inspectedCommuneCode`: consultar una comuna no obliga a
@@ -190,6 +201,9 @@ export const useMapStore = create<MapState>((set, get) => ({
 
   isolate: true,
   setIsolate: (isolate) => set({ isolate }),
+
+  clusterClients: true,
+  setClusterClients: (clusterClients) => set({ clusterClients }),
 
   scopedCommuneCode: null,
   scopeToCommune: (code) =>

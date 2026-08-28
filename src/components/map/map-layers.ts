@@ -276,100 +276,7 @@ export function registerLayers(map: MapLibreMap): void {
     paint: { 'text-color': '#ffffff' },
   });
 
-  // --- Clientes (con agrupamiento) -----------------------------------------
-  map.addSource(SOURCE.clients, {
-    type: 'geojson',
-    data: EMPTY,
-    cluster: true,
-    // Sin agrupamiento, cientos de pines saturan la lectura del mapa. El
-    // corte se fija bajo para que los pines individuales aparezcan en cuanto
-    // el operador se acerca a un sector concreto.
-    clusterMaxZoom: 12,
-    clusterRadius: 42,
-    clusterProperties: {
-      dormidos: ['+', ['case', ['==', ['get', 'status'], 'dormant'], 1, 0]],
-      observacion: ['+', ['case', ['==', ['get', 'status'], 'warning'], 1, 0]],
-    },
-  });
-
-  map.addLayer({
-    id: LAYER.clientClusters,
-    type: 'circle',
-    source: SOURCE.clients,
-    filter: ['has', 'point_count'],
-    paint: {
-      // El color del grupo refleja su composicion: si predominan dormidos, se
-      // ve rojo aunque este agrupado. Un grupo gris ocultaria el problema.
-      'circle-color': [
-        'case',
-        ['>', ['/', ['get', 'dormidos'], ['get', 'point_count']], 0.4], 'rgba(220, 38, 38, 0.92)',
-        ['>', ['/', ['get', 'observacion'], ['get', 'point_count']], 0.4], 'rgba(180, 83, 9, 0.92)',
-        'rgba(13, 144, 174, 0.92)',
-      ],
-      'circle-radius': ['step', ['get', 'point_count'], 15, 10, 19, 30, 24, 80, 30],
-      'circle-stroke-width': 2.5,
-      'circle-stroke-color': '#ffffff',
-    },
-  });
-
-  map.addLayer({
-    id: LAYER.clientClusterCount,
-    type: 'symbol',
-    source: SOURCE.clients,
-    filter: ['has', 'point_count'],
-    layout: {
-      'text-field': ['get', 'point_count_abbreviated'],
-      'text-size': 12,
-      'text-font': [BOLD_FONT],
-    },
-    paint: { 'text-color': '#ffffff' },
-  });
-
-  map.addLayer({
-    id: LAYER.clientPoints,
-    type: 'symbol',
-    source: SOURCE.clients,
-    filter: ['!', ['has', 'point_count']],
-    layout: {
-      // Pin de gota anclado por la punta: marca el domicilio exacto y se
-      // distingue del disco del vehiculo y del circulo numerado de parada.
-      'icon-image': [
-        'concat',
-        'client-pin-',
-        ['match', ['get', 'status'], 'active', 'active', 'warning', 'warning', 'dormant'],
-        ['case', ['get', 'selected'], '-selected', ''],
-      ],
-      'icon-anchor': 'bottom',
-      'icon-size': ['interpolate', ['linear'], ['zoom'], 10, 0.55, 13, 0.8, 16, 1],
-      // Los pines no se descartan entre si: ocultar clientes seria ocultar
-      // informacion comercial, no reducir ruido.
-      'icon-allow-overlap': true,
-      'icon-ignore-placement': true,
-    },
-  });
-
-  map.addLayer({
-    id: LAYER.clientLabels,
-    type: 'symbol',
-    source: SOURCE.clients,
-    filter: ['!', ['has', 'point_count']],
-    // El nombre solo aparece cuando hay espacio real para leerlo.
-    minzoom: 14.5,
-    layout: {
-      'text-field': ['get', 'name'],
-      'text-font': [REGULAR_FONT],
-      'text-size': 11,
-      'text-anchor': 'top',
-      'text-offset': [0, 0.4],
-      'text-max-width': 9,
-      'text-optional': true,
-    },
-    paint: {
-      'text-color': '#334155',
-      'text-halo-color': '#ffffff',
-      'text-halo-width': 1.8,
-    },
-  });
+  registerClientLayers(map, true);
 
   // --- Ordenes de trabajo pendientes ---------------------------------------
   map.addSource(SOURCE.workOrders, { type: 'geojson', data: EMPTY });
@@ -758,4 +665,121 @@ export function boundsToLngLatBounds(bounds: {
     [bounds.minLng, bounds.minLat],
     [bounds.maxLng, bounds.maxLat],
   ];
+}
+
+/**
+ * Capas de clientes.
+ *
+ * Van en su propia funcion porque el AGRUPAMIENTO es una opcion de la FUENTE
+ * en MapLibre, no de la capa: no se puede encender ni apagar sobre la marcha.
+ * Para cambiarlo hay que destruir la fuente y volver a crearla, y con ella
+ * sus capas. Aislarlo aqui evita repetir esa secuencia en dos sitios.
+ */
+export function registerClientLayers(map: MapLibreMap, cluster: boolean): void {
+  map.addSource(SOURCE.clients, {
+    type: 'geojson',
+    data: EMPTY,
+    cluster,
+    // Sin agrupamiento, cientos de pines saturan la lectura del mapa. El
+    // corte se fija bajo para que los pines individuales aparezcan en cuanto
+    // el operador se acerca a un sector concreto.
+    clusterMaxZoom: 12,
+    clusterRadius: 42,
+    clusterProperties: {
+      dormidos: ['+', ['case', ['==', ['get', 'status'], 'dormant'], 1, 0]],
+      observacion: ['+', ['case', ['==', ['get', 'status'], 'warning'], 1, 0]],
+    },
+  });
+
+  map.addLayer({
+    id: LAYER.clientClusters,
+    type: 'circle',
+    source: SOURCE.clients,
+    filter: ['has', 'point_count'],
+    paint: {
+      // El color del grupo refleja su composicion: si predominan dormidos, se
+      // ve rojo aunque este agrupado. Un grupo gris ocultaria el problema.
+      'circle-color': [
+        'case',
+        ['>', ['/', ['get', 'dormidos'], ['get', 'point_count']], 0.4], 'rgba(220, 38, 38, 0.92)',
+        ['>', ['/', ['get', 'observacion'], ['get', 'point_count']], 0.4], 'rgba(180, 83, 9, 0.92)',
+        'rgba(13, 144, 174, 0.92)',
+      ],
+      'circle-radius': ['step', ['get', 'point_count'], 15, 10, 19, 30, 24, 80, 30],
+      'circle-stroke-width': 2.5,
+      'circle-stroke-color': '#ffffff',
+    },
+  });
+
+  map.addLayer({
+    id: LAYER.clientClusterCount,
+    type: 'symbol',
+    source: SOURCE.clients,
+    filter: ['has', 'point_count'],
+    layout: {
+      'text-field': ['get', 'point_count_abbreviated'],
+      'text-size': 12,
+      'text-font': [BOLD_FONT],
+    },
+    paint: { 'text-color': '#ffffff' },
+  });
+
+  map.addLayer({
+    id: LAYER.clientPoints,
+    type: 'symbol',
+    source: SOURCE.clients,
+    filter: ['!', ['has', 'point_count']],
+    layout: {
+      // Pin de gota anclado por la punta: marca el domicilio exacto y se
+      // distingue del disco del vehiculo y del circulo numerado de parada.
+      'icon-image': [
+        'concat',
+        'client-pin-',
+        ['match', ['get', 'status'], 'active', 'active', 'warning', 'warning', 'dormant'],
+        ['case', ['get', 'selected'], '-selected', ''],
+      ],
+      'icon-anchor': 'bottom',
+      'icon-size': ['interpolate', ['linear'], ['zoom'], 10, 0.55, 13, 0.8, 16, 1],
+      // Los pines no se descartan entre si: ocultar clientes seria ocultar
+      // informacion comercial, no reducir ruido.
+      'icon-allow-overlap': true,
+      'icon-ignore-placement': true,
+    },
+  });
+
+  map.addLayer({
+    id: LAYER.clientLabels,
+    type: 'symbol',
+    source: SOURCE.clients,
+    filter: ['!', ['has', 'point_count']],
+    // El nombre solo aparece cuando hay espacio real para leerlo.
+    minzoom: 14.5,
+    layout: {
+      'text-field': ['get', 'name'],
+      'text-font': [REGULAR_FONT],
+      'text-size': 11,
+      'text-anchor': 'top',
+      'text-offset': [0, 0.4],
+      'text-max-width': 9,
+      'text-optional': true,
+    },
+    paint: {
+      'text-color': '#334155',
+      'text-halo-color': '#ffffff',
+      'text-halo-width': 1.8,
+    },
+  });
+}
+
+/** Retira fuente y capas de clientes para poder recrearlas. */
+export function removeClientLayers(map: MapLibreMap): void {
+  for (const layer of [
+    LAYER.clientLabels,
+    LAYER.clientPoints,
+    LAYER.clientClusterCount,
+    LAYER.clientClusters,
+  ]) {
+    if (map.getLayer(layer)) map.removeLayer(layer);
+  }
+  if (map.getSource(SOURCE.clients)) map.removeSource(SOURCE.clients);
 }

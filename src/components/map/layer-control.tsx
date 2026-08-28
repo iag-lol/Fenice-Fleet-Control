@@ -13,6 +13,8 @@ import {
 } from 'lucide-react';
 import { useState } from 'react';
 
+import { MapPopover } from '@/components/map/map-popover';
+
 import { Badge } from '@/components/ui/badge';
 import { Select } from '@/components/ui/input';
 import { cn } from '@/lib/cn';
@@ -40,6 +42,8 @@ const HEATMAP_OPTIONS: { value: HeatmapMode; label: string }[] = [
 /** Selector de capas. Permite combinar libremente todas las capas del mapa. */
 export function LayerControl({ inline }: { inline?: boolean }) {
   const layers = useMapStore((s) => s.layers);
+  const clusterClients = useMapStore((s) => s.clusterClients);
+  const setClusterClients = useMapStore((s) => s.setClusterClients);
   const toggleLayer = useMapStore((s) => s.toggleLayer);
   const heatmapMode = useMapStore((s) => s.heatmapMode);
   const setHeatmapMode = useMapStore((s) => s.setHeatmapMode);
@@ -90,6 +94,46 @@ export function LayerControl({ inline }: { inline?: boolean }) {
         })}
       </ul>
 
+      {/*
+        Desagrupar clientes.
+        Solo tiene sentido con la capa de clientes encendida, y por eso
+        aparece justo debajo de ella en vez de en un menu aparte.
+      */}
+      {layers.clientes ? (
+        <div className="border-t border-line pt-2">
+          <button
+            type="button"
+            onClick={() => setClusterClients(!clusterClients)}
+            aria-pressed={!clusterClients}
+            className="flex min-h-11 w-full items-center justify-between gap-3 rounded-md px-2 text-left transition-colors hover:bg-surface-800"
+          >
+            <span className="min-w-0">
+              <span className="block text-[13px] text-ink">
+                {clusterClients ? 'Agrupar clientes cercanos' : 'Clientes desagrupados'}
+              </span>
+              <span className="block text-2xs leading-snug text-ink-faint">
+                {clusterClients
+                  ? 'Los circulos con numero reunen varios domicilios'
+                  : 'Se dibuja un pin por domicilio, aunque se solapen'}
+              </span>
+            </span>
+            <span
+              className={cn(
+                'relative h-5 w-9 shrink-0 rounded-full transition-colors',
+                clusterClients ? 'bg-brand-600' : 'bg-surface-700',
+              )}
+            >
+              <span
+                className={cn(
+                  'absolute top-0.5 h-4 w-4 rounded-full bg-white transition-transform',
+                  clusterClients ? 'translate-x-4' : 'translate-x-0.5',
+                )}
+              />
+            </span>
+          </button>
+        </div>
+      ) : null}
+
       {layers.calor ? (
         <div className="border-t border-line pt-2">
           <label className="field-label">Modo del mapa de calor</label>
@@ -111,6 +155,10 @@ export function LayerControl({ inline }: { inline?: boolean }) {
         type="button"
         onClick={() => setOpen((value) => !value)}
         aria-expanded={open}
+        // En movil la etiqueta va oculta y el boton quedaba sin nombre
+        // accesible: un icono solo, ilegible para un lector de pantalla.
+        title="Capas del mapa"
+        aria-label="Capas del mapa"
         className="tap flex items-center gap-2 rounded-md border border-line-strong bg-surface-900/95 px-3 text-[13px] text-ink shadow-float backdrop-blur transition-colors hover:border-brand-500 sm:h-9 sm:min-h-0"
       >
         <Layers className="h-4 w-4 text-brand-700" />
@@ -120,19 +168,9 @@ export function LayerControl({ inline }: { inline?: boolean }) {
         </Badge>
       </button>
 
-      {open ? (
-        <>
-          <button
-            type="button"
-            aria-label="Cerrar capas"
-            className="fixed inset-0 z-10 cursor-default"
-            onClick={() => setOpen(false)}
-          />
-          <div className="absolute right-0 top-full z-20 mt-2 w-[280px] animate-slide-up rounded-lg border border-line-strong bg-surface-900/98 p-2 shadow-panel backdrop-blur">
-            {body}
-          </div>
-        </>
-      ) : null}
+      <MapPopover open={open} onClose={() => setOpen(false)} title="Capas del mapa" width={280}>
+        {body}
+      </MapPopover>
     </div>
   );
 }

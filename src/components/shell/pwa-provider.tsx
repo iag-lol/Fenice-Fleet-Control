@@ -72,7 +72,7 @@ export function PwaProvider() {
   if (!visible || !prompt) return null;
 
   return (
-    <div className="fixed inset-x-2.5 bottom-[72px] z-[65] sm:inset-x-auto sm:bottom-4 sm:left-4 sm:w-[340px]">
+    <div className="fixed inset-x-2.5 bottom-[72px] z-[45] sm:inset-x-auto sm:bottom-4 sm:left-4 sm:w-[340px]">
       <div className="flex items-start gap-3 rounded-xl border border-line-strong bg-surface-900/97 p-3 shadow-panel backdrop-blur">
         <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-brand-600 text-white">
           <Download className="h-4.5 w-4.5" width={18} height={18} />

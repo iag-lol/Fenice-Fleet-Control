@@ -4,6 +4,8 @@ import { useQuery } from '@tanstack/react-query';
 import { Layers2, Lock, Moon, Satellite, TrafficCone } from 'lucide-react';
 import { useState } from 'react';
 
+import { MapPopover } from '@/components/map/map-popover';
+
 import { PlanBadge } from '@/components/product/plan-badge';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -68,16 +70,8 @@ export function ViewModeControl() {
         <span className="hidden sm:inline">{MAP_VIEW_LABEL[viewMode]}</span>
       </button>
 
-      {open ? (
-        <>
-          <button
-            type="button"
-            aria-label="Cerrar selector de vista"
-            className="fixed inset-0 z-10 cursor-default"
-            onClick={() => setOpen(false)}
-          />
-          <div className="absolute right-0 top-full z-20 mt-2 w-[268px] animate-slide-up rounded-lg border border-line-strong bg-surface-900/98 p-2 shadow-panel backdrop-blur">
-            <p className="field-label px-1">Vista del mapa</p>
+      <MapPopover open={open} onClose={() => setOpen(false)} title="Vista del mapa" width={268}>
+            <p className="field-label hidden px-1 md:block">Vista del mapa</p>
 
             <ul className="space-y-0.5">
               {modes.map((entry) => {
@@ -200,9 +194,7 @@ export function ViewModeControl() {
                 </Badge>
               </p>
             ) : null}
-          </div>
-        </>
-      ) : null}
+      </MapPopover>
     </div>
   );
 }

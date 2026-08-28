@@ -8,7 +8,9 @@ import { registerMapIcons } from '@/components/map/map-icons';
 import {
   boundsToLngLatBounds,
   LAYER,
+  registerClientLayers,
   registerLayers,
+  removeClientLayers,
   setLayerVisibility,
   SOURCE,
   updateAlerts,
@@ -139,6 +141,7 @@ export function FleetMap({
   const [styleError, setStyleError] = useState<string | null>(null);
 
   const layers = useMapStore((s) => s.layers);
+  const clusterClients = useMapStore((s) => s.clusterClients);
   const selection = useMapStore((s) => s.selection);
   const select = useMapStore((s) => s.select);
   const following = useMapStore((s) => s.followingVehicleId);
@@ -649,6 +652,30 @@ export function FleetMap({
       { padding: 64, maxZoom: 15.5, duration: 0 },
     );
   }, [ready, autoFit, vehicles, routes, clients]);
+
+  /**
+   * Cambio de agrupamiento.
+   *
+   * En MapLibre `cluster` es una opcion de la FUENTE, no de la capa: no se
+   * puede alternar. Hay que destruir fuente y capas y volver a crearlas, y
+   * despues reponer los datos, porque la fuente nueva nace vacia.
+   *
+   * Se salta el primer render: la fuente inicial ya se creo agrupada.
+   */
+  const clusterAplicado = useRef(true);
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !ready || clusterAplicado.current === clusterClients) return;
+
+    clusterAplicado.current = clusterClients;
+    try {
+      removeClientLayers(map);
+      registerClientLayers(map, clusterClients);
+      updateClients(map, clients, selection?.type === 'client' ? selection.id : null);
+    } catch (error) {
+      setStyleError(error instanceof Error ? error.message : String(error));
+    }
+  }, [ready, clusterClients, clients, selection]);
 
   // --- Encuadre solicitado -------------------------------------------------
   useEffect(() => {
