@@ -133,12 +133,14 @@ describe('Plan Basico sin venta cruzada', () => {
     const { access } = await loadWith(env);
     const bloqueadas = access.getBlockedRoutes();
 
-    expect(bloqueadas).toContain('/control');
     expect(bloqueadas).toContain('/despachos');
+    // `/control` es la unica pantalla de mapa y existe en TODOS los planes:
+    // bloquearla dejaria al Plan Basico sin su pantalla nucleo.
+    expect(bloqueadas).not.toContain('/control');
     // El portal del conductor no es una pantalla del menu, pero declara ruta
     // justamente para que el plan Basico la bloquee por URL igual que el resto.
     expect(bloqueadas).toContain('/conductor');
-    expect(bloqueadas).not.toContain('/mapa');
+
   });
 
   it('no ofrece el portal del conductor ni su evidencia', async () => {

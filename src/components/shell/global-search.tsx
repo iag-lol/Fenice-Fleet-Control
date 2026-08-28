@@ -111,7 +111,7 @@ export function GlobalSearch({ className }: { className?: string }) {
       );
     }
     if (result.position) focusOn(result.position, result.kind === 'comuna' ? 12.5 : 15);
-    router.push('/mapa');
+    router.push('/control');
   };
 
   const onKeyDown = (event: KeyboardEvent<HTMLInputElement>): void => {

@@ -5,6 +5,7 @@ import { PanelRightClose, PanelRightOpen } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { OperationalMap } from '@/components/map/operational-map';
+import { hasFeature } from '@/product/feature-access';
 import { OperationsPanel } from '@/features/medium/control-tower/operations-panel';
 import { useIsDesktop } from '@/hooks/use-media-query';
 import { useLiveFleet } from '@/hooks/use-live-fleet';
@@ -14,12 +15,20 @@ import type { Alert } from '@/types/core';
 import type { MapSnapshot } from '@/types/views';
 
 /**
- * Torre de control.
+ * Torre de control: la unica pantalla de mapa del sistema.
  *
- * El mapa deja de ser una pantalla mas y pasa a ser el centro de trabajo: a
- * la izquierda la operacion georreferenciada, a la derecha la lista de lo que
- * esta ocurriendo. La division se puede arrastrar y se recuerda entre
- * sesiones, porque cada operador reparte su atencion de forma distinta.
+ * Es la misma pantalla en todos los planes, y crece con el contratado:
+ *
+ *  - PLAN BASICO: el mapa a pantalla completa, con todas sus capas, filtros
+ *    y seleccion. Es la pantalla nucleo del plan y no se degrada en nada.
+ *  - PLAN MEDIO en adelante: se le suma el panel de operacion, con flota,
+ *    despachos, alertas y rutas junto al mapa. La division se puede arrastrar
+ *    y se recuerda entre sesiones, porque cada operador reparte su atencion
+ *    de forma distinta.
+ *
+ * Antes esto eran dos pantallas de menu ("Mapa operacional" y "Torre de
+ * control") sobre el mismo mapa. Se unificaron: la diferencia era el panel,
+ * no el mapa, y dos entradas para lo mismo confundian sin aportar.
  */
 
 const MIN_PANEL = 280;
@@ -28,6 +37,9 @@ const DEFAULT_PANEL = 360;
 const STORAGE_KEY = 'fenice.control.panelWidth';
 
 export function ControlTowerView() {
+  // El panel de operacion es Plan Medio. Sin el, la torre es exactamente el
+  // mapa a pantalla completa que el Plan Basico siempre incluyo.
+  const hasOperationsPanel = hasFeature('control-tower');
   const isDesktop = useIsDesktop();
   const { positions } = useLiveFleet();
   const select = useMapStore((s) => s.select);
@@ -131,7 +143,7 @@ export function ControlTowerView() {
         <OperationalMap />
 
         {/* Alternar el panel: en el mapa cada pixel horizontal cuenta. */}
-        {isDesktop ? (
+        {isDesktop && hasOperationsPanel ? (
           <button
             type="button"
             onClick={() => setPanelOpen((value) => !value)}
@@ -149,7 +161,7 @@ export function ControlTowerView() {
       </div>
 
       {/* --- Escritorio: panel lateral redimensionable --- */}
-      {isDesktop && panelOpen ? (
+      {isDesktop && panelOpen && hasOperationsPanel ? (
         <>
           <div
             role="separator"
@@ -168,7 +180,7 @@ export function ControlTowerView() {
       ) : null}
 
       {/* --- Movil: el panel vive bajo el mapa, deslizable --- */}
-      {!isDesktop ? (
+      {!isDesktop && hasOperationsPanel ? (
         <div className="pointer-events-none absolute inset-x-0 bottom-0 z-30 h-[42%] md:hidden">
           <div className="pointer-events-auto h-full overflow-hidden rounded-t-xl border-t border-line bg-surface-900 shadow-panel">
             <div className="flex justify-center pt-1.5">

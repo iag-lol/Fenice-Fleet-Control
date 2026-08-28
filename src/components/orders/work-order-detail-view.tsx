@@ -126,7 +126,7 @@ export function WorkOrderDetailView({ workOrderId }: { workOrderId: string }) {
                 onClick={() => {
                   select({ type: 'workOrder', id: workOrder.id });
                   focusOn(workOrder.coordinates!, 16);
-                  router.push('/mapa');
+                  router.push('/control');
                 }}
               >
                 Ver en mapa
@@ -368,7 +368,7 @@ export function WorkOrderDetailView({ workOrderId }: { workOrderId: string }) {
                     icon={<RouteIcon className="h-3.5 w-3.5" />}
                     onClick={() => {
                       highlightRoute(route.id);
-                      router.push('/mapa');
+                      router.push('/control');
                     }}
                   >
                     Resaltar ruta en el mapa

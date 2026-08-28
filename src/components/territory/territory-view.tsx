@@ -114,7 +114,7 @@ export function TerritoryView() {
               setLayer('calor', true);
               setLayer('clientes', false);
               setHeatmapMode(mode);
-              router.push('/mapa');
+              router.push('/control');
             }}
           >
             Abrir calor en el mapa operacional
@@ -187,7 +187,7 @@ export function TerritoryView() {
                         type="button"
                         onClick={() => {
                           focusOn(commune.center, 12.5);
-                          router.push('/mapa');
+                          router.push('/control');
                         }}
                         className="flex min-h-11 min-w-11 items-center truncate text-left text-[13px] text-ink hover:text-brand-700 sm:block sm:min-h-0 sm:min-w-0"
                       >
@@ -239,7 +239,7 @@ export function TerritoryView() {
                           type="button"
                           onClick={() => {
                             focusOn(commune.center, 12.5);
-                            router.push('/mapa');
+                            router.push('/control');
                           }}
                           className="flex min-h-11 items-center rounded-md border border-status-warning/30 bg-status-warning/10 px-3 text-xs text-status-warning transition-colors hover:border-status-warning/60 sm:min-h-0 sm:px-2.5 sm:py-1.5"
                         >
@@ -308,7 +308,7 @@ export function TerritoryView() {
                           type="button"
                           onClick={() => {
                             focusOn(commune.center, 12.5);
-                            router.push('/mapa');
+                            router.push('/control');
                           }}
                           className="flex min-h-11 min-w-11 items-center text-left text-[13px] text-ink hover:text-brand-700 sm:block sm:min-h-0 sm:min-w-0"
                         >

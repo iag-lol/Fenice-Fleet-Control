@@ -334,7 +334,7 @@ export function AlertsView() {
                           if (alert.vehicleId) select({ type: 'vehicle', id: alert.vehicleId });
                           else if (alert.clientId) select({ type: 'client', id: alert.clientId });
                           focusOn(alert.position!, 15);
-                          router.push('/mapa');
+                          router.push('/control');
                         }}
                       >
                         Abrir en mapa

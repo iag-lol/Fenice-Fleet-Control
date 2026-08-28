@@ -133,7 +133,7 @@ export function VehicleDetailView({ vehicleId }: { vehicleId: string }) {
               disabled={!position}
               onClick={() => {
                 followVehicle(vehicleId);
-                router.push('/mapa');
+                router.push('/control');
               }}
             >
               Seguir en el mapa
@@ -407,7 +407,7 @@ export function VehicleDetailView({ vehicleId }: { vehicleId: string }) {
                 onFocus={(entry) => {
                   if (entry.position) {
                     focusOn(entry.position, 16);
-                    router.push('/mapa');
+                    router.push('/control');
                   }
                 }}
               />

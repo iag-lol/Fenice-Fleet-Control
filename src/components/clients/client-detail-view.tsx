@@ -103,7 +103,7 @@ export function ClientDetailView({ clientId }: { clientId: string }) {
               onClick={() => {
                 select({ type: 'client', id: clientId });
                 focusOn(primaryLocation.coordinates!, 16);
-                router.push('/mapa');
+                router.push('/control');
               }}
             >
               Ver en mapa operacional

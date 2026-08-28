@@ -102,7 +102,7 @@ export function ClientsView() {
   const showOnMap = (client: ClientMapPoint): void => {
     select({ type: 'client', id: client.clientId });
     focusOn({ lat: client.lat, lng: client.lng }, 16);
-    router.push('/mapa');
+    router.push('/control');
   };
 
   const columns: Column<ClientMapPoint>[] = [
@@ -220,7 +220,7 @@ export function ClientsView() {
                   communeCodes: commune ? [commune] : [],
                   search,
                 });
-                router.push('/mapa');
+                router.push('/control');
               }}
             >
               Ver seleccion en el mapa

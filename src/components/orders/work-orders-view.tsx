@@ -183,7 +183,7 @@ export function WorkOrdersView() {
               event.stopPropagation();
               select({ type: 'workOrder', id: row.id });
               focusOn(row.coordinates!, 16);
-              router.push('/mapa');
+              router.push('/control');
             }}
           >
             Ver en mapa
@@ -208,7 +208,7 @@ export function WorkOrdersView() {
             variant="secondary"
             size="sm"
             icon={<MapPin className="h-3.5 w-3.5" />}
-            onClick={() => router.push('/mapa')}
+            onClick={() => router.push('/control')}
           >
             Ver en el mapa
           </Button>

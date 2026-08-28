@@ -5,7 +5,6 @@ import {
   Camera,
   ClipboardList,
   LayoutDashboard,
-  Map,
   MoonStar,
   Route,
   PackageCheck,
@@ -54,9 +53,7 @@ export const NAV_GROUPS: NavGroup[] = [
         label: 'Torre de control',
         icon: Radar,
         hint: 'Mapa y operacion en una pantalla',
-        featureId: 'control-tower',
       },
-      { href: '/mapa', label: 'Mapa operacional', icon: Map, hint: 'Centro de control' },
       {
         href: '/despachos',
         label: 'Despachos',
@@ -123,7 +120,7 @@ export function getVisibleNavGroups(): NavGroup[] {
  * insertar una entrada en el menu cambiara en silencio la barra inferior, y
  * que apareciera ahi una pantalla que el plan contratado ni siquiera incluye.
  */
-const MOBILE_PRIMARY_HREFS = ['/', '/mapa', '/flota', '/ordenes'] as const;
+const MOBILE_PRIMARY_HREFS = ['/', '/control', '/flota', '/ordenes'] as const;
 
 export function getMobilePrimary(): NavItem[] {
   // Busqueda directa en lugar de un indice: el identificador `Map` ya lo ocupa

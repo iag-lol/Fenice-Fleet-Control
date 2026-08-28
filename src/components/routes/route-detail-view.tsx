@@ -109,7 +109,7 @@ export function RouteDetailView({ routeId }: { routeId: string }) {
                 highlightRoute(route.id);
                 const first = route.plannedPath[0];
                 if (first) focusOn(first, 12);
-                router.push('/mapa');
+                router.push('/control');
               }}
             >
               Ver en mapa operacional

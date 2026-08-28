@@ -148,12 +148,15 @@ export const FEATURES: readonly FeatureDefinition[] = [
   },
   {
     id: 'operational-map',
-    name: 'Mapa operacional',
+    name: 'Torre de control',
     description: 'Camiones, clientes, rutas y geocercas sobre un mapa unico.',
     minimumPlan: 'base',
     category: 'mapa',
     implementationState: 'active',
-    route: '/mapa',
+    // Una sola pantalla de mapa para todos los planes. En Basico es el mapa a
+    // pantalla completa; el Plan Medio le anade el panel de operacion encima.
+    // Tener dos entradas distintas para el mismo mapa confundia sin aportar.
+    route: '/control',
     showInNavigation: true,
   },
   {
@@ -284,13 +287,15 @@ export const FEATURES: readonly FeatureDefinition[] = [
   // -------------------------------------------------------------------------
   {
     id: 'control-tower',
-    name: 'Torre de control',
-    description: 'El mapa como centro de operacion, con panel lateral y filtros.',
+    name: 'Panel de operacion en la torre',
+    description: 'Panel lateral con flota, despachos, alertas y rutas junto al mapa.',
     minimumPlan: 'medium',
     category: 'mapa',
     implementationState: 'active',
-    route: '/control',
-    showInNavigation: true,
+    // NO declara ruta: no es una pantalla aparte, sino el panel que se suma a
+    // la torre de control. Si declarara `/control`, el middleware bloquearia
+    // en Plan Basico la unica pantalla de mapa que ese plan si incluye.
+    showInNavigation: false,
     showAsUpgrade: true,
   },
   {

@@ -109,7 +109,7 @@ export function DormantClientsView() {
       maxDaysSincePurchase: null,
       maxDaysSinceVisit: null,
     });
-    router.push('/mapa');
+    router.push('/control');
   };
 
   const columns: Column<DormantClientRow>[] = [
@@ -208,7 +208,7 @@ export function DormantClientsView() {
               event.stopPropagation();
               select({ type: 'client', id: row.clientId });
               focusOn({ lat: row.lat!, lng: row.lng! }, 16);
-              router.push('/mapa');
+              router.push('/control');
             }}
           >
             Ver en mapa
