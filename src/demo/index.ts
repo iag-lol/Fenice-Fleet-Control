@@ -23,12 +23,23 @@ import { buildDataset, type DemoDataset } from '@/demo/dataset';
 
 const TRUE_VALUES = new Set(['true', '1', 'yes', 'si']);
 
-/** `true` cuando la plataforma debe servir el dataset de demostracion. */
+/**
+ * `true` cuando la plataforma debe servir el dataset de demostracion.
+ *
+ * POR DEFECTO ESTA APAGADO. La plataforma entro en produccion: lo que se ve
+ * en pantalla tiene que venir de las fuentes reales — telemetria del GPS y,
+ * cuando se conecte, la base de Fenice.
+ *
+ * Mezclar camiones, clientes y rutas inventados con los reales es peor que
+ * no tener datos: la operacion no puede distinguir unos de otros y acabaria
+ * despachando contra informacion que no existe.
+ *
+ * Para volver a la demostracion (formacion, una presentacion comercial) hay
+ * que pedirlo de forma explicita con DEMO_MODE=true.
+ */
 export function isDemoMode(): boolean {
   const raw = process.env.DEMO_MODE ?? process.env.NEXT_PUBLIC_DEMO_MODE;
-  // Por defecto activo: sin fuentes reales conectadas, una plataforma vacia
-  // no permitiria validar nada con Fenice.
-  if (raw === undefined || raw.trim() === '') return true;
+  if (raw === undefined || raw.trim() === '') return false;
   return TRUE_VALUES.has(raw.trim().toLowerCase());
 }
 

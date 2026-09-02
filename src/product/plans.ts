@@ -94,6 +94,7 @@ export function getProductConfig(): ProductConfig {
     showPlanBadges: readBoolean(process.env.NEXT_PUBLIC_SHOW_PLAN_BADGES, true),
     // Sin venta cruzada no tiene sentido anunciar el plan de cada funcion.
     showUpsell: readBoolean(process.env.NEXT_PUBLIC_SHOW_UPSELL, true),
-    demoMode: readBoolean(process.env.NEXT_PUBLIC_DEMO_MODE, true),
+    // Produccion por defecto. La demostracion se pide de forma explicita.
+    demoMode: readBoolean(process.env.NEXT_PUBLIC_DEMO_MODE, false),
   };
 }

@@ -15,7 +15,15 @@ const booleanFromEnv = z
 const serverEnvSchema = z.object({
   AUTH_ENABLED: booleanFromEnv.default('false'),
 
-  GPS_PROVIDER: z.enum(['mock', 'traccar', '3dtracking']).default('mock'),
+  /**
+   * Fuente de telemetria.
+   *
+   * Por defecto `3dtracking`, que es el proveedor contratado. Sin credenciales
+   * la plataforma no muestra nada y explica que faltan, en vez de anunciar un
+   * modo demostracion que ya no sirve datos: decir "DEMO" cuando no hay ni
+   * datos falsos ni reales solo confunde a quien mira la pantalla.
+   */
+  GPS_PROVIDER: z.enum(['mock', 'traccar', '3dtracking']).default('3dtracking'),
   OPERATIONS_PROVIDER: z.enum(['mock', 'external']).default('mock'),
   GEOCODING_PROVIDER: z.enum(['none', 'nominatim', 'maptiler', 'mapbox', 'google']).default('none'),
   ROUTING_PROVIDER: z.enum(['estimated', 'osrm', 'mapbox', 'google', 'maptiler']).default('estimated'),

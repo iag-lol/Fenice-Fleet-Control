@@ -70,7 +70,8 @@ enteramente con datos simulados.
 NEXT_PUBLIC_PRODUCT_PLAN=medium
 NEXT_PUBLIC_SHOW_UPSELL=true
 NEXT_PUBLIC_SHOW_PLAN_BADGES=true
-DEMO_MODE=true
+DEMO_MODE=false
+NEXT_PUBLIC_DEMO_MODE=false
 
 AUTH_ENABLED=false
 GPS_PROVIDER=mock
@@ -126,7 +127,8 @@ para el conductor**, copia y abrelo en un movil.
 `AUTH_ENABLED=false`: **no hay login**. Cualquiera con la URL entra a todas
 las pantallas de operacion.
 
-Los datos son enteramente ficticios (`DEMO_MODE=true`), asi que no se expone
+Los datos son enteramente ficticios (`DEMO_MODE=false
+NEXT_PUBLIC_DEMO_MODE=false`), asi que no se expone
 nada real de Fenice. Pero la URL puede circular. Recomendaciones minimas:
 
 - No enlaces la URL desde ninguna web publica (evita que la indexen). La

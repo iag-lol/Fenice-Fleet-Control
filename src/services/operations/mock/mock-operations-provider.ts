@@ -2,7 +2,7 @@ import 'server-only';
 
 import { getOperationalSettings } from '@/services/settings/settings-store';
 import { COMMUNES } from '@/data/communes';
-import { getDemoDataset as getDataset } from '@/demo';
+import { getDemoDataset as getDataset, isDemoMode } from '@/demo';
 import { calculateClientActivityStatus } from '@/lib/engines/client-activity';
 import {
   calculateDwellTime,
@@ -71,10 +71,18 @@ interface LiveRouteState {
 }
 
 export class MockOperationsProvider implements ExternalOperationsProvider {
+  /**
+   * La etiqueta refleja lo que este proveedor SIRVE, no como se llama.
+   *
+   * Con la demostracion apagada devuelve un mundo vacio: anunciarlo como
+   * "datos de demostracion" haria creer al operador que esta viendo un
+   * simulacro, cuando en realidad no esta viendo nada y lo que falta es
+   * conectar la base de Fenice.
+   */
   readonly info: OperationsProviderInfo = {
     id: 'mock',
-    label: 'Datos de demostracion',
-    simulated: true,
+    label: isDemoMode() ? 'Datos de demostracion' : 'Sin fuente conectada',
+    simulated: isDemoMode(),
     readOnly: true,
   };
 
