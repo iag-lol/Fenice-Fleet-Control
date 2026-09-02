@@ -42,23 +42,58 @@ export interface FleetContext {
   geofences: Geofence[];
 }
 
+/**
+ * Une el parque del ERP con el que conoce la telemetria.
+ *
+ * El ERP manda: patente, planta, capacidad del estanque y compartimentos son
+ * datos comerciales que el GPS no tiene. Pero un camion que reporta posicion
+ * y NO esta en el ERP tiene que verse igual, porque existe y esta circulando.
+ *
+ * Sin esto, conectar un proveedor GPS real antes que la base de Fenice dejaba
+ * el mapa vacio: llegaban posiciones de vehiculos que ningun listado incluia
+ * y no habia a que asociarlas.
+ */
+export function mergeFleet(erpVehicles: Vehicle[], gpsVehicles: Vehicle[]): Vehicle[] {
+  const porId = new Map(erpVehicles.map((v) => [String(v.id), v]));
+
+  for (const desdeGps of gpsVehicles) {
+    const id = String(desdeGps.id);
+    if (porId.has(id)) continue;
+
+    // Tambien puede estar en el ERP con otro identificador pero el mismo
+    // equipo instalado: el IMEI es lo que de verdad une ambos mundos.
+    const imei = desdeGps.device?.imei;
+    const yaConocido =
+      imei !== undefined && erpVehicles.some((v) => v.device?.imei === imei);
+    if (yaConocido) continue;
+
+    porId.set(id, desdeGps);
+  }
+
+  return [...porId.values()];
+}
+
 export async function loadFleetContext(): Promise<FleetContext> {
   const gps = getGpsProvider();
   const operations = getOperationsProvider();
   const today = new Date();
 
-  const [vehicles, positions, devices, routes, workOrders, alerts, geofences] = await Promise.all([
-    operations.getVehicles(),
-    gps.getAllCurrentPositions(),
-    gps.getDeviceStatus(),
-    operations.getRoutes({ date: today.toISOString() }),
-    operations.getWorkOrders({ date: today.toISOString() }),
-    operations.getAlerts({ states: ['nueva', 'revisada'] }),
-    operations.getGeofences(),
-  ]);
+  const [erpVehicles, gpsVehicles, positions, devices, routes, workOrders, alerts, geofences] =
+    await Promise.all([
+      operations.getVehicles(),
+      // La fuente de telemetria tambien conoce el parque. Se pide siempre
+      // porque es lo que permite operar antes de conectar el ERP.
+      gps.getVehicles().catch(() => [] as Vehicle[]),
+      gps.getAllCurrentPositions(),
+      gps.getDeviceStatus(),
+      operations.getRoutes({ date: today.toISOString() }),
+      operations.getWorkOrders({ date: today.toISOString() }),
+      operations.getAlerts({ states: ['nueva', 'revisada'] }),
+      operations.getGeofences(),
+    ]);
 
   return {
-    vehicles,
+    vehicles: mergeFleet(erpVehicles, gpsVehicles),
     positions: new Map(positions.map((p) => [p.vehicleId, p])),
     devices: new Map(devices.map((d) => [d.vehicleId, d])),
     routes,

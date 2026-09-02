@@ -27,6 +27,7 @@ import {
 } from '@/components/map/map-layers';
 import { resolveMapStyle } from '@/components/map/map-style';
 import { OPERATION_BOUNDS, OPERATION_CENTER } from '@/data/communes';
+import { isUsableCoordinate } from '@/lib/geo';
 import { useMapStore, type MapLayerId } from '@/stores/map-store';
 import type { Geofence, HeatmapPoint, LatLng, Position } from '@/types/core';
 import type {
@@ -387,7 +388,11 @@ export function FleetMap({
     const seen = new Set<string>();
 
     for (const vehicle of vehicles) {
-      if (!vehicle.position) continue;
+      // Un equipo puede reportar SIN fijacion satelital: manda (0,0), que cae
+      // en el Golfo de Guinea. Dibujarlo pondria camiones chilenos en mitad
+      // del Atlantico, asi que se omite del mapa. El vehiculo sigue en los
+      // listados con su estado de conexion, que es donde eso si se explica.
+      if (!vehicle.position || !isUsableCoordinate(vehicle.position)) continue;
       seen.add(vehicle.vehicleId);
 
       const target = {
@@ -617,7 +622,11 @@ export function FleetMap({
 
     const puntos: [number, number][] = [];
     for (const vehicle of vehicles) {
-      if (vehicle.position) puntos.push([vehicle.position.lng, vehicle.position.lat]);
+      // Un (0,0) arrastraria el encuadre hasta el Atlantico y dejaria la flota
+      // real como un punto invisible.
+      if (vehicle.position && isUsableCoordinate(vehicle.position)) {
+        puntos.push([vehicle.position.lng, vehicle.position.lat]);
+      }
     }
     for (const route of routes) {
       for (const p of route.plannedPath) puntos.push([p.lng, p.lat]);

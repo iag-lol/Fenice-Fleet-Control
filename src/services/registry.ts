@@ -6,6 +6,8 @@ import { MockGpsProvider } from '@/services/gps/mock/mock-gps-provider';
 import type { ExternalOperationsProvider } from '@/services/operations/operations-provider';
 import { MockOperationsProvider } from '@/services/operations/mock/mock-operations-provider';
 import { TraccarGpsProvider } from '@/services/gps/traccar/traccar-gps-provider';
+import { TridTrackingGpsProvider } from '@/services/gps/tridtracking/tridtracking-gps-provider';
+import { UnavailableGpsProvider } from '@/services/gps/unavailable-gps-provider';
 import {
   createExternalQueryExecutor,
   DatabaseOperationsProvider,
@@ -30,10 +32,30 @@ const globalForProviders = globalThis as unknown as {
 function createGpsProvider(): GpsProvider {
   const env = getServerEnv();
 
+  /**
+   * Un proveedor real mal configurado NO puede tumbar la aplicacion, y sobre
+   * todo NO puede degradar al simulador: la operacion veria camiones
+   * inventados y los tomaria por reales. Se devuelve un proveedor vacio que
+   * explica el motivo, y el diagnostico de /api/system/gps lo muestra.
+   */
+  const construir = (crear: () => GpsProvider): GpsProvider => {
+    try {
+      return crear();
+    } catch (error) {
+      const motivo = error instanceof Error ? error.message : String(error);
+      console.error('[gps] proveedor no disponible:', motivo);
+      return new UnavailableGpsProvider(motivo);
+    }
+  };
+
   // Los constructores de los proveedores reales validan sus credenciales al
   // instanciarse, no al importarse: en modo demostracion nunca se ejecutan.
   if (env.GPS_PROVIDER === 'traccar') {
-    return new TraccarGpsProvider();
+    return construir(() => new TraccarGpsProvider());
+  }
+
+  if (env.GPS_PROVIDER === '3dtracking') {
+    return construir(() => new TridTrackingGpsProvider());
   }
 
   return new MockGpsProvider();

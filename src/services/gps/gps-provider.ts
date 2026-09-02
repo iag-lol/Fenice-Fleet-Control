@@ -44,7 +44,7 @@ export type GpsTransport = 'websocket' | 'sse' | 'polling' | 'disconnected';
 
 export interface GpsProviderInfo {
   /** Identificador tecnico del proveedor activo. */
-  id: 'mock' | 'traccar';
+  id: 'mock' | 'traccar' | '3dtracking' | 'unavailable';
   /** Etiqueta mostrada en el indicador de modo del header. */
   label: string;
   /** `true` cuando los datos provienen de un simulador. */

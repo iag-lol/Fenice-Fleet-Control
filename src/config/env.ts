@@ -15,7 +15,7 @@ const booleanFromEnv = z
 const serverEnvSchema = z.object({
   AUTH_ENABLED: booleanFromEnv.default('false'),
 
-  GPS_PROVIDER: z.enum(['mock', 'traccar']).default('mock'),
+  GPS_PROVIDER: z.enum(['mock', 'traccar', '3dtracking']).default('mock'),
   OPERATIONS_PROVIDER: z.enum(['mock', 'external']).default('mock'),
   GEOCODING_PROVIDER: z.enum(['none', 'nominatim', 'maptiler', 'mapbox', 'google']).default('none'),
   ROUTING_PROVIDER: z.enum(['estimated', 'osrm', 'mapbox', 'google', 'maptiler']).default('estimated'),
@@ -26,6 +26,16 @@ const serverEnvSchema = z.object({
   TRACCAR_PASSWORD: z.string().optional(),
   TRACCAR_TOKEN: z.string().optional(),
   TRACCAR_WEBSOCKET_URL: z.string().optional(),
+
+  // --- 3DTracking (Client WebApi v1.0) ---
+  // La API pide usuario y clave y devuelve UserIdGuid + SessionId, que viajan
+  // como parametros de consulta en cada llamada. Por eso NADA de esto puede
+  // llegar al navegador: solo se lee desde el servidor.
+  // Documentacion: https://apiv2.3dtracking.net/docs/v1/
+  TRIDTRACKING_BASE_URL: z.string().url().default('https://apiv2.3dtracking.net'),
+  TRIDTRACKING_USERNAME: z.string().optional(),
+  TRIDTRACKING_PASSWORD: z.string().optional(),
+  TRIDTRACKING_TIMEOUT_MS: z.coerce.number().int().positive().max(60_000).default(15_000),
 
   // --- Base de datos externa de Fenice (SOLO LECTURA) ---
   EXTERNAL_DB_ENGINE: z.enum(['postgres', 'mysql', 'sqlserver', 'oracle']).optional(),
