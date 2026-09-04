@@ -67,6 +67,17 @@ const serverEnvSchema = z.object({
    * en vez de gastarla de madrugada.
    */
   TRAFFIC_MONTHLY_QUOTA: z.coerce.number().int().positive().default(200_000),
+  /**
+   * Tamano previsto de la flota, para dimensionar el gasto de trafico.
+   *
+   * El sistema cuenta los camiones que estan reportando, pero ese numero es 0
+   * antes de conectar el GPS y baja de madrugada. Dimensionar con el valor
+   * real en esos momentos daria un intervalo demasiado corto y el gasto se
+   * dispararia al volver la flota. Se usa el MAYOR de los dos: quedarse
+   * corto de frecuencia solo envejece un poco el dato; pasarse de cuota deja
+   * a la operacion sin trafico.
+   */
+  TRAFFIC_EXPECTED_FLEET: z.coerce.number().int().positive().max(2000).default(10),
   /** Jornada de despacho: fuera de ella no se consulta trafico. */
   TRAFFIC_WINDOW_START_HOUR: z.coerce.number().int().min(0).max(23).default(8),
   TRAFFIC_WINDOW_END_HOUR: z.coerce.number().int().min(1).max(24).default(19),

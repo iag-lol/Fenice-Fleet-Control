@@ -57,11 +57,17 @@ export async function GET(request: Request): Promise<Response> {
       return { provider: provider.info, segments: [], quota: null };
     }
 
-    // La flota real determina el gasto: se consulta el tramo de cada camion.
-    const vehicles = await getGpsProvider()
+    // La flota determina el gasto: se consulta el tramo de cada camion.
+    const reportando = await getGpsProvider()
       .getAllCurrentPositions()
       .then((p) => p.filter((x) => x.valid).length)
       .catch(() => 0);
+
+    // Se dimensiona con el MAYOR entre lo que reporta ahora y la flota
+    // prevista. Antes de conectar el GPS reportan cero, y de madrugada casi
+    // ninguno: dimensionar con ese numero daria un intervalo demasiado corto
+    // y el gasto se dispararia al volver la flota completa.
+    const vehicles = Math.max(reportando, env.TRAFFIC_EXPECTED_FLEET);
 
     const plan = planTrafficPolling(vehicles, env.TRAFFIC_MONTHLY_QUOTA, window);
     const dentroDeJornada = isWithinWindow(now, window);
@@ -72,6 +78,7 @@ export async function GET(request: Request): Promise<Response> {
       consultasMensualesEstimadas: plan.monthlyRequests,
       usoDeCuota: Math.round(plan.quotaUsage * 100) / 100,
       vehiculos: vehicles,
+      vehiculosReportando: reportando,
     };
 
     const cache = globalForTraffic.__feniceTrafficCache;
