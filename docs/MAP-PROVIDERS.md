@@ -40,8 +40,36 @@ TRAFFIC_PROVIDER=tomtom
 TRAFFIC_API_KEY=<clave>
 ```
 
-TomTom tiene el nivel gratuito mas generoso para este uso. El proveedor ya
-esta implementado: solo hay que poner la clave.
+TomTom tiene el nivel gratuito mas generoso para este uso: **200.000
+consultas al mes, sin tarjeta de credito**, y Chile figura con cobertura
+confirmada de Flow e Incidents.
+
+### Como se reparte la cuota
+
+Nuestra implementacion consulta el tramo donde esta CADA camion, no un mosaico
+de teselas, asi que el gasto crece con la flota.
+
+La cuota NO se reparte entre los 43.200 minutos del mes. Se concentra en la
+jornada de despacho declarada (por defecto lunes a viernes, 08:00 a 19:00):
+15.180 minutos utiles, mas del triple de presupuesto por minuto. Fuera de esa
+ventana no se consulta nada.
+
+| Flota | Intervalo | Consultas/mes | Uso de la cuota |
+|---|---|---|---|
+| 10 camiones | 60 s | 151.800 | 76 % |
+| 12 camiones | 75 s | 145.728 | 73 % |
+| 20 camiones | 120 s | 151.800 | 76 % |
+| 30 camiones | 165 s | 165.600 | 83 % |
+| 50 camiones | 270 s | 168.667 | 84 % |
+
+El intervalo lo calcula el sistema solo, a partir de la flota que este
+reportando. Se reserva un 15 % de margen para reintentos, pruebas y los meses
+de 23 dias habiles: agotar la cuota a mitad de mes dejaria la operacion sin
+trafico justo cuando mas se usa.
+
+Al terminar la jornada el mapa conserva el ultimo trafico conocido en lugar de
+vaciarse, porque un mapa que pierde el trafico al dar las 19:00 parece
+averiado.
 
 ---
 

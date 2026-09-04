@@ -58,9 +58,28 @@ const serverEnvSchema = z.object({
   // --- Base de datos interna de la plataforma ---
   DATABASE_URL: z.string().optional(),
 
-  // --- Trafico en tiempo real (Plan Medio) ---
+  // --- Trafico en tiempo real ---
   TRAFFIC_PROVIDER: z.enum(['none', 'mapbox', 'tomtom', 'google']).default('none'),
   TRAFFIC_API_KEY: z.string().optional(),
+  /**
+   * Cuota mensual del proveedor. El nivel gratuito de TomTom son 200.000
+   * consultas; el sistema reparte esa cifra dentro de la jornada de despacho
+   * en vez de gastarla de madrugada.
+   */
+  TRAFFIC_MONTHLY_QUOTA: z.coerce.number().int().positive().default(200_000),
+  /** Jornada de despacho: fuera de ella no se consulta trafico. */
+  TRAFFIC_WINDOW_START_HOUR: z.coerce.number().int().min(0).max(23).default(8),
+  TRAFFIC_WINDOW_END_HOUR: z.coerce.number().int().min(1).max(24).default(19),
+  /** Dias activos: 1 = lunes ... 7 = domingo. */
+  TRAFFIC_WINDOW_WEEKDAYS: z
+    .string()
+    .default('1,2,3,4,5')
+    .transform((v) =>
+      v
+        .split(',')
+        .map((d) => Number(d.trim()))
+        .filter((d) => Number.isInteger(d) && d >= 1 && d <= 7),
+    ),
 
   // --- Proveedores de mapa / routing ---
   MAPTILER_API_KEY: z.string().optional(),
