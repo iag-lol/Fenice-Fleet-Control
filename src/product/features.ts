@@ -320,31 +320,31 @@ export const FEATURES: readonly FeatureDefinition[] = [
     id: 'satellite-view',
     name: 'Vista satelital',
     description: 'Imagineria satelital real del area de operacion.',
-    minimumPlan: 'medium',
+    // Pasa a Basico: se sirve con imagineria de Esri, que no exige clave ni
+    // contrato. Reservarla a un plan superior seria cobrar por algo gratuito.
+    minimumPlan: 'base',
     category: 'mapa',
-    implementationState: 'requires-provider',
-    requiredEnv: ['NEXT_PUBLIC_SATELLITE_PROVIDER', 'NEXT_PUBLIC_MAPTILER_KEY'],
-    showAsUpgrade: true,
+    implementationState: 'active',
   },
   {
     id: 'hybrid-view',
     name: 'Vista hibrida',
-    description: 'Satelite con calles, nombres y limites comunales encima.',
-    minimumPlan: 'medium',
+    description: 'Satelite con calles, nombres y limites encima.',
+    minimumPlan: 'base',
     category: 'mapa',
-    implementationState: 'requires-provider',
-    requiredEnv: ['NEXT_PUBLIC_SATELLITE_PROVIDER'],
-    showAsUpgrade: true,
+    implementationState: 'active',
   },
   {
     id: 'live-traffic',
     name: 'Trafico en tiempo real',
     description: 'Congestion actual sobre las vias de la operacion.',
-    minimumPlan: 'medium',
+    // Disponible en Basico, pero sigue exigiendo un proveedor: NO existe
+    // ninguna fuente de trafico sin clave. El control se muestra y explica
+    // que falta configurarlo, en vez de fingir congestion inventada.
+    minimumPlan: 'base',
     category: 'mapa',
     implementationState: 'requires-provider',
     requiredEnv: ['TRAFFIC_PROVIDER', 'TRAFFIC_API_KEY'],
-    showAsUpgrade: true,
   },
   {
     id: 'traffic-eta',

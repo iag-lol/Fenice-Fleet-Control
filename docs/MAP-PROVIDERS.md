@@ -1,96 +1,65 @@
 # Proveedores de mapa
 
-Cómo configurar cartografía, satélite, tráfico, ruteo y geocodificación.
+## Vistas disponibles SIN clave
 
-## Mapa base
+Las cuatro vistas funcionan sin contratar nada:
 
-```bash
-# osm | maptiler | mapbox | carto-light
-NEXT_PUBLIC_MAP_PROVIDER=osm
-NEXT_PUBLIC_MAPTILER_KEY=
-NEXT_PUBLIC_MAPBOX_TOKEN=
-```
-
-| Proveedor | Clave | Notas |
+| Vista | Fuente | Clave |
 |---|---|---|
-| `osm` | No | **Por defecto.** Desaturado al 92 % para que el mapa sea guía de calles y el color quede en los datos |
-| `maptiler` | Sí | Vectorial. Recomendado para producción |
-| `mapbox` | Sí | Vectorial |
-| `carto-light` | Sí | **Ya no funciona sin clave**: devuelve 200 con la marca de agua "API KEY REQUIRED" incrustada |
+| **Estandar** | OpenStreetMap, desaturado | No |
+| **Satelite** | Esri World Imagery | No |
+| **Hibrido** | Esri World Imagery + capa de referencia (calles, nombres, limites) | No |
+| **Nocturno** | OpenStreetMap con tratamiento oscuro | No |
 
-Sin clave, la plataforma degrada a OpenStreetMap e informa el motivo en el mapa
-en lugar de mostrar una pantalla vacía.
+El modo hibrido superpone la capa de referencia sobre la imagineria. Sin ella
+el satelite es bonito pero inutil para operar: nadie reconoce una direccion
+sin el nombre de la calle.
 
-### Trampa de las etiquetas
+### Mejorar la nitidez (opcional)
 
-El servidor de glifos debe servir las fuentes que se le piden. Si devuelve HTML
-en lugar de un protobuf —algunos responden 200 con una página de error—,
-MapLibre lo parsea como protobuf, el bucket de símbolos revienta y **se pierde
-el tile completo**, arrastrando los círculos e iconos de la misma fuente.
+Con `NEXT_PUBLIC_MAPTILER_KEY` o `NEXT_PUBLIC_MAPBOX_TOKEN` el satelite pasa a
+teselas VECTORIALES, mas nitidas al acercarse y mas livianas. No hace falta
+para tener satelite; solo lo mejora.
 
-El síntoma es un mapa sin clientes ni paradas, sin ningún error visible. Por eso
-solo se piden fuentes sueltas (`Noto Sans Regular`, `Noto Sans Bold`), nunca
-pilas compuestas: esas responden 404 con HTML.
+---
 
-## Satélite e híbrido — Plan Medio
+## Trafico en tiempo real
 
-```bash
-NEXT_PUBLIC_SATELLITE_PROVIDER=
-```
+**No existe ninguna fuente de trafico sin clave.** Ni Google, ni TomTom, ni
+HERE, ni Mapbox: todas exigen registro y facturan por uso. Google Maps en
+particular no es gratuito — requiere una cuenta con facturacion activa.
 
-Sin proveedor, la función aparece marcada como *requiere proveedor
-configurado*. No se muestra un mapa en blanco ni se finge imaginería.
+Por eso el control de trafico se muestra pero declara que necesita un
+proveedor configurado, en lugar de dibujar congestion inventada. Un mapa que
+finge trafico haria replanificar rutas contra una realidad que no existe.
 
-## Tráfico — Plan Medio
-
-```bash
-# mapbox | tomtom | google
-TRAFFIC_PROVIDER=
-TRAFFIC_API_KEY=
-```
-
-**Nunca se genera tráfico ficticio.** Sin proveedor, la capa informa que
-requiere configuración. Presentar congestión inventada como real llevaría a
-decisiones de despacho equivocadas.
-
-## Ruteo
+### Activarlo
 
 ```bash
-# estimated | osrm | mapbox | google | maptiler
-ROUTING_PROVIDER=estimated
-OSRM_BASE_URL=
+TRAFFIC_PROVIDER=tomtom
+TRAFFIC_API_KEY=<clave>
 ```
 
-`estimated` calcula sobre el corredor planificado con velocidad urbana
-efectiva. Es honesto: el ETA declara su procedencia (`estimated` frente a
-`routing_provider`).
+TomTom tiene el nivel gratuito mas generoso para este uso. El proveedor ya
+esta implementado: solo hay que poner la clave.
 
-La geometría por calle de las rutas de demostración se precalcula aparte con
-`npm run build:rutas`.
+---
 
-## Geocodificación
+## Cambiar el mapa base
 
-```bash
-# none | nominatim | maptiler | mapbox | google
-GEOCODING_PROVIDER=none
-```
+`NEXT_PUBLIC_MAP_PROVIDER` acepta `osm` (por defecto), `carto-light`,
+`maptiler` o `mapbox`.
 
-**Nunca se geocodifica masivamente de forma automática.** Los proveedores
-cobran por consulta y limitan la tasa; una base con miles de direcciones podría
-generar un costo inesperado o un bloqueo. Se dispara por acción explícita y se
-cachea.
+CARTO **exige clave** aunque sus teselas respondan 200: sin ella devuelven la
+imagen con la marca de agua "API KEY REQUIRED" incrustada.
 
-## Terreno 3D — Plan Avanzado
+---
 
-```bash
-NEXT_PUBLIC_TERRAIN_PROVIDER=
-```
+## Nota sobre las teselas de Google
 
-## Atribución
-
-Respetar obligatoriamente las atribuciones de OpenStreetMap, MapTiler, Mapbox,
-TomTom, Google e IDE Chile según el proveedor en uso. **No retirar los logos ni
-los textos exigidos contractualmente.**
-
-Las claves `NEXT_PUBLIC_*` son publicables por naturaleza (el navegador debe
-descargar los tiles). Restringirlas por dominio en el panel del proveedor.
+Existen endpoints de Google (`mt.google.com/vt/lyrs=s`) que devuelven
+imagineria satelital sin clave. **No se usan aqui**: sus condiciones de
+servicio no permiten consumirlas fuera de sus propias APIs, y una demanda por
+uso indebido de cartografia no es un riesgo que valga la pena para ahorrar
+una clave. Esri publica su imagineria justamente para este uso, con
+atribucion.

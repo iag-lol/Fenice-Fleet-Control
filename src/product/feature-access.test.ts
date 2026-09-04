@@ -239,9 +239,16 @@ describe('Plan Avanzado contratado', () => {
 });
 
 describe('configuracion de producto', () => {
-  it('cae a Plan Medio ante un valor desconocido', async () => {
+  it('ante un valor desconocido cae al plan MENOR, nunca al mayor', async () => {
+    // Una variable mal escrita no puede acabar entregando funcionalidad que
+    // el cliente no pago.
     const { plans } = await loadWith({ NEXT_PUBLIC_PRODUCT_PLAN: 'enterprise' });
-    expect(plans.getProductConfig().plan).toBe('medium');
+    expect(plans.getProductConfig().plan).toBe('base');
+  });
+
+  it('sin variable definida, el plan contratado es el Basico', async () => {
+    const { plans } = await loadWith({});
+    expect(plans.getProductConfig().plan).toBe('base');
   });
 
   it('interpreta los indicadores booleanos', async () => {

@@ -69,11 +69,18 @@ function readBoolean(value: string | undefined, fallback: boolean): boolean {
   return TRUE_VALUES.has(value.trim().toLowerCase());
 }
 
+/**
+ * Plan contratado.
+ *
+ * Por defecto `base`, que es lo que Fenice contrato. Un valor invalido cae al
+ * plan MENOR, nunca al mayor: una variable mal escrita no puede acabar
+ * entregando funcionalidad que el cliente no pago.
+ */
 function readPlan(value: string | undefined): ProductPlan {
   const normalized = value?.trim().toLowerCase();
   return normalized === 'base' || normalized === 'medium' || normalized === 'advanced'
     ? normalized
-    : 'medium';
+    : 'base';
 }
 
 /**
@@ -93,7 +100,9 @@ export function getProductConfig(): ProductConfig {
     plan,
     showPlanBadges: readBoolean(process.env.NEXT_PUBLIC_SHOW_PLAN_BADGES, true),
     // Sin venta cruzada no tiene sentido anunciar el plan de cada funcion.
-    showUpsell: readBoolean(process.env.NEXT_PUBLIC_SHOW_UPSELL, true),
+    // Sin venta cruzada por defecto: el cliente contrato Basico y no tiene
+    // por que ver anuncios de lo que no compro dentro de su herramienta.
+    showUpsell: readBoolean(process.env.NEXT_PUBLIC_SHOW_UPSELL, false),
     // Produccion por defecto. La demostracion se pide de forma explicita.
     demoMode: readBoolean(process.env.NEXT_PUBLIC_DEMO_MODE, false),
   };

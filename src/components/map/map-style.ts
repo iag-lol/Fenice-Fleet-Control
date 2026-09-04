@@ -13,13 +13,13 @@ import type { StyleSpecification } from 'maplibre-gl';
  * en consecuencia; la arquitectura ya lo soporta.
  */
 
-export type MapProviderId = 'carto-light' | 'osm' | 'maptiler' | 'mapbox';
+export type MapProviderId = 'carto-light' | 'osm' | 'esri' | 'maptiler' | 'mapbox';
 
 /**
  * Modo de visualizacion del mapa.
  *
  *  - `standard` es el mapa aprobado y sigue siendo el predeterminado.
- *  - `satellite` e `hybrid` requieren un proveedor con imagineria contratada.
+ *  - `satellite` e `hybrid` usan imagineria de Esri, que no exige clave.
  *  - `dark` sirve para turnos de noche sin alterar la identidad del sistema.
  */
 export type MapViewMode = 'standard' | 'satellite' | 'hybrid' | 'dark';
@@ -47,6 +47,16 @@ export const MAP_PROVIDERS: Record<MapProviderId, MapProviderConfig> = {
     vector: false,
     requiresKey: false,
     attribution: '&copy; OpenStreetMap contributors',
+  },
+  esri: {
+    id: 'esri',
+    label: 'Esri World Imagery',
+    vector: false,
+    // Imagineria satelital SIN clave. Es lo que permite ofrecer la vista
+    // satelital en Plan Basico sin contratar nada.
+    requiresKey: false,
+    attribution:
+      'Imagineria &copy; Esri, Maxar, Earthstar Geographics y la comunidad de usuarios GIS',
   },
   'carto-light': {
     id: 'carto-light',
@@ -170,25 +180,64 @@ export interface MapViewAvailability {
 }
 
 /**
+ * Estilo satelital de Esri, sin clave.
+ *
+ * El modo hibrido superpone la capa de referencia (nombres de calles, limites
+ * y lugares) sobre la imagineria. Sin ella, el satelite es bonito pero
+ * inutil para operar: nadie reconoce una direccion sin el nombre de la calle.
+ */
+function esriStyle(withLabels: boolean): StyleSpecification {
+  const IMAGERY =
+    'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
+  const REFERENCE =
+    'https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}';
+
+  const style: StyleSpecification = {
+    version: 8,
+    glyphs: 'https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf',
+    sources: {
+      basemap: {
+        type: 'raster',
+        tiles: [IMAGERY],
+        tileSize: 256,
+        maxzoom: 19,
+        attribution: MAP_PROVIDERS.esri.attribution,
+      },
+    },
+    layers: [
+      { id: 'background', type: 'background', paint: { 'background-color': '#0b1b2b' } },
+      { id: 'basemap', type: 'raster', source: 'basemap', paint: { 'raster-opacity': 1 } },
+    ],
+  };
+
+  if (withLabels) {
+    style.sources.labels = {
+      type: 'raster',
+      tiles: [REFERENCE],
+      tileSize: 256,
+      maxzoom: 19,
+      attribution: MAP_PROVIDERS.esri.attribution,
+    };
+    style.layers.push({ id: 'labels', type: 'raster', source: 'labels' });
+  }
+
+  return style;
+}
+
+/**
  * Que modos de vista puede ofrecer la configuracion actual.
  *
- * Sin clave de imagineria, satelite e hibrido se declaran NO disponibles en
- * lugar de mostrar un mapa en blanco: es preferible decir que falta una clave
- * a que el operador crea que el satelite no carga por un fallo.
+ * Los cuatro estan SIEMPRE disponibles: satelite e hibrido se sirven con
+ * imagineria de Esri, que no exige clave ni contrato. Una clave de MapTiler o
+ * Mapbox mejora la nitidez y el rendimiento (teselas vectoriales), pero no
+ * hace falta para tener satelite.
  */
 export function getAvailableViewModes(): MapViewAvailability[] {
-  const satelliteKey =
-    process.env.NEXT_PUBLIC_MAPTILER_KEY ?? process.env.NEXT_PUBLIC_MAPBOX_TOKEN ?? null;
-
-  const satelliteReason = satelliteKey
-    ? null
-    : 'Requiere NEXT_PUBLIC_MAPTILER_KEY o NEXT_PUBLIC_MAPBOX_TOKEN.';
-
   return [
     { mode: 'standard', available: true, reason: null },
+    { mode: 'satellite', available: true, reason: null },
+    { mode: 'hybrid', available: true, reason: null },
     { mode: 'dark', available: true, reason: null },
-    { mode: 'satellite', available: satelliteKey !== null, reason: satelliteReason },
-    { mode: 'hybrid', available: satelliteKey !== null, reason: satelliteReason },
   ];
 }
 
@@ -218,7 +267,11 @@ export function resolveMapStyle(mode: MapViewMode = 'standard'): ResolvedMapStyl
     };
   }
 
-  // --- Satelite e hibrido: exigen imagineria contratada --------------------
+  // --- Satelite e hibrido -------------------------------------------------
+  //
+  // Con clave contratada se usan teselas vectoriales, que son mas nitidas al
+  // acercarse. Sin clave se cae a Esri, que es imagineria libre y suficiente
+  // para reconocer una planta, un acceso o una playa de carga.
   if (mode === 'satellite' || mode === 'hybrid') {
     if (maptilerKeyForView) {
       return {
@@ -236,8 +289,9 @@ export function resolveMapStyle(mode: MapViewMode = 'standard'): ResolvedMapStyl
     }
 
     return {
-      ...resolveDefault(),
-      fallbackReason: 'La vista satelital requiere una clave de MapTiler o Mapbox.',
+      style: esriStyle(mode === 'hybrid'),
+      provider: MAP_PROVIDERS.esri,
+      fallbackReason: null,
     };
   }
 
