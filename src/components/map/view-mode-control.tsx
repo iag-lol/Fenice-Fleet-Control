@@ -153,7 +153,7 @@ export function ViewModeControl() {
                 <span className="min-w-0 flex-1">
                   <span className="flex items-center gap-1.5">
                     <span className="text-[13px]">Trafico en tiempo real</span>
-                    <PlanBadge featureId="live-traffic" />
+                    <PlanBadge featureId="live-traffic" available={trafficAvailable} />
                   </span>
                   {!trafficAvailable ? (
                     <span className="mt-0.5 block text-2xs leading-relaxed text-ink-faint">

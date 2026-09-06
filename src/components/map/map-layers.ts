@@ -6,6 +6,7 @@ import type {
 
 import { circleToPolygon } from '@/lib/geo';
 import type { Geofence, HeatmapPoint, LatLng } from '@/types/core';
+import type { TrafficSegment } from '@/services/traffic/traffic-provider';
 import type {
   AlertMapPoint,
   ClientMapPoint,
@@ -30,6 +31,7 @@ export const SOURCE = {
   routesExecuted: 'src-routes-executed',
   routeStops: 'src-route-stops',
   geofences: 'src-geofences',
+  traffic: 'src-traffic',
   alerts: 'src-alerts',
   workOrders: 'src-work-orders',
   communes: 'src-communes',
@@ -44,6 +46,7 @@ export const LAYER = {
   geofenceFill: 'lyr-geofence-fill',
   geofenceLine: 'lyr-geofence-line',
   geofenceLabel: 'lyr-geofence-label',
+  traffic: 'lyr-traffic',
   routePlanned: 'lyr-route-planned',
   routeExecuted: 'lyr-route-executed',
   routeStops: 'lyr-route-stops',
@@ -233,6 +236,31 @@ export function registerLayers(map: MapLibreMap): void {
       'text-color': ['get', 'color'],
       'text-halo-color': '#ffffff',
       'text-halo-width': 1.6,
+    },
+  });
+
+  // --- Trafico en tiempo real ------------------------------------------------
+  // Los colores repiten CONGESTION_COLOR de `traffic-provider.ts`: ese modulo
+  // es `server-only` y no puede importarse aqui, asi que se fijan directo en
+  // la expresion de estilo en vez de duplicar el objeto.
+  map.addSource(SOURCE.traffic, { type: 'geojson', data: EMPTY });
+  map.addLayer({
+    id: LAYER.traffic,
+    type: 'line',
+    source: SOURCE.traffic,
+    layout: { visibility: 'none', 'line-cap': 'round', 'line-join': 'round' },
+    paint: {
+      'line-color': [
+        'match',
+        ['get', 'level'],
+        'fluido', '#15803d',
+        'moderado', '#b45309',
+        'congestionado', '#c2410c',
+        'muy_congestionado', '#b91c1c',
+        '#94a3b8',
+      ],
+      'line-width': ['interpolate', ['linear'], ['zoom'], 10, 2, 15, 4.5],
+      'line-opacity': 0.85,
     },
   });
 
@@ -592,6 +620,22 @@ export function updateGeofences(map: MapLibreMap, geofences: Geofence[]): void {
           },
         };
       }),
+  });
+}
+
+export function updateTraffic(map: MapLibreMap, segments: TrafficSegment[]): void {
+  setData(map, SOURCE.traffic, {
+    type: 'FeatureCollection',
+    features: segments
+      .filter((s) => s.path.length >= 2)
+      .map((segment) => ({
+        type: 'Feature' as const,
+        geometry: {
+          type: 'LineString' as const,
+          coordinates: segment.path.map((p) => [p.lng, p.lat]),
+        },
+        properties: { level: segment.level },
+      })),
   });
 }
 

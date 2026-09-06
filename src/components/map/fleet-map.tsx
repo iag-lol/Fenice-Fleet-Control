@@ -20,6 +20,7 @@ import {
   updateGeofences,
   updateHeatmap,
   updateRoutes,
+  updateTraffic,
   updateVehicles,
   updateWorkOrders,
   type CommuneFeatureInput,
@@ -30,6 +31,7 @@ import { OPERATION_BOUNDS, OPERATION_CENTER } from '@/data/communes';
 import { isUsableCoordinate } from '@/lib/geo';
 import { useMapStore, type MapLayerId } from '@/stores/map-store';
 import type { Geofence, HeatmapPoint, LatLng, Position } from '@/types/core';
+import type { TrafficSegment } from '@/services/traffic/traffic-provider';
 import type {
   AlertMapPoint,
   ClientMapPoint,
@@ -63,6 +65,8 @@ export interface FleetMapProps {
   workOrders: WorkOrderMapPoint[];
   communes: CommuneFeatureInput[];
   heatmapPoints: HeatmapPoint[];
+  /** Tramos de congestion a dibujar. Vacio por defecto: la mayoria de los mapas embebidos no la necesitan. */
+  trafficSegments?: TrafficSegment[];
   onSelectVehicle?: (vehicleId: string) => void;
   onSelectClient?: (clientId: string) => void;
   onSelectWorkOrder?: (workOrderId: string) => void;
@@ -124,6 +128,7 @@ export function FleetMap({
   workOrders,
   communes,
   heatmapPoints,
+  trafficSegments = [],
   onSelectVehicle,
   onSelectClient,
   onSelectWorkOrder,
@@ -142,6 +147,7 @@ export function FleetMap({
   const [styleError, setStyleError] = useState<string | null>(null);
 
   const layers = useMapStore((s) => s.layers);
+  const trafficEnabled = useMapStore((s) => s.trafficEnabled);
   const clusterClients = useMapStore((s) => s.clusterClients);
   const selection = useMapStore((s) => s.selection);
   const select = useMapStore((s) => s.select);
@@ -571,6 +577,12 @@ export function FleetMap({
     updateHeatmap(map, heatmapPoints);
   }, [ready, heatmapPoints]);
 
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !ready) return;
+    updateTraffic(map, trafficSegments);
+  }, [ready, trafficSegments]);
+
   // --- Visibilidad de capas ------------------------------------------------
   const effectiveLayers = useMemo(
     () => ({ ...layers, ...layerOverride }),
@@ -602,6 +614,7 @@ export function FleetMap({
       effectiveLayers.geocercas,
     );
     setLayerVisibility(map, [LAYER.heatmap], effectiveLayers.calor);
+    setLayerVisibility(map, [LAYER.traffic], trafficEnabled);
     setLayerVisibility(map, [LAYER.workOrders], effectiveLayers.pedidos);
     setLayerVisibility(map, [LAYER.alerts], effectiveLayers.alertas);
     setLayerVisibility(
@@ -609,7 +622,7 @@ export function FleetMap({
       [LAYER.communesFill, LAYER.communesLine, LAYER.communesLabel],
       effectiveLayers.comunas,
     );
-  }, [ready, effectiveLayers]);
+  }, [ready, effectiveLayers, trafficEnabled]);
 
   /**
    * Encuadre inicial sobre el contenido.
