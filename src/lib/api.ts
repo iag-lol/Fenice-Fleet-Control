@@ -83,7 +83,15 @@ export function getClientIp(request: Request): string | null {
  * Es una capa adicional sobre la cookie de sesion `SameSite=Lax`: protege
  * ademas contra el caso de un subdominio o proxy donde `SameSite` por si solo
  * no basta. Compara el origen declarado por el navegador (`Origin`, y si no
- * viene, `Referer`) contra el host de la propia peticion.
+ * viene, `Referer`) contra el HOSTNAME que el propio servidor recibio.
+ *
+ * Se compara contra la cabecera `Host` (o `X-Forwarded-Host` si el proxy la
+ * fija, que es el estandar en Render, Railway, etc.), NUNCA contra
+ * `request.url`: detras de un proxy inverso esa URL puede reflejar un puerto
+ * o host interno distinto al dominio publico que uso el navegador, lo que
+ * hacia fallar la comparacion SIEMPRE y bloqueaba toda escritura en
+ * produccion. Tambien se ignora el puerto en ambos lados: el navegador omite
+ * el 443 implicito en `Origin` pero algunos proxies si lo agregan a `Host`.
  */
 export function assertSameOrigin(request: Request): Response | null {
   const origin = request.headers.get('origin') ?? request.headers.get('referer');
@@ -91,10 +99,17 @@ export function assertSameOrigin(request: Request): Response | null {
   // `Origin`: se dejan pasar, la autenticacion por sesion ya los cubre.
   if (!origin) return null;
 
+  const forwardedHost = request.headers.get('x-forwarded-host');
+  const host = forwardedHost ?? request.headers.get('host');
+  // Sin `Host` no hay con que comparar: no se bloquea por una cabecera que
+  // deberia existir siempre en HTTP/1.1+, para no convertir un caso raro en
+  // una funcionalidad rota.
+  if (!host) return null;
+
   try {
-    const originHost = new URL(origin).host;
-    const requestHost = new URL(request.url).host;
-    if (originHost !== requestHost) {
+    const originHostname = new URL(origin).hostname;
+    const requestHostname = host.split(':')[0];
+    if (originHostname !== requestHostname) {
       return apiError('Solicitud rechazada: origen no confiable.', 403);
     }
     return null;

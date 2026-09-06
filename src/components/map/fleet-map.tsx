@@ -596,7 +596,11 @@ export function FleetMap({
       [LAYER.routePlanned, LAYER.routeExecuted, LAYER.routeStops, LAYER.routeStopLabels],
       effectiveLayers.rutas,
     );
-    setLayerVisibility(map, [LAYER.geofenceFill, LAYER.geofenceLine], effectiveLayers.geocercas);
+    setLayerVisibility(
+      map,
+      [LAYER.geofenceFill, LAYER.geofenceLine, LAYER.geofenceLabel],
+      effectiveLayers.geocercas,
+    );
     setLayerVisibility(map, [LAYER.heatmap], effectiveLayers.calor);
     setLayerVisibility(map, [LAYER.workOrders], effectiveLayers.pedidos);
     setLayerVisibility(map, [LAYER.alerts], effectiveLayers.alertas);

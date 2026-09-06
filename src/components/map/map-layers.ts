@@ -43,6 +43,7 @@ export const LAYER = {
   heatmap: 'lyr-heatmap',
   geofenceFill: 'lyr-geofence-fill',
   geofenceLine: 'lyr-geofence-line',
+  geofenceLabel: 'lyr-geofence-label',
   routePlanned: 'lyr-route-planned',
   routeExecuted: 'lyr-route-executed',
   routeStops: 'lyr-route-stops',
@@ -213,6 +214,25 @@ export function registerLayers(map: MapLibreMap): void {
       'line-width': 1.5,
       'line-opacity': 0.75,
       'line-dasharray': [2, 2],
+    },
+  });
+  map.addLayer({
+    id: LAYER.geofenceLabel,
+    type: 'symbol',
+    source: SOURCE.geofences,
+    layout: {
+      visibility: 'none',
+      'text-field': ['get', 'name'],
+      'text-font': [REGULAR_FONT],
+      'text-size': ['interpolate', ['linear'], ['zoom'], 10, 10, 14, 12, 17, 14],
+      'text-allow-overlap': false,
+      'text-padding': 4,
+      'text-max-width': 10,
+    },
+    paint: {
+      'text-color': ['get', 'color'],
+      'text-halo-color': '#ffffff',
+      'text-halo-width': 1.6,
     },
   });
 

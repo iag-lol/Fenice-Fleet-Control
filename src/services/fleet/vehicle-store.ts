@@ -1,17 +1,43 @@
 import 'server-only';
 
+import { randomUUID } from 'node:crypto';
+import { z } from 'zod';
+
 import { getDemoDataset } from '@/demo';
 import { getSupabaseClient, isSupabaseConfigured } from '@/lib/supabase/server-client';
 import { asDeviceId, asDriverId, asVehicleId, type GpsDevice, type Vehicle, type VehicleId } from '@/types/core';
 
 /**
  * Flota (camiones). Artefacto propio de la plataforma: vive en Supabase
- * (tablas `vehiculos` + `dispositivos_gps`) cuando esta configurado, y en el
- * dataset de demostracion si no. Ya NO viene del ERP de Fenice: solo
- * clientes, pedidos y ordenes de trabajo siguen ahi.
+ * (tablas `vehiculos` + `dispositivos_gps`) cuando esta configurado, y en
+ * memoria (sembrada desde el dataset de demostracion) si no. Ya NO viene del
+ * ERP de Fenice: solo clientes, pedidos y ordenes de trabajo siguen ahi.
  */
 
 const TABLE = 'vehiculos';
+
+export const VEHICLE_TYPES = ['cisterna_semirremolque', 'cisterna_rigido', 'camioneta_estanque'] as const;
+
+export const vehicleInputSchema = z.object({
+  plate: z
+    .string()
+    .trim()
+    .min(5)
+    .max(10)
+    .transform((v) => v.toUpperCase().replace(/\s+/g, '')),
+  fleetCode: z.string().trim().min(1).max(20),
+  brand: z.string().trim().max(60).default(''),
+  model: z.string().trim().max(60).default(''),
+  year: z.coerce.number().int().min(1980).max(new Date().getFullYear() + 1).nullable().optional(),
+  type: z.enum(VEHICLE_TYPES),
+  /** El operador lo ingresa en metros cubicos; se guarda en litros (x1000). */
+  capacityM3: z.coerce.number().positive().max(60),
+  compartments: z.coerce.number().int().positive().max(10).default(1),
+  depotName: z.string().trim().max(120).default(''),
+  active: z.boolean().default(true),
+});
+
+export type VehicleInput = z.infer<typeof vehicleInputSchema>;
 
 interface DeviceRow {
   id: string;
@@ -28,7 +54,7 @@ interface VehicleRow {
   codigo_flota: string;
   marca: string;
   modelo: string;
-  anio: number;
+  anio: number | null;
   tipo: Vehicle['type'];
   capacidad_litros: number;
   compartimentos: number;
@@ -58,7 +84,7 @@ function rowToVehicle(row: VehicleRow): Vehicle {
     fleetCode: row.codigo_flota,
     brand: row.marca,
     model: row.modelo,
-    year: row.anio,
+    year: row.anio ?? new Date().getFullYear(),
     type: row.tipo,
     capacityLiters: row.capacidad_litros,
     compartments: row.compartimentos,
@@ -69,8 +95,66 @@ function rowToVehicle(row: VehicleRow): Vehicle {
   };
 }
 
+function inputToRow(input: VehicleInput) {
+  return {
+    patente: input.plate,
+    codigo_flota: input.fleetCode,
+    marca: input.brand,
+    modelo: input.model,
+    anio: input.year ?? null,
+    tipo: input.type,
+    capacidad_litros: Math.round(input.capacityM3 * 1000),
+    compartimentos: input.compartments,
+    base_despacho: input.depotName || null,
+    activo: input.active,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Backend en memoria (modo demostracion, sin Supabase configurado)
+// ---------------------------------------------------------------------------
+
+const globalForVehicles = globalThis as unknown as {
+  __feniceVehicles?: Map<string, Vehicle>;
+};
+
+function memoryStore(): Map<string, Vehicle> {
+  if (!globalForVehicles.__feniceVehicles) {
+    const seeded = new Map<string, Vehicle>();
+    for (const vehicle of getDemoDataset().vehicles) seeded.set(vehicle.id, vehicle);
+    globalForVehicles.__feniceVehicles = seeded;
+  }
+  return globalForVehicles.__feniceVehicles;
+}
+
+function createInMemory(input: VehicleInput): Vehicle {
+  const vehicle: Vehicle = {
+    id: asVehicleId(randomUUID()),
+    plate: input.plate,
+    fleetCode: input.fleetCode,
+    brand: input.brand,
+    model: input.model,
+    year: input.year ?? new Date().getFullYear(),
+    type: input.type,
+    capacityLiters: Math.round(input.capacityM3 * 1000),
+    compartments: input.compartments,
+    device: null,
+    driverId: null,
+    depotName: input.depotName,
+    active: input.active,
+  };
+  memoryStore().set(vehicle.id, vehicle);
+  return vehicle;
+}
+
+// ---------------------------------------------------------------------------
+// API publica
+// ---------------------------------------------------------------------------
+
 export async function listVehicles(): Promise<Vehicle[]> {
-  if (!isSupabaseConfigured()) return getDemoDataset().vehicles;
+  if (!isSupabaseConfigured()) {
+    return [...memoryStore().values()].sort((a, b) => a.fleetCode.localeCompare(b.fleetCode, 'es'));
+  }
 
   const { data, error } = await getSupabaseClient()
     .from(TABLE)
@@ -85,9 +169,7 @@ export async function listVehicles(): Promise<Vehicle[]> {
 }
 
 export async function getVehicleByIdFromStore(id: VehicleId): Promise<Vehicle | null> {
-  if (!isSupabaseConfigured()) {
-    return getDemoDataset().vehicles.find((v) => v.id === id) ?? null;
-  }
+  if (!isSupabaseConfigured()) return memoryStore().get(id) ?? null;
 
   const { data, error } = await getSupabaseClient()
     .from(TABLE)
@@ -97,4 +179,38 @@ export async function getVehicleByIdFromStore(id: VehicleId): Promise<Vehicle | 
 
   if (error || !data) return null;
   return rowToVehicle(data);
+}
+
+export interface CreateVehicleResult {
+  ok: boolean;
+  vehicle?: Vehicle;
+  error?: string;
+}
+
+/** Crea un vehiculo. La patente es unica: dos altas con la misma fallan con un mensaje claro. */
+export async function createVehicle(input: VehicleInput): Promise<CreateVehicleResult> {
+  if (!isSupabaseConfigured()) return { ok: true, vehicle: createInMemory(input) };
+
+  const { data, error } = await getSupabaseClient()
+    .from(TABLE)
+    .insert(inputToRow(input))
+    .select('*, dispositivos_gps(*)')
+    .single<VehicleRow>();
+
+  if (error) {
+    if (error.code === '23505') {
+      return { ok: false, error: `Ya existe un vehiculo con la patente ${input.plate} o el codigo ${input.fleetCode}.` };
+    }
+    return { ok: false, error: `No fue posible crear el vehiculo: ${error.message}` };
+  }
+  if (!data) return { ok: false, error: 'No fue posible crear el vehiculo.' };
+
+  return { ok: true, vehicle: rowToVehicle(data) };
+}
+
+export async function deleteVehicleFromStore(id: VehicleId): Promise<boolean> {
+  if (!isSupabaseConfigured()) return memoryStore().delete(id);
+
+  const { error, count } = await getSupabaseClient().from(TABLE).delete({ count: 'exact' }).eq('id', id);
+  return !error && (count ?? 0) > 0;
 }

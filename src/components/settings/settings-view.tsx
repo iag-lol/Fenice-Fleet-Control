@@ -10,6 +10,7 @@ import {
   Save,
   Shield,
   Route as RouteIcon,
+  Warehouse,
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
@@ -142,6 +143,14 @@ export function SettingsView() {
               icon={<Shield className="h-3.5 w-3.5" />}
             >
               Editor de geocercas
+            </LinkButton>
+            <LinkButton
+              href="/configuracion/puntos-partida"
+              variant="secondary"
+              size="sm"
+              icon={<Warehouse className="h-3.5 w-3.5" />}
+            >
+              Puntos de partida
             </LinkButton>
             <Button
               variant="ghost"

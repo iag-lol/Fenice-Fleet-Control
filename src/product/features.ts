@@ -65,6 +65,7 @@ export type FeatureId =
   | 'routes'
   | 'geofences'
   | 'geofence-editor'
+  | 'depot-points'
   | 'alerts'
   | 'territory-intelligence'
   | 'heatmap'
@@ -225,6 +226,15 @@ export const FEATURES: readonly FeatureDefinition[] = [
     category: 'entregas',
     implementationState: 'active',
     route: '/configuracion/geocercas',
+  },
+  {
+    id: 'depot-points',
+    name: 'Puntos de partida',
+    description: 'Alta guiada de la central y los puntos de carga, con geocerca de 300 m automatica.',
+    minimumPlan: 'base',
+    category: 'entregas',
+    implementationState: 'active',
+    route: '/configuracion/puntos-partida',
   },
   {
     id: 'alerts',

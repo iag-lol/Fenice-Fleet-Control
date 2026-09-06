@@ -108,8 +108,17 @@ export function useGeofenceDrawing(map: MapLibreMap | null): GeofenceDrawingStat
       });
     };
 
-    if (map.isStyleLoaded()) register();
-    else map.once('load', register);
+    // `map` solo llega aqui a traves de `onMapReady`, que `FleetMap` invoca
+    // DESPUES de que su propio evento `load` ya disparo y registro sus capas
+    // (ver fleet-map.tsx). Ese `load` es un evento de una sola vez: para
+    // cuando este efecto corre, ya paso, y `map.once('load', ...)` nunca
+    // volveria a llamarse — asi quedaba esta capa de previsualizacion sin
+    // registrar nunca, y el dibujo no mostraba nada mientras el operador
+    // hacia clic. Anadir fuentes y capas es seguro apenas el estilo del mapa
+    // existe, que es garantizado por ese mismo contrato; no hace falta
+    // esperar a que `isStyleLoaded()` se ponga en verdadero (fluctua mientras
+    // OTRAS fuentes del mapa siguen cargando sus propios tiles).
+    register();
 
     return () => {
       for (const layer of [PREVIEW_VERTICES, PREVIEW_LINE, PREVIEW_FILL]) {

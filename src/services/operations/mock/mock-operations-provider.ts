@@ -14,6 +14,8 @@ import { evaluateConnectionState } from '@/lib/engines/gps-health';
 import { haversineMeters } from '@/lib/geo';
 import { normalizeSearch } from '@/lib/format';
 import { listGeofences } from '@/services/geofences/geofence-store';
+import { listDrivers } from '@/services/fleet/driver-store';
+import { listVehicles } from '@/services/fleet/vehicle-store';
 import { fleetSimulator } from '@/services/gps/mock/simulator';
 import type {
   AlertQuery,
@@ -377,12 +379,16 @@ export class MockOperationsProvider implements ExternalOperationsProvider {
   // Flota
   // -------------------------------------------------------------------------
 
+  // Delega en el almacen compartido (memoria sembrada desde el dataset de
+  // demostracion, o Supabase si esta configurado) para que un vehiculo dado
+  // de alta en tiempo de ejecucion aparezca aqui igual que en el proveedor
+  // "external": ambos proveedores sirven la misma flota persistida.
   async getVehicles(): Promise<Vehicle[]> {
-    return getDataset().vehicles;
+    return listVehicles();
   }
 
   async getDrivers(): Promise<Driver[]> {
-    return getDataset().drivers;
+    return listDrivers();
   }
 
   // -------------------------------------------------------------------------
