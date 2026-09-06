@@ -6,7 +6,6 @@ import type {
 
 import { circleToPolygon } from '@/lib/geo';
 import type { Geofence, HeatmapPoint, LatLng } from '@/types/core';
-import type { TrafficSegment } from '@/services/traffic/traffic-provider';
 import type {
   AlertMapPoint,
   ClientMapPoint,
@@ -240,28 +239,25 @@ export function registerLayers(map: MapLibreMap): void {
   });
 
   // --- Trafico en tiempo real ------------------------------------------------
-  // Los colores repiten CONGESTION_COLOR de `traffic-provider.ts`: ese modulo
-  // es `server-only` y no puede importarse aqui, asi que se fijan directo en
-  // la expresion de estilo en vez de duplicar el objeto.
-  map.addSource(SOURCE.traffic, { type: 'geojson', data: EMPTY });
+  // Tiles rasterizados (como los del mapa base), no lineas por muestreo.
+  // TomTom tambien ofrece `flowSegmentData`, que solo devuelve el tramo mas
+  // cercano a UN punto: sirve para el ETA de una ruta concreta, no para
+  // cubrir una ciudad entera, y con pocos puntos de muestreo se veia como un
+  // puñado de lineas sueltas en medio del mapa. El servicio de tiles cubre
+  // todas las vias visibles, igual que el trafico de Google Maps.
+  // La clave nunca llega al navegador: se pide via el proxy propio
+  // /api/trafico/tile/{z}/{x}/{y}, que la agrega en el servidor.
+  map.addSource(SOURCE.traffic, {
+    type: 'raster',
+    tiles: ['/api/trafico/tile/{z}/{x}/{y}'],
+    tileSize: 256,
+  });
   map.addLayer({
     id: LAYER.traffic,
-    type: 'line',
+    type: 'raster',
     source: SOURCE.traffic,
-    layout: { visibility: 'none', 'line-cap': 'round', 'line-join': 'round' },
-    paint: {
-      'line-color': [
-        'match',
-        ['get', 'level'],
-        'fluido', '#15803d',
-        'moderado', '#b45309',
-        'congestionado', '#c2410c',
-        'muy_congestionado', '#b91c1c',
-        '#94a3b8',
-      ],
-      'line-width': ['interpolate', ['linear'], ['zoom'], 10, 2, 15, 4.5],
-      'line-opacity': 0.85,
-    },
+    layout: { visibility: 'none' },
+    paint: { 'raster-opacity': 0.8 },
   });
 
   // --- Rutas ---------------------------------------------------------------
@@ -620,22 +616,6 @@ export function updateGeofences(map: MapLibreMap, geofences: Geofence[]): void {
           },
         };
       }),
-  });
-}
-
-export function updateTraffic(map: MapLibreMap, segments: TrafficSegment[]): void {
-  setData(map, SOURCE.traffic, {
-    type: 'FeatureCollection',
-    features: segments
-      .filter((s) => s.path.length >= 2)
-      .map((segment) => ({
-        type: 'Feature' as const,
-        geometry: {
-          type: 'LineString' as const,
-          coordinates: segment.path.map((p) => [p.lng, p.lat]),
-        },
-        properties: { level: segment.level },
-      })),
   });
 }
 

@@ -1,6 +1,6 @@
 'use client';
 
-import maplibregl, { type Map as MapLibreMap, type MapMouseEvent } from 'maplibre-gl';
+import maplibregl, { type Map as MapLibreMap, type MapMouseEvent, type RasterTileSource } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
@@ -20,7 +20,6 @@ import {
   updateGeofences,
   updateHeatmap,
   updateRoutes,
-  updateTraffic,
   updateVehicles,
   updateWorkOrders,
   type CommuneFeatureInput,
@@ -31,7 +30,6 @@ import { OPERATION_BOUNDS, OPERATION_CENTER } from '@/data/communes';
 import { isUsableCoordinate } from '@/lib/geo';
 import { useMapStore, type MapLayerId } from '@/stores/map-store';
 import type { Geofence, HeatmapPoint, LatLng, Position } from '@/types/core';
-import type { TrafficSegment } from '@/services/traffic/traffic-provider';
 import type {
   AlertMapPoint,
   ClientMapPoint,
@@ -65,8 +63,6 @@ export interface FleetMapProps {
   workOrders: WorkOrderMapPoint[];
   communes: CommuneFeatureInput[];
   heatmapPoints: HeatmapPoint[];
-  /** Tramos de congestion a dibujar. Vacio por defecto: la mayoria de los mapas embebidos no la necesitan. */
-  trafficSegments?: TrafficSegment[];
   onSelectVehicle?: (vehicleId: string) => void;
   onSelectClient?: (clientId: string) => void;
   onSelectWorkOrder?: (workOrderId: string) => void;
@@ -128,7 +124,6 @@ export function FleetMap({
   workOrders,
   communes,
   heatmapPoints,
-  trafficSegments = [],
   onSelectVehicle,
   onSelectClient,
   onSelectWorkOrder,
@@ -577,11 +572,28 @@ export function FleetMap({
     updateHeatmap(map, heatmapPoints);
   }, [ready, heatmapPoints]);
 
+  /**
+   * Refresco del trafico.
+   *
+   * MapLibre solo vuelve a pedir un tile ya cargado si cambia la URL de la
+   * fuente: por eso el trafico se veria fijo en lo que había al encenderlo,
+   * aunque cambiara en la realidad. Se agrega un parametro que cambia cada
+   * minuto (mismo periodo que el `Cache-Control` del proxy) para forzar la
+   * recarga de los tiles visibles.
+   */
   useEffect(() => {
+    if (!ready || !trafficEnabled) return;
     const map = mapRef.current;
-    if (!map || !ready) return;
-    updateTraffic(map, trafficSegments);
-  }, [ready, trafficSegments]);
+    if (!map) return;
+
+    const refresh = (): void => {
+      const source = map.getSource(SOURCE.traffic) as RasterTileSource | undefined;
+      source?.setTiles([`/api/trafico/tile/{z}/{x}/{y}?t=${Date.now()}`]);
+    };
+
+    const timer = setInterval(refresh, 60_000);
+    return () => clearInterval(timer);
+  }, [ready, trafficEnabled]);
 
   // --- Visibilidad de capas ------------------------------------------------
   const effectiveLayers = useMemo(

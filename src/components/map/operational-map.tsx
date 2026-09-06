@@ -41,7 +41,6 @@ import { cn } from '@/lib/cn';
 import { useMapStore } from '@/stores/map-store';
 import type { BoundaryMetadata } from '@/data/administrative-boundaries';
 import type { MapSnapshot, TerritoryAnalysis } from '@/types/views';
-import type { TrafficProviderInfo, TrafficSegment } from '@/services/traffic/traffic-provider';
 
 interface CommunesResponse {
   metadata: BoundaryMetadata;
@@ -79,7 +78,6 @@ export function OperationalMap() {
   const isolate = useMapStore((s) => s.isolate);
   const scopedCommuneCode = useMapStore((s) => s.scopedCommuneCode);
   const scopeToCommune = useMapStore((s) => s.scopeToCommune);
-  const trafficEnabled = useMapStore((s) => s.trafficEnabled);
 
   const {
     data: snapshot,
@@ -122,25 +120,6 @@ export function OperationalMap() {
       return (await response.json()) as CommunesResponse;
     },
   });
-
-  // El trafico solo se descarga cuando el operador enciende la capa: es una
-  // consulta a un proveedor externo pago, no algo que se pida de fondo.
-  const { data: trafficData } = useQuery({
-    queryKey: ['traffic', 'segments'],
-    enabled: trafficEnabled,
-    refetchInterval: 60_000,
-    staleTime: 30_000,
-    queryFn: async (): Promise<{ provider: TrafficProviderInfo; segments: TrafficSegment[] }> => {
-      const response = await fetch('/api/trafico');
-      if (!response.ok) throw new Error('No fue posible cargar el trafico.');
-      return (await response.json()) as { provider: TrafficProviderInfo; segments: TrafficSegment[] };
-    },
-  });
-
-  const trafficSegments = useMemo(
-    () => (trafficEnabled ? (trafficData?.segments ?? []) : []),
-    [trafficEnabled, trafficData],
-  );
 
   const communeFeatures = useMemo(
     () =>
@@ -306,7 +285,6 @@ export function OperationalMap() {
             workOrders={pedidosEnfocados}
             communes={communeFeatures}
             heatmapPoints={heatmapPoints}
-            trafficSegments={trafficSegments}
             onSelectVehicle={openDetail}
             onSelectClient={openDetail}
             onSelectWorkOrder={openDetail}

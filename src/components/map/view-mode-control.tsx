@@ -164,7 +164,25 @@ export function ViewModeControl() {
                     </span>
                   ) : null}
                 </span>
-                {!trafficAvailable ? <Lock className="mt-0.5 h-3 w-3 shrink-0" /> : null}
+                {trafficAvailable ? (
+                  // Interruptor explicito: el tinte de fondo por si solo no
+                  // se leia como un boton de encendido/apagado.
+                  <span
+                    className={cn(
+                      'mt-0.5 flex h-5 w-9 shrink-0 items-center rounded-full p-0.5 transition-colors',
+                      trafficEnabled ? 'bg-brand-500' : 'bg-surface-700',
+                    )}
+                  >
+                    <span
+                      className={cn(
+                        'h-4 w-4 rounded-full bg-white transition-transform',
+                        trafficEnabled && 'translate-x-4',
+                      )}
+                    />
+                  </span>
+                ) : (
+                  <Lock className="mt-0.5 h-3 w-3 shrink-0" />
+                )}
               </button>
             </div>
 
