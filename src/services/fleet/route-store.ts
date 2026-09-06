@@ -28,7 +28,6 @@ import {
  */
 
 const ROUTE_TABLE = 'rutas';
-const STOP_TABLE = 'paradas_ruta';
 
 interface StopRow {
   id: string;

@@ -1,6 +1,5 @@
 import 'server-only';
 
-import { createHash, randomBytes } from 'node:crypto';
 import { cookies } from 'next/headers';
 
 import { getServerEnv } from '@/config/env';
@@ -19,6 +18,13 @@ import type { Role } from '@/lib/auth';
  * La autoridad sobre revocacion y vigencia vive siempre en esta tabla: la
  * cookie por si sola no basta para entrar, tiene que seguir existiendo una
  * fila valida en `sesiones`.
+ *
+ * Usa exclusivamente Web Crypto (`crypto.subtle`, `crypto.getRandomValues`)
+ * en vez de `node:crypto`: este modulo lo importa `src/middleware.ts`, que
+ * Next.js compila para el Edge Runtime, donde los esquemas `node:` no estan
+ * soportados por el empaquetador. Web Crypto esta disponible tanto en Node
+ * (desde la v20, la minima que exige este proyecto) como en Edge, asi que el
+ * mismo codigo sirve para ambos sin duplicarlo.
  */
 
 export const SESSION_COOKIE_NAME = 'fenice_session';
@@ -35,8 +41,19 @@ export interface SessionRequestContext {
   userAgent: string | null;
 }
 
-function hashToken(token: string): string {
-  return createHash('sha256').update(token).digest('hex');
+async function hashToken(token: string): Promise<string> {
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(token));
+  return Array.from(new Uint8Array(digest))
+    .map((byte) => byte.toString(16).padStart(2, '0'))
+    .join('');
+}
+
+/** Token opaco de 32 bytes aleatorios, codificado en base64url. */
+function generateToken(): string {
+  const bytes = crypto.getRandomValues(new Uint8Array(32));
+  let binary = '';
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
 
 interface SesionRow {
@@ -70,7 +87,7 @@ export async function resolveSessionByToken(token: string): Promise<SessionUser 
   const { data, error } = await supabase
     .from('sesiones')
     .select('id, expira_at, revocada_at, usuarios!inner(id, rut, nombre_completo, rol, activo)')
-    .eq('token_hash', hashToken(token))
+    .eq('token_hash', await hashToken(token))
     .maybeSingle<SesionRow>();
 
   if (error || !data) return null;
@@ -114,14 +131,14 @@ export async function resolveSessionFromCookies(): Promise<SessionUser | null> {
  */
 export async function createSession(usuarioId: string, ctx: SessionRequestContext): Promise<void> {
   const env = getServerEnv();
-  const token = randomBytes(32).toString('base64url');
+  const token = generateToken();
   const now = new Date();
   const expiresAt = new Date(now.getTime() + env.SESSION_TTL_HOURS * 3_600_000);
 
   const supabase = getSupabaseClient();
   const { error } = await supabase.from('sesiones').insert({
     usuario_id: usuarioId,
-    token_hash: hashToken(token),
+    token_hash: await hashToken(token),
     expira_at: expiresAt.toISOString(),
     ip_creacion: ctx.ip,
     user_agent: ctx.userAgent,
@@ -151,7 +168,7 @@ export async function destroySessionFromCookies(): Promise<void> {
   const { error } = await supabase
     .from('sesiones')
     .update({ revocada_at: new Date().toISOString() })
-    .eq('token_hash', hashToken(token));
+    .eq('token_hash', await hashToken(token));
 
   if (error) console.error('[session] no fue posible revocar la sesion:', error.message);
 }
