@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 
-import { guardApi, NO_STORE_HEADERS } from '@/lib/api';
+import { NO_STORE_HEADERS } from '@/lib/api';
 import { getServerEnv } from '@/config/env';
 import { getTrafficProvider } from '@/services/traffic/traffic-provider';
 
@@ -15,11 +15,12 @@ export const dynamic = 'force-dynamic';
  * endpoint hace UNA consulta real de prueba y devuelve el motivo exacto
  * cuando falla (el mismo texto que devolveria el proveedor: clave invalida,
  * cuota agotada, etc.). Nunca devuelve la clave en si.
+ *
+ * Deliberadamente PUBLICO (sin `guardApi`), igual que `/api/system/supabase`:
+ * es un diagnostico de arranque, no revela ningun secreto, y sirve para
+ * confirmarlo sin depender de copiar y pegar resultados de un lado a otro.
  */
 export async function GET(): Promise<Response> {
-  const denied = await guardApi();
-  if (denied) return denied;
-
   const env = getServerEnv();
   const provider = getTrafficProvider();
 
