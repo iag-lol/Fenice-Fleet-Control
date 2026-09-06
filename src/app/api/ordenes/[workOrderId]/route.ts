@@ -1,4 +1,4 @@
-import { apiError } from '@/lib/api';
+import { apiError, guardApi } from '@/lib/api';
 import { canUseFeature } from '@/product/feature-access';
 import { getProof } from '@/services/deliveries/proof-store';
 import { getOperationsProvider } from '@/services/registry';
@@ -11,6 +11,9 @@ export async function GET(
   _request: Request,
   { params }: { params: Promise<{ workOrderId: string }> },
 ): Promise<Response> {
+  const denied = await guardApi('ordenes.ver');
+  if (denied) return denied;
+
   const { workOrderId } = await params;
 
   try {
@@ -35,7 +38,7 @@ export async function GET(
 
     // La evidencia de terreno solo viaja si el plan la incluye: en Plan
     // Basico no existe el portal del conductor y no hay nada que mostrar.
-    const proof = canUseFeature('proof-of-delivery') ? getProof(workOrder.id) : null;
+    const proof = canUseFeature('proof-of-delivery') ? await getProof(workOrder.id) : null;
 
     return NextResponse.json({ workOrder, order, client, vehicle, driver, route, proof });
   } catch (error) {

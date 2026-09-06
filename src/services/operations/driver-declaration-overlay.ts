@@ -29,8 +29,8 @@ import type { ExternalOperationsProvider } from './operations-provider';
  * con la base real: la regla es del dominio, no del origen de los datos.
  */
 
-function applyProof(workOrder: WorkOrder): WorkOrder {
-  const proof = getProof(workOrder.id);
+async function applyProof(workOrder: WorkOrder): Promise<WorkOrder> {
+  const proof = await getProof(workOrder.id);
   if (!proof) return workOrder;
 
   // Una parada cancelada no se reabre por una declaracion posterior.
@@ -49,8 +49,8 @@ function applyProof(workOrder: WorkOrder): WorkOrder {
   };
 }
 
-function applyProofToStops(stops: RouteStop[]): RouteStop[] {
-  const proofs = getProofs(stops.map((stop) => stop.workOrderId));
+async function applyProofToStops(stops: RouteStop[]): Promise<RouteStop[]> {
+  const proofs = await getProofs(stops.map((stop) => stop.workOrderId));
   if (proofs.size === 0) return stops;
 
   return stops.map((stop) => {
@@ -66,8 +66,8 @@ function applyProofToStops(stops: RouteStop[]): RouteStop[] {
   });
 }
 
-function applyProofToRoute(route: Route): Route {
-  return { ...route, stops: applyProofToStops(route.stops) };
+async function applyProofToRoute(route: Route): Promise<Route> {
+  return { ...route, stops: await applyProofToStops(route.stops) };
 }
 
 /**
@@ -84,7 +84,7 @@ export function withDriverDeclarations(
       switch (property) {
         case 'getWorkOrders':
           return async (...args: Parameters<ExternalOperationsProvider['getWorkOrders']>) =>
-            (await target.getWorkOrders(...args)).map(applyProof);
+            Promise.all((await target.getWorkOrders(...args)).map(applyProof));
 
         case 'getWorkOrderById':
           return async (id: WorkOrderId) => {
@@ -100,7 +100,7 @@ export function withDriverDeclarations(
 
         case 'getRoutes':
           return async (...args: Parameters<ExternalOperationsProvider['getRoutes']>) =>
-            (await target.getRoutes(...args)).map(applyProofToRoute);
+            Promise.all((await target.getRoutes(...args)).map(applyProofToRoute));
 
         case 'getRouteById':
           return async (...args: Parameters<ExternalOperationsProvider['getRouteById']>) => {

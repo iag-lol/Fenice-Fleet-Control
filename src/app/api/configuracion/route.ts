@@ -1,5 +1,6 @@
-import { apiError, handleApi } from '@/lib/api';
-import { ForbiddenError, requirePermission, UnauthorizedError } from '@/lib/auth';
+import { assertSameOrigin, getClientIp, guardApi, handleApi } from '@/lib/api';
+import { getAuthContext } from '@/lib/auth';
+import { logAction } from '@/lib/audit';
 import {
   getOperationalSettings,
   resetOperationalSettings,
@@ -9,32 +10,23 @@ import { NextResponse } from 'next/server';
 
 export const dynamic = 'force-dynamic';
 
-/**
- * Control de acceso a la escritura de configuracion. Inerte mientras
- * AUTH_ENABLED=false; al activarla, aqui se aplica sin cambiar la UI.
- */
-async function guardWrite(): Promise<Response | null> {
-  try {
-    await requirePermission('configuracion.editar');
-    return null;
-  } catch (error) {
-    if (error instanceof UnauthorizedError) return apiError(error.message, 401);
-    if (error instanceof ForbiddenError) return apiError(error.message, 403);
-    throw error;
-  }
-}
-
 export async function GET(): Promise<Response> {
+  const denied = await guardApi();
+  if (denied) return denied;
+
   return handleApi(async () => getOperationalSettings(), 'la configuracion operacional');
 }
 
 /** Aplica una nueva configuracion. Los motores la toman en la siguiente lectura. */
 export async function PUT(request: Request): Promise<Response> {
-  const denied = await guardWrite();
+  const originError = assertSameOrigin(request);
+  if (originError) return originError;
+
+  const denied = await guardApi('configuracion.editar');
   if (denied) return denied;
 
   const body = await request.json().catch(() => null);
-  const result = updateOperationalSettings(body);
+  const result = await updateOperationalSettings(body);
 
   if (!result.ok) {
     return NextResponse.json(
@@ -43,21 +35,32 @@ export async function PUT(request: Request): Promise<Response> {
     );
   }
 
+  const context = await getAuthContext();
+  void logAction({
+    userId: context.userId,
+    action: 'configuracion.editar',
+    entity: 'configuracion_operacional',
+    ip: getClientIp(request),
+  });
+
   return NextResponse.json(result.settings);
 }
 
 /** Restaura los valores definidos por variables de entorno. */
-export async function DELETE(): Promise<Response> {
-  const denied = await guardWrite();
+export async function DELETE(request: Request): Promise<Response> {
+  const originError = assertSameOrigin(request);
+  if (originError) return originError;
+
+  const denied = await guardApi('configuracion.editar');
   if (denied) return denied;
 
-  try {
-    return NextResponse.json(resetOperationalSettings());
-  } catch (error) {
-    return apiError(
-      'No fue posible restaurar la configuracion.',
-      503,
-      error instanceof Error ? error.message : String(error),
-    );
-  }
+  const context = await getAuthContext();
+  void logAction({
+    userId: context.userId,
+    action: 'configuracion.restaurar',
+    entity: 'configuracion_operacional',
+    ip: getClientIp(request),
+  });
+
+  return handleApi(() => resetOperationalSettings(), 'la configuracion operacional');
 }

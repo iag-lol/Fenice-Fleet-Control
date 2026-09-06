@@ -1,6 +1,8 @@
 import { NextResponse, type NextRequest } from 'next/server';
 
+import { getServerEnv } from '@/config/env';
 import { getBlockedRoutes } from '@/product/feature-access';
+import { resolveSessionByToken, SESSION_COOKIE_NAME } from '@/lib/session';
 
 /**
  * Control de acceso por plan a nivel de ruta.
@@ -16,19 +18,44 @@ import { getBlockedRoutes } from '@/product/feature-access';
 
 const BLOCKED = getBlockedRoutes();
 
-export function middleware(request: NextRequest): NextResponse {
+/**
+ * Rutas que no exigen sesion: la propia pantalla de login, el seguimiento
+ * publico del cliente final y el portal del conductor (su credencial es el
+ * enlace firmado, no una sesion de esta plataforma).
+ */
+const PUBLIC_PREFIXES = ['/login', '/seguimiento', '/conductor'];
+
+function isPublicPath(pathname: string): boolean {
+  return PUBLIC_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));
+}
+
+export async function middleware(request: NextRequest): Promise<NextResponse> {
   const { pathname } = request.nextUrl;
 
   const blocked = BLOCKED.some(
     (route) => pathname === route || pathname.startsWith(`${route}/`),
   );
 
-  if (!blocked) return NextResponse.next();
+  if (blocked) {
+    // Se reescribe a una ruta inexistente para que Next sirva su pagina de
+    // "no encontrado" con el estado correcto, sin revelar que la pantalla
+    // existe pero esta restringida.
+    return NextResponse.rewrite(new URL('/404', request.url), { status: 404 });
+  }
 
-  // Se reescribe a una ruta inexistente para que Next sirva su pagina de
-  // "no encontrado" con el estado correcto, sin revelar que la pantalla
-  // existe pero esta restringida.
-  return NextResponse.rewrite(new URL('/404', request.url), { status: 404 });
+  const env = getServerEnv();
+  if (env.AUTH_ENABLED && !isPublicPath(pathname)) {
+    const token = request.cookies.get(SESSION_COOKIE_NAME)?.value;
+    const session = token ? await resolveSessionByToken(token) : null;
+
+    if (!session) {
+      const loginUrl = new URL('/login', request.url);
+      loginUrl.searchParams.set('next', pathname);
+      return NextResponse.redirect(loginUrl);
+    }
+  }
+
+  return NextResponse.next();
 }
 
 export const config = {

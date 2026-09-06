@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 
-import { apiError, NO_STORE_HEADERS } from '@/lib/api';
+import { apiError, assertSameOrigin, NO_STORE_HEADERS } from '@/lib/api';
 import {
   findOwnStop,
   loadDriverSession,
@@ -28,6 +28,9 @@ export async function POST(
   request: Request,
   { params }: { params: Promise<{ token: string; workOrderId: string }> },
 ): Promise<Response> {
+  const originError = assertSameOrigin(request);
+  if (originError) return originError;
+
   const { token, workOrderId } = await params;
 
   // El plan se comprueba tambien aqui: el middleware no cubre `/api`, y sin
@@ -53,7 +56,7 @@ export async function POST(
     );
   }
 
-  const recorded = recordDeliveryProof(parsed.data, {
+  const recorded = await recordDeliveryProof(parsed.data, {
     workOrderId: stop.workOrderId,
     routeId: result.session.routeId,
     driverId: null,

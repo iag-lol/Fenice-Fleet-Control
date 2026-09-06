@@ -1,4 +1,4 @@
-import { handleApi } from '@/lib/api';
+import { guardApi, handleApi } from '@/lib/api';
 import { BOUNDARY_METADATA, COMMUNES } from '@/data/communes';
 import { loadCommuneOperationalSummary } from '@/services/aggregation/commune-aggregator';
 
@@ -12,6 +12,9 @@ export const dynamic = 'force-dynamic';
  * tiene sentido enviarla en cada carga del mapa.
  */
 export async function GET(): Promise<Response> {
+  const denied = await guardApi();
+  if (denied) return denied;
+
   return handleApi(async () => {
     const summary = await loadCommuneOperationalSummary();
 

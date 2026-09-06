@@ -83,8 +83,8 @@ function fakeProvider(workOrder: WorkOrder = BASE): ExternalOperationsProvider {
   } as unknown as ExternalOperationsProvider;
 }
 
-function declarar(outcome: 'entregada' | 'incidencia', extra: Record<string, unknown> = {}) {
-  recordDeliveryProof(
+async function declarar(outcome: 'entregada' | 'incidencia', extra: Record<string, unknown> = {}) {
+  await recordDeliveryProof(
     deliveryProofInputSchema.parse({
       outcome,
       receiverName: outcome === 'entregada' ? 'Patricia Soto' : undefined,
@@ -105,7 +105,7 @@ describe('declaracion del conductor sobre la fuente operacional', () => {
   });
 
   it('cierra la parada cuando el conductor firma la entrega', async () => {
-    declarar('entregada');
+    await declarar('entregada');
     const provider = withDriverDeclarations(fakeProvider());
     const workOrder = await provider.getWorkOrderById(OT);
 
@@ -115,7 +115,7 @@ describe('declaracion del conductor sobre la fuente operacional', () => {
   });
 
   it('corta el seguimiento publico en cuanto el conductor firma', async () => {
-    declarar('entregada');
+    await declarar('entregada');
     const provider = withDriverDeclarations(fakeProvider());
     const workOrder = await provider.getWorkOrderByNumber('OT-1');
 
@@ -123,7 +123,7 @@ describe('declaracion del conductor sobre la fuente operacional', () => {
   });
 
   it('una incidencia NO cuenta como entrega aunque el camion estuviera dentro', async () => {
-    declarar('incidencia');
+    await declarar('incidencia');
     const dentro: WorkOrder = { ...BASE, status: 'en_cliente', deliveryConfirmation: 'gps' };
     const provider = withDriverDeclarations(fakeProvider(dentro));
     const workOrder = await provider.getWorkOrderById(OT);
@@ -134,13 +134,13 @@ describe('declaracion del conductor sobre la fuente operacional', () => {
   });
 
   it('no reabre una parada cancelada', async () => {
-    declarar('entregada');
+    await declarar('entregada');
     const provider = withDriverDeclarations(fakeProvider({ ...BASE, status: 'cancelada' }));
     expect((await provider.getWorkOrderById(OT))?.status).toBe('cancelada');
   });
 
   it('propaga la declaracion a las paradas de la ruta', async () => {
-    declarar('entregada');
+    await declarar('entregada');
     const provider = withDriverDeclarations(fakeProvider());
     const route = await provider.getRouteById(RUTA);
 

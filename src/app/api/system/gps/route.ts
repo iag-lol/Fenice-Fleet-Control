@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 
-import { apiError, NO_STORE_HEADERS } from '@/lib/api';
+import { apiError, guardApi, NO_STORE_HEADERS } from '@/lib/api';
 import { getServerEnv } from '@/config/env';
 import { getGpsProvider } from '@/services/registry';
 
@@ -17,6 +17,9 @@ export const dynamic = 'force-dynamic';
  * NUNCA devuelve credenciales: solo si estan presentes y si funcionan.
  */
 export async function GET(): Promise<Response> {
+  const denied = await guardApi();
+  if (denied) return denied;
+
   const env = getServerEnv();
   const gps = getGpsProvider();
 

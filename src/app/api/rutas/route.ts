@@ -1,9 +1,12 @@
-import { handleApi } from '@/lib/api';
+import { guardApi, handleApi } from '@/lib/api';
 import { getOperationsProvider } from '@/services/registry';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(): Promise<Response> {
+  const denied = await guardApi('rutas.ver');
+  if (denied) return denied;
+
   return handleApi(async () => {
     const operations = getOperationsProvider();
     const [routes, vehicles, drivers] = await Promise.all([

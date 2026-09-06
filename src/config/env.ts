@@ -13,7 +13,37 @@ const booleanFromEnv = z
   .transform((v) => v === 'true');
 
 const serverEnvSchema = z.object({
+  /**
+   * Control de acceso de la plataforma.
+   *
+   * `true` exige sesion valida (login por RUT y contrasena, ver
+   * `src/lib/auth.ts`) para toda la aplicacion salvo `/login`, `/seguimiento`
+   * y `/conductor` (portal del conductor, con su propia credencial por
+   * enlace). Requiere Supabase configurado: ahi viven `usuarios` y
+   * `sesiones`.
+   */
   AUTH_ENABLED: booleanFromEnv.default('false'),
+
+  // --- Supabase: base interna de la plataforma ---
+  // Aloja login (usuarios/sesiones), flota, rutas, geocercas, alertas,
+  // configuracion y evidencias de entrega. NUNCA clientes ni despachos: esos
+  // siguen viviendo en la base externa de Fenice (ver EXTERNAL_DB_*).
+  // Se usa exclusivamente con la service role key, solo desde el servidor:
+  // esta plataforma NO usa Supabase Auth.
+  //
+  // No hay una variable separada para "activar" la persistencia en Supabase:
+  // su sola presencia es la senal. Sin configurar, cada almacen (geocercas,
+  // configuracion, evidencias, flota, rutas) sigue funcionando en memoria del
+  // proceso exactamente como hoy, sembrado desde el dataset de demostracion.
+  SUPABASE_URL: z.string().url().optional(),
+  SUPABASE_SERVICE_ROLE_KEY: z.string().optional(),
+
+  /** Vigencia de la sesion de login, en horas. */
+  SESSION_TTL_HOURS: z.coerce.number().int().positive().max(24 * 30).default(12),
+  /** Intentos fallidos antes de bloquear temporalmente la cuenta. */
+  LOGIN_MAX_ATTEMPTS: z.coerce.number().int().positive().max(20).default(5),
+  /** Duracion del bloqueo tras superar `LOGIN_MAX_ATTEMPTS`, en minutos. */
+  LOGIN_LOCKOUT_MINUTES: z.coerce.number().int().positive().max(1440).default(15),
 
   /**
    * Fuente de telemetria.
@@ -152,6 +182,24 @@ const serverEnvSchema = z.object({
   /** Tope por fotografia ya comprimida en el telefono, en bytes. */
   PROOF_PHOTO_MAX_BYTES: z.coerce.number().int().positive().default(900_000),
   PROOF_MAX_PHOTOS: z.coerce.number().int().positive().max(10).default(4),
+}).superRefine((env, ctx) => {
+  // El login (tablas `usuarios`/`sesiones`) necesita Supabase de verdad.
+  // Fallar aqui, con nombre y apellido de lo que falta, es mejor que dejar
+  // que la primera consulta explote con un mensaje generico de conexion.
+  if (env.AUTH_ENABLED && !env.SUPABASE_URL) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['SUPABASE_URL'],
+      message: 'Requerido cuando AUTH_ENABLED=true.',
+    });
+  }
+  if (env.AUTH_ENABLED && !env.SUPABASE_SERVICE_ROLE_KEY) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['SUPABASE_SERVICE_ROLE_KEY'],
+      message: 'Requerido cuando AUTH_ENABLED=true.',
+    });
+  }
 });
 
 export type ServerEnv = z.infer<typeof serverEnvSchema>;

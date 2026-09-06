@@ -1,4 +1,4 @@
-import { handleApi } from '@/lib/api';
+import { guardApi, handleApi } from '@/lib/api';
 import { loadClientContext, toClientMapPoints } from '@/services/aggregation/client-aggregator';
 
 export const dynamic = 'force-dynamic';
@@ -9,6 +9,9 @@ export const dynamic = 'force-dynamic';
  * evita que la lista y el mapa muestren estados distintos.
  */
 export async function GET(): Promise<Response> {
+  const denied = await guardApi('clientes.ver');
+  if (denied) return denied;
+
   return handleApi(async () => {
     const { snapshots } = await loadClientContext();
     return { generatedAt: new Date().toISOString(), clients: toClientMapPoints(snapshots) };

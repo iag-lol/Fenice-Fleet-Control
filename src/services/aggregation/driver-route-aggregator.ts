@@ -53,7 +53,7 @@ function geofenceForWorkOrder(
 }
 
 export async function loadDriverSession(token: string): Promise<DriverSessionResult> {
-  const verification = verifyRouteToken(token);
+  const verification = await verifyRouteToken(token);
   if (!verification.valid) return { ok: false, reason: verification.reason };
 
   const { routeId, expiresAt } = verification.claims;
@@ -79,7 +79,7 @@ export async function loadDriverSession(token: string): Promise<DriverSessionRes
   const vehicle = route.vehicleId ? vehicles.find((v) => v.id === route.vehicleId) ?? null : null;
 
   const position = route.vehicleId ? await gps.getVehiclePosition(route.vehicleId) : null;
-  const proofs = getProofs(ownWorkOrders.map((wo) => wo.id));
+  const proofs = await getProofs(ownWorkOrders.map((wo) => wo.id));
 
   // Los pedidos se piden por cliente de esta ruta y se cruzan por id de
   // pedido; el conductor necesita saber que producto y cuantos litros lleva

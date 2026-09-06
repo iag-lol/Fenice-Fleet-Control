@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { apiError, handleApi } from '@/lib/api';
+import { apiError, assertSameOrigin, guardApi, handleApi } from '@/lib/api';
 import { fleetSimulator } from '@/services/gps/mock/simulator';
 import { getGpsProvider } from '@/services/registry';
 
@@ -8,6 +8,9 @@ export const dynamic = 'force-dynamic';
 
 /** Estado del simulador GPS de demostracion. */
 export async function GET(): Promise<Response> {
+  const denied = await guardApi();
+  if (denied) return denied;
+
   if (getGpsProvider().info.id !== 'mock') {
     return handleApi(async () => ({ available: false }), 'el estado del simulador');
   }
@@ -21,6 +24,12 @@ const commandSchema = z.object({ action: z.enum(['pause', 'resume']) });
  * con GPS real no existe nada que pausar.
  */
 export async function POST(request: Request): Promise<Response> {
+  const originError = assertSameOrigin(request);
+  if (originError) return originError;
+
+  const denied = await guardApi('configuracion.editar');
+  if (denied) return denied;
+
   if (getGpsProvider().info.id !== 'mock') {
     return apiError('El simulador solo esta disponible con GPS_PROVIDER=mock.', 409);
   }

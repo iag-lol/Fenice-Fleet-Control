@@ -1,4 +1,4 @@
-import { apiError, handleApi } from '@/lib/api';
+import { apiError, guardApi, handleApi } from '@/lib/api';
 import { getGpsProvider } from '@/services/registry';
 import { asVehicleId } from '@/types/core';
 
@@ -9,6 +9,9 @@ export async function GET(
   request: Request,
   { params }: { params: Promise<{ vehicleId: string }> },
 ): Promise<Response> {
+  const denied = await guardApi('flota.ver');
+  if (denied) return denied;
+
   const { vehicleId } = await params;
   const url = new URL(request.url);
 

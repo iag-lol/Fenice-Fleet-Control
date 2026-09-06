@@ -1,4 +1,4 @@
-import { handleApi } from '@/lib/api';
+import { guardApi, handleApi } from '@/lib/api';
 import { getServerEnv } from '@/config/env';
 import { getGpsProvider } from '@/services/registry';
 import { getTrafficProvider } from '@/services/traffic/traffic-provider';
@@ -45,6 +45,9 @@ function buildWindow(): OperatingWindow {
 }
 
 export async function GET(request: Request): Promise<Response> {
+  const denied = await guardApi();
+  if (denied) return denied;
+
   const url = new URL(request.url);
 
   return handleApi(async () => {

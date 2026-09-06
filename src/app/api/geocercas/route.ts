@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server';
 
-import { apiError, handleApi } from '@/lib/api';
-import { ForbiddenError, requirePermission, UnauthorizedError } from '@/lib/auth';
+import { assertSameOrigin, getClientIp, guardApi, handleApi } from '@/lib/api';
+import { getAuthContext } from '@/lib/auth';
+import { logAction } from '@/lib/audit';
 import {
   createGeofence,
   geofenceInputSchema,
@@ -11,7 +12,10 @@ import {
 export const dynamic = 'force-dynamic';
 
 export async function GET(): Promise<Response> {
-  return handleApi(async () => ({ geofences: listGeofences() }), 'las geocercas');
+  const denied = await guardApi('geocercas.ver');
+  if (denied) return denied;
+
+  return handleApi(async () => ({ geofences: await listGeofences() }), 'las geocercas');
 }
 
 /**
@@ -22,13 +26,11 @@ export async function GET(): Promise<Response> {
  * externa.
  */
 export async function POST(request: Request): Promise<Response> {
-  try {
-    await requirePermission('configuracion.editar');
-  } catch (error) {
-    if (error instanceof UnauthorizedError) return apiError(error.message, 401);
-    if (error instanceof ForbiddenError) return apiError(error.message, 403);
-    throw error;
-  }
+  const originError = assertSameOrigin(request);
+  if (originError) return originError;
+
+  const denied = await guardApi('geocercas.editar');
+  if (denied) return denied;
 
   const parsed = geofenceInputSchema.safeParse(await request.json().catch(() => null));
 
@@ -42,5 +44,17 @@ export async function POST(request: Request): Promise<Response> {
     );
   }
 
-  return NextResponse.json(createGeofence(parsed.data), { status: 201 });
+  const created = await createGeofence(parsed.data);
+
+  const context = await getAuthContext();
+  void logAction({
+    userId: context.userId,
+    action: 'geocerca.crear',
+    entity: 'geocercas',
+    entityId: created.id,
+    detail: { nombre: created.name, tipo: created.kind },
+    ip: getClientIp(request),
+  });
+
+  return NextResponse.json(created, { status: 201 });
 }

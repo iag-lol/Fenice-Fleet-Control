@@ -1,4 +1,4 @@
-import { handleApi, NO_STORE_HEADERS } from '@/lib/api';
+import { guardApi, handleApi, NO_STORE_HEADERS } from '@/lib/api';
 import { getSystemMode } from '@/services/registry';
 import { getOperationalSettings } from '@/services/settings/settings-store';
 import { getProductConfig } from '@/product/plans';
@@ -7,6 +7,9 @@ export const dynamic = 'force-dynamic';
 
 /** Modo del sistema e indicadores de configuracion. Sin secretos. */
 export async function GET(): Promise<Response> {
+  const denied = await guardApi();
+  if (denied) return denied;
+
   const response = await handleApi(
     async () => ({
       ...getSystemMode(),

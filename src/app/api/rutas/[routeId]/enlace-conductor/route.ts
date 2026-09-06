@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
 
-import { apiError, NO_STORE_HEADERS } from '@/lib/api';
-import { ForbiddenError, requirePermission, UnauthorizedError } from '@/lib/auth';
+import { apiError, assertSameOrigin, guardApi, NO_STORE_HEADERS } from '@/lib/api';
 import { canUseFeature } from '@/product/feature-access';
 import { getOperationsProvider } from '@/services/registry';
 import { issueRouteToken, revokeRouteToken } from '@/services/drivers/route-token';
@@ -24,13 +23,11 @@ export async function POST(
     return apiError('El portal del conductor no esta incluido en este plan.', 404);
   }
 
-  try {
-    await requirePermission('ordenes.editar');
-  } catch (error) {
-    if (error instanceof UnauthorizedError) return apiError(error.message, 401);
-    if (error instanceof ForbiddenError) return apiError(error.message, 403);
-    throw error;
-  }
+  const originError = assertSameOrigin(request);
+  if (originError) return originError;
+
+  const denied = await guardApi('rutas.editar');
+  if (denied) return denied;
 
   const { routeId } = await params;
   const route = await getOperationsProvider().getRouteById(routeId as RouteId);
@@ -42,7 +39,7 @@ export async function POST(
       ? Math.floor(body.ttlHours)
       : undefined;
 
-  const issued = issueRouteToken(route.id, ttlHours ? { ttlHours } : undefined);
+  const issued = await issueRouteToken(route.id, ttlHours ? { ttlHours } : undefined);
 
   const response = NextResponse.json(
     {
@@ -60,17 +57,15 @@ export async function POST(
 
 /** Anula un enlace ya entregado: telefono perdido o cambio de conductor. */
 export async function DELETE(request: Request): Promise<Response> {
-  try {
-    await requirePermission('ordenes.editar');
-  } catch (error) {
-    if (error instanceof UnauthorizedError) return apiError(error.message, 401);
-    if (error instanceof ForbiddenError) return apiError(error.message, 403);
-    throw error;
-  }
+  const originError = assertSameOrigin(request);
+  if (originError) return originError;
+
+  const denied = await guardApi('rutas.editar');
+  if (denied) return denied;
 
   const token = new URL(request.url).searchParams.get('token')?.trim() ?? '';
   if (token.length < 20) return apiError('Indica el enlace que quieres anular.', 400);
 
-  revokeRouteToken(token);
+  await revokeRouteToken(token);
   return NextResponse.json({ revoked: true });
 }

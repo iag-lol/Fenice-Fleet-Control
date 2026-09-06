@@ -73,8 +73,8 @@ describe('evidencia de entrega', () => {
     expect(parsed.success).toBe(false);
   });
 
-  it('registra la evidencia y calcula la distancia al domicilio', () => {
-    const result = recordDeliveryProof(
+  it('registra la evidencia y calcula la distancia al domicilio', async () => {
+    const result = await recordDeliveryProof(
       entregaValida({ capturedPosition: { lat: -33.4505, lng: -70.66 } }),
       CONTEXTO,
     );
@@ -90,29 +90,29 @@ describe('evidencia de entrega', () => {
     expect(result.proof.distanceToClientMeters).toBeLessThan(70);
   });
 
-  it('es idempotente: reenviar la misma evidencia no crea una segunda', () => {
-    const primera = recordDeliveryProof(entregaValida(), CONTEXTO);
-    const segunda = recordDeliveryProof(entregaValida({ receiverName: 'Otro Nombre' }), CONTEXTO);
+  it('es idempotente: reenviar la misma evidencia no crea una segunda', async () => {
+    const primera = await recordDeliveryProof(entregaValida(), CONTEXTO);
+    const segunda = await recordDeliveryProof(entregaValida({ receiverName: 'Otro Nombre' }), CONTEXTO);
 
     expect(primera.ok && segunda.ok).toBe(true);
     if (!primera.ok || !segunda.ok) return;
     expect(segunda.duplicate).toBe(true);
     expect(segunda.proof.id).toBe(primera.proof.id);
     // La primera declaracion es la que vale: el reenvio no la reescribe.
-    expect(getProof(OT)?.receiverName).toBe('Patricia Soto');
-    expect(listProofs()).toHaveLength(1);
+    expect((await getProof(OT))?.receiverName).toBe('Patricia Soto');
+    expect(await listProofs()).toHaveLength(1);
   });
 
-  it('rechaza una fotografia que supera el limite aunque mienta en su tamano', () => {
+  it('rechaza una fotografia que supera el limite aunque mienta en su tamano', async () => {
     const enorme = { ...FOTO, byteSize: 10, dataUrl: `data:image/jpeg;base64,${'A'.repeat(4_000_000)}` };
-    const result = recordDeliveryProof(entregaValida({ photos: [enorme] }), CONTEXTO);
+    const result = await recordDeliveryProof(entregaValida({ photos: [enorme] }), CONTEXTO);
 
     expect(result.ok).toBe(false);
-    expect(getProof(OT)).toBeNull();
+    expect(await getProof(OT)).toBeNull();
   });
 
-  it('conserva la hora declarada en terreno y la de recepcion cuando llega desde la cola', () => {
-    const result = recordDeliveryProof(
+  it('conserva la hora declarada en terreno y la de recepcion cuando llega desde la cola', async () => {
+    const result = await recordDeliveryProof(
       entregaValida({ declaredAt: '2026-08-27T14:01:00.000Z', submittedOffline: true }),
       { ...CONTEXTO, now: new Date('2026-08-27T15:40:00.000Z') },
     );
@@ -124,9 +124,9 @@ describe('evidencia de entrega', () => {
     expect(result.proof.submittedOffline).toBe(true);
   });
 
-  it('filtra el listado por ruta y por resultado', () => {
-    recordDeliveryProof(entregaValida(), CONTEXTO);
-    recordDeliveryProof(
+  it('filtra el listado por ruta y por resultado', async () => {
+    await recordDeliveryProof(entregaValida(), CONTEXTO);
+    await recordDeliveryProof(
       deliveryProofInputSchema.parse({
         outcome: 'incidencia',
         incidentReason: 'cliente_ausente',
@@ -135,10 +135,10 @@ describe('evidencia de entrega', () => {
       { ...CONTEXTO, workOrderId: 'wo-2' as WorkOrderId },
     );
 
-    expect(listProofs({ routeId: RUTA })).toHaveLength(2);
-    expect(listProofs({ outcome: 'incidencia' })).toHaveLength(1);
-    expect(listProofs({ withPhotosOnly: true })).toHaveLength(1);
+    expect(await listProofs({ routeId: RUTA })).toHaveLength(2);
+    expect(await listProofs({ outcome: 'incidencia' })).toHaveLength(1);
+    expect(await listProofs({ withPhotosOnly: true })).toHaveLength(1);
     // Mas reciente primero.
-    expect(listProofs()[0]?.outcome).toBe('incidencia');
+    expect((await listProofs())[0]?.outcome).toBe('incidencia');
   });
 });

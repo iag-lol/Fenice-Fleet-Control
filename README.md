@@ -41,8 +41,10 @@ npm run dev
 
 Abrir <http://localhost:3000>.
 
-**No hay login.** La plataforma está abierta por decisión de producto para
-desarrollo, demostración y validación con Fenice.
+**Sin configurar nada, no hay login** (`AUTH_ENABLED=false` por defecto):
+abierta para desarrollo y demostración. Para producción, `AUTH_ENABLED=true`
+exige iniciar sesión con RUT y contraseña contra una tabla propia en Supabase
+— sin Supabase Auth. Ver [`docs/SUPABASE-INTEGRATION.md`](docs/SUPABASE-INTEGRATION.md).
 
 Al arrancar sin configuración, el sistema opera en **modo demostración**: un
 simulador GPS mueve la flota por rutas reales de Santiago y un dataset interno
@@ -283,7 +285,8 @@ Ninguna de ellas se finge: sin proveedor, la función aparece marcada como
 | [`CUSTOMER-TRACKING.md`](docs/CUSTOMER-TRACKING.md) | Seguimiento público del cliente y su privacidad |
 | [`GPS-INTEGRATION.md`](docs/GPS-INTEGRATION.md) | Conectar el servidor Traccar |
 | [`3DTRACKING-INTEGRATION.md`](docs/3DTRACKING-INTEGRATION.md) | Conectar la telemetría real de 3DTracking |
-| [`EXTERNAL-DATABASE-INTEGRATION.md`](docs/EXTERNAL-DATABASE-INTEGRATION.md) | Conectar la base de Fenice |
+| [`EXTERNAL-DATABASE-INTEGRATION.md`](docs/EXTERNAL-DATABASE-INTEGRATION.md) | Conectar la base de Fenice (solo clientes y despachos) |
+| [`SUPABASE-INTEGRATION.md`](docs/SUPABASE-INTEGRATION.md) | Login, flota, rutas, geocercas y evidencia en Supabase |
 | [`BASELINE-PLAN-BASICO.md`](docs/BASELINE-PLAN-BASICO.md) | Línea base del Plan Básico, para no-regresión |
 
 **El esquema de la base de Fenice no está asumido.** El mapeo es declarativo
@@ -305,8 +308,16 @@ completamente distinto funciona sin tocar otra línea de código.
   No expone otros clientes, otras OT, la ruta completa, el historial del camión
   ni datos comerciales. La patente se muestra parcialmente enmascarada. La
   posición deja de compartirse una vez entregado el pedido.
-- **Preparado para autenticación.** `src/lib/auth.ts` centraliza el control de
-  acceso con `AUTH_ENABLED=false`. Activarlo no requiere reconstruir el sistema.
+- **Login propio, sin Supabase Auth.** `AUTH_ENABLED=true` exige RUT y
+  contraseña validados contra la tabla `usuarios` (bcrypt, costo 12), con
+  sesiones propias por cookie `httpOnly`/`secure`/`SameSite=Lax` — nunca se
+  delega la autenticación en el sistema de usuarios de Supabase. Bloqueo por
+  intentos fallidos, auditoría de login y de acciones administrativas. Ver
+  [`docs/SUPABASE-INTEGRATION.md`](docs/SUPABASE-INTEGRATION.md).
+- **CSRF.** Toda ruta que muta estado verifica que `Origin`/`Referer`
+  coincida con el propio sitio, ademas de la cookie `SameSite=Lax`.
+- **Cabeceras de seguridad HTTP** (`X-Frame-Options`, `X-Content-Type-Options`,
+  `Referrer-Policy`, `Permissions-Policy`, HSTS) en toda respuesta.
 
 ---
 

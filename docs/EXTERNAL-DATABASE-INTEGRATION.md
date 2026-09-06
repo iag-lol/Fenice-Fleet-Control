@@ -1,7 +1,13 @@
 # Integración con la base de datos de Fenice
 
 Cómo reemplazar el dataset de demostración por los datos reales de clientes,
-pedidos, despachos, rutas y órdenes de trabajo.
+pedidos y despachos (órdenes de trabajo).
+
+**Alcance de esta base: solo clientes, pedidos y despachos.** Flota
+(camiones, conductores), rutas y geocercas ya NO vienen de aquí: viven en
+Supabase, la base propia de la plataforma — ver
+[`SUPABASE-INTEGRATION.md`](SUPABASE-INTEGRATION.md). Esta base externa
+queda reducida a lo que de verdad es del ERP de Fenice.
 
 **Estado actual:** `OPERATIONS_PROVIDER=mock`. La estructura de conexión, el
 mapeo y las guardas de solo lectura están implementadas. **Faltan tres cosas
@@ -205,8 +211,9 @@ Para completar el mapeo:
 2. **Host, puerto y nombre** de la base (o de la réplica de lectura).
 3. **Credenciales de solo lectura.**
 4. **Nombres de tablas o vistas** para: clientes, direcciones de cliente,
-   pedidos, detalle de pedidos, órdenes de trabajo, rutas, camiones y
-   conductores.
+   pedidos, detalle de pedidos y órdenes de trabajo. (Camiones, conductores
+   y rutas ya no se piden aquí: viven en Supabase, ver
+   [`SUPABASE-INTEGRATION.md`](SUPABASE-INTEGRATION.md).)
 5. **Nombres de columnas** y sus tipos.
 6. **Relaciones**: cómo se une un pedido con su cliente, con su dirección de
    despacho y con su orden de trabajo.
@@ -263,16 +270,11 @@ forma controlada desde la plataforma.
 | `scheduledDate`, ventana horaria | Sí | Detección de atrasos |
 | `status`, `priority` | Sí | Estado operacional |
 
-### Rutas
-El **corredor planificado** (la polilínea) casi con seguridad no existe en el
-ERP. Hay dos opciones:
-
-1. Reconstruirlo uniendo las paradas en secuencia (aproximado pero suficiente
-   para detectar desvíos grandes).
-2. Calcularlo con un proveedor de ruteo real (`ROUTING_PROVIDER=osrm`).
-
-Sin corredor, la detección de desvío de ruta no funciona; el resto de la
-plataforma sí.
+### Rutas, flota y geocercas
+Ya no se piden a Fenice: se administran directamente en Supabase (tablas
+`rutas`, `paradas_ruta`, `vehiculos`, `conductores`, `dispositivos_gps`,
+`geocercas`). Ver [`SUPABASE-INTEGRATION.md`](SUPABASE-INTEGRATION.md),
+sección "Cargar flota y rutas reales".
 
 ---
 

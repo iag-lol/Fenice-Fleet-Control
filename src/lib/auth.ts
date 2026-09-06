@@ -1,27 +1,19 @@
 import 'server-only';
 
 import { getServerEnv } from '@/config/env';
+import { resolveSessionFromCookies } from '@/lib/session';
 
 /**
  * Punto de control de acceso de la plataforma.
  *
- * ESTADO ACTUAL: `AUTH_ENABLED=false`. La plataforma esta completamente
- * abierta para desarrollo, demostracion y validacion con Fenice. No existe
- * login, registro ni recuperacion de contrasena, y ninguna pantalla aplica
- * restricciones.
+ * Login propio por RUT y contrasena (tabla `usuarios` en Supabase, sesiones
+ * en `sesiones`), sin Supabase Auth. La resolucion real de la sesion vive en
+ * `src/lib/session.ts`; este modulo traduce esa sesion al contexto de
+ * autorizacion (`AuthContext`) que consume el resto de la aplicacion.
  *
- * POR QUE EXISTE ESTE MODULO: para que activar la autenticacion mas adelante
- * no obligue a reconstruir el sistema. Toda pregunta sobre "quien es el
- * usuario" y "puede hacer esto" pasa por aqui. El dia que Fenice lo requiera:
- *
- *   1. Poner `AUTH_ENABLED=true`.
- *   2. Implementar `resolveSession()` contra el proveedor elegido
- *      (credenciales propias, OAuth corporativo, SSO...).
- *   3. Llamar a `requireAuth()` en las rutas de API y `requirePermission()`
- *      en las acciones sensibles.
- *
- * Nada mas cambia: los componentes, los proveedores y los motores de reglas
- * son indiferentes a la identidad del usuario.
+ * Con `AUTH_ENABLED=false` la plataforma opera en modo abierto (desarrollo o
+ * demostracion sin Supabase configurado): todo permitido, sin usuario
+ * asociado. Es el mismo comportamiento que tenia el andamiaje original.
  */
 
 export type Role = 'operador' | 'supervisor' | 'administrador' | 'invitado';
@@ -32,6 +24,10 @@ export type Permission =
   | 'clientes.ver'
   | 'ordenes.ver'
   | 'ordenes.editar'
+  | 'rutas.ver'
+  | 'rutas.editar'
+  | 'geocercas.ver'
+  | 'geocercas.editar'
   | 'alertas.resolver'
   | 'configuracion.editar';
 
@@ -52,6 +48,10 @@ const ALL_PERMISSIONS: readonly Permission[] = [
   'clientes.ver',
   'ordenes.ver',
   'ordenes.editar',
+  'rutas.ver',
+  'rutas.editar',
+  'geocercas.ver',
+  'geocercas.editar',
   'alertas.resolver',
   'configuracion.editar',
 ];
@@ -65,10 +65,14 @@ export const ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
     'clientes.ver',
     'ordenes.ver',
     'ordenes.editar',
+    'rutas.ver',
+    'rutas.editar',
+    'geocercas.ver',
+    'geocercas.editar',
     'alertas.resolver',
   ],
-  operador: ['flota.ver', 'clientes.ver', 'ordenes.ver', 'alertas.resolver'],
-  invitado: ['flota.ver', 'clientes.ver', 'ordenes.ver'],
+  operador: ['flota.ver', 'clientes.ver', 'ordenes.ver', 'rutas.ver', 'geocercas.ver', 'alertas.resolver'],
+  invitado: ['flota.ver', 'clientes.ver', 'ordenes.ver', 'rutas.ver', 'geocercas.ver'],
 };
 
 /**
@@ -84,15 +88,19 @@ const OPEN_CONTEXT: AuthContext = {
   permissions: new Set(ALL_PERMISSIONS),
 };
 
-/**
- * Resuelve la sesion del usuario.
- *
- * PENDIENTE DE IMPLEMENTAR cuando se active la autenticacion: leer la cookie
- * o cabecera de sesion, validarla contra el proveedor y devolver el contexto.
- * Devolver `null` significa "no autenticado".
- */
+/** Resuelve la sesion del usuario contra la cookie de la peticion actual. */
 async function resolveSession(): Promise<AuthContext | null> {
-  return null;
+  const session = await resolveSessionFromCookies();
+  if (!session) return null;
+
+  return {
+    authenticated: true,
+    openAccess: false,
+    userId: session.id,
+    displayName: session.nombreCompleto,
+    role: session.rol,
+    permissions: new Set(ROLE_PERMISSIONS[session.rol]),
+  };
 }
 
 /** Contexto de acceso vigente. Nunca lanza. */

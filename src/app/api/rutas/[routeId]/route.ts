@@ -1,4 +1,4 @@
-import { apiError } from '@/lib/api';
+import { apiError, guardApi } from '@/lib/api';
 import { getOperationsProvider } from '@/services/registry';
 import { asRouteId } from '@/types/core';
 import { NextResponse } from 'next/server';
@@ -9,6 +9,9 @@ export async function GET(
   _request: Request,
   { params }: { params: Promise<{ routeId: string }> },
 ): Promise<Response> {
+  const denied = await guardApi('rutas.ver');
+  if (denied) return denied;
+
   const { routeId } = await params;
 
   try {

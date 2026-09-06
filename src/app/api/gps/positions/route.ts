@@ -1,4 +1,4 @@
-import { handleApi, NO_STORE_HEADERS } from '@/lib/api';
+import { guardApi, handleApi, NO_STORE_HEADERS } from '@/lib/api';
 import { loadFleetSnapshots } from '@/services/aggregation/fleet-aggregator';
 import { getGpsProvider } from '@/services/registry';
 import { fleetSimulator } from '@/services/gps/mock/simulator';
@@ -8,6 +8,9 @@ export const dynamic = 'force-dynamic';
 
 /** Posiciones vivas + instantanea de flota. Fallback de polling del mapa. */
 export async function GET(): Promise<Response> {
+  const denied = await guardApi();
+  if (denied) return denied;
+
   const response = await handleApi<LivePositionsPayload>(async () => {
     const provider = getGpsProvider();
     const [positions, vehicles] = await Promise.all([

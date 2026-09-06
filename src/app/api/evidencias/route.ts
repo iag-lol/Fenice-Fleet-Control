@@ -1,5 +1,4 @@
-import { apiError, NO_STORE_HEADERS } from '@/lib/api';
-import { ForbiddenError, requirePermission, UnauthorizedError } from '@/lib/auth';
+import { apiError, guardApi, NO_STORE_HEADERS } from '@/lib/api';
 import { canUseFeature } from '@/product/feature-access';
 import { listProofs } from '@/services/deliveries/proof-store';
 import { getOperationsProvider } from '@/services/registry';
@@ -20,13 +19,8 @@ export async function GET(request: Request): Promise<Response> {
     return apiError('La evidencia de entrega no esta incluida en este plan.', 404);
   }
 
-  try {
-    await requirePermission('ordenes.ver');
-  } catch (error) {
-    if (error instanceof UnauthorizedError) return apiError(error.message, 401);
-    if (error instanceof ForbiddenError) return apiError(error.message, 403);
-    throw error;
-  }
+  const denied = await guardApi('ordenes.ver');
+  if (denied) return denied;
 
   const url = new URL(request.url);
   const routeId = url.searchParams.get('ruta')?.trim() ?? '';
@@ -35,7 +29,7 @@ export async function GET(request: Request): Promise<Response> {
   const includeImages = routeId.length > 0;
 
   try {
-    const proofs = listProofs({
+    const proofs = await listProofs({
       ...(routeId ? { routeId: routeId as RouteId } : {}),
       ...(outcome === 'entregada' || outcome === 'incidencia' ? { outcome } : {}),
       ...(withPhotos ? { withPhotosOnly: true } : {}),

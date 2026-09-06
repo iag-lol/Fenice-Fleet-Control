@@ -1,3 +1,4 @@
+import { guardApi } from '@/lib/api';
 import { getServerEnv } from '@/config/env';
 import { loadFleetSnapshots } from '@/services/aggregation/fleet-aggregator';
 import { fleetSimulator } from '@/services/gps/mock/simulator';
@@ -31,6 +32,9 @@ export const maxDuration = 60;
  * endpoint.
  */
 export async function GET(request: Request): Promise<Response> {
+  const denied = await guardApi();
+  if (denied) return denied;
+
   const provider = getGpsProvider();
   const intervalMs = getOperationalSettings().gps.refreshIntervalMs;
   const encoder = new TextEncoder();

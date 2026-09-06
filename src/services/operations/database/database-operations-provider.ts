@@ -2,6 +2,13 @@ import 'server-only';
 
 import { getServerEnv } from '@/config/env';
 import { OperationsProviderError } from '@/services/operations/operations-provider';
+import { listAlerts, updateAlertState as updateAlertStateInStore } from '@/services/fleet/alert-store';
+import { listCustomerVisits } from '@/services/fleet/customer-visit-store';
+import { listDrivers } from '@/services/fleet/driver-store';
+import { listGeofenceEvents } from '@/services/fleet/geofence-event-store';
+import { getRouteByIdFromStore, listRoutes } from '@/services/fleet/route-store';
+import { listVehicles } from '@/services/fleet/vehicle-store';
+import { listGeofences } from '@/services/geofences/geofence-store';
 import type {
   AlertQuery,
   ClientQuery,
@@ -247,45 +254,45 @@ export class DatabaseOperationsProvider implements ExternalOperationsProvider {
     return rows[0] ? mapExternalWorkOrder(rows[0], this.mapping) : null;
   }
 
-  async getRoutes(_query: RouteQuery = {}): Promise<Route[]> {
-    // El corredor planificado no existe en el ERP; se reconstruye a partir de
-    // las paradas o se obtiene de un proveedor de routing. Pendiente de definir
-    // con Fenice.
-    return [];
+  // Rutas, flota, geocercas, visitas y alertas son artefactos de ESTA
+  // plataforma, no del ERP de Fenice: se sirven desde Supabase (ver
+  // `src/services/fleet/*-store.ts` y `src/services/geofences/geofence-store.ts`).
+  // Sin Supabase configurado, esos modulos devuelven listas vacias en vez de
+  // datos inventados.
+  async getRoutes(query: RouteQuery = {}): Promise<Route[]> {
+    return listRoutes(query);
   }
 
-  async getRouteById(_id: RouteId): Promise<Route | null> {
-    return null;
+  async getRouteById(id: RouteId): Promise<Route | null> {
+    return getRouteByIdFromStore(id);
   }
 
   async getVehicles(): Promise<Vehicle[]> {
-    return [];
+    return listVehicles();
   }
 
   async getDrivers(): Promise<Driver[]> {
-    return [];
+    return listDrivers();
   }
 
-  // Geocercas, visitas y alertas son artefactos de ESTA plataforma, no del ERP
-  // de Fenice. Su persistencia definitiva ira en la base interna (DATABASE_URL).
   async getGeofences(): Promise<Geofence[]> {
-    return [];
+    return listGeofences();
   }
 
-  async getGeofenceEvents(): Promise<GeofenceEvent[]> {
-    return [];
+  async getGeofenceEvents(limit?: number): Promise<GeofenceEvent[]> {
+    return listGeofenceEvents(limit);
   }
 
-  async getCustomerVisits(): Promise<CustomerVisit[]> {
-    return [];
+  async getCustomerVisits(limit?: number): Promise<CustomerVisit[]> {
+    return listCustomerVisits(limit);
   }
 
-  async getAlerts(_query: AlertQuery = {}): Promise<Alert[]> {
-    return [];
+  async getAlerts(query: AlertQuery = {}): Promise<Alert[]> {
+    return listAlerts(query);
   }
 
-  async updateAlertState(_id: AlertId, _state: AlertState): Promise<Alert | null> {
-    return null;
+  async updateAlertState(id: AlertId, state: AlertState): Promise<Alert | null> {
+    return updateAlertStateInStore(id, state);
   }
 }
 

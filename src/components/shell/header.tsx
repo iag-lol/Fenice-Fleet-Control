@@ -9,6 +9,7 @@ import { GpsStatusIndicator } from '@/components/shell/gps-status';
 import { ALL_NAV_ITEMS, isActivePath } from '@/components/shell/navigation';
 import { MobileNav } from '@/components/shell/mobile-nav';
 import { BrandMark } from '@/components/shell/brand';
+import { UserMenu } from '@/components/shell/user-menu';
 import { formatTimeWithSeconds } from '@/lib/format';
 
 /** Titulo contextual a partir de la ruta activa. */
@@ -62,6 +63,7 @@ export function Header() {
           <ControlClock />
           <GpsStatusIndicator />
           <AlertsBell />
+          <UserMenu />
         </div>
       </div>
 

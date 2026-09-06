@@ -16,9 +16,9 @@ describe('enlaces de ruta del conductor', () => {
     resetRevokedTokens();
   });
 
-  it('emite un enlace que se verifica y devuelve su ruta', () => {
-    const issued = issueRouteToken(RUTA);
-    const result = verifyRouteToken(issued.token);
+  it('emite un enlace que se verifica y devuelve su ruta', async () => {
+    const issued = await issueRouteToken(RUTA);
+    const result = await verifyRouteToken(issued.token);
 
     expect(result.valid).toBe(true);
     if (!result.valid) return;
@@ -26,57 +26,59 @@ describe('enlaces de ruta del conductor', () => {
     expect(issued.path).toBe(`/conductor/ruta/${issued.token}`);
   });
 
-  it('emite enlaces distintos para la misma ruta', () => {
+  it('emite enlaces distintos para la misma ruta', async () => {
     // Si dos emisiones coincidieran, revocar una revocaria la otra y no se
     // podria distinguir que telefono tiene cual.
-    expect(issueRouteToken(RUTA).token).not.toBe(issueRouteToken(RUTA).token);
+    const a = await issueRouteToken(RUTA);
+    const b = await issueRouteToken(RUTA);
+    expect(a.token).not.toBe(b.token);
   });
 
-  it('rechaza un enlace al que se le cambia la ruta', () => {
-    const issued = issueRouteToken(RUTA);
+  it('rechaza un enlace al que se le cambia la ruta', async () => {
+    const issued = await issueRouteToken(RUTA);
     const parts = issued.token.split('.');
     parts[1] = Buffer.from(OTRA, 'utf8').toString('base64url');
 
-    const result = verifyRouteToken(parts.join('.'));
+    const result = await verifyRouteToken(parts.join('.'));
     expect(result).toEqual({ valid: false, reason: 'firma_invalida' });
   });
 
-  it('rechaza un enlace al que se le extiende la vigencia', () => {
-    const issued = issueRouteToken(RUTA, { ttlHours: 1 });
+  it('rechaza un enlace al que se le extiende la vigencia', async () => {
+    const issued = await issueRouteToken(RUTA, { ttlHours: 1 });
     const parts = issued.token.split('.');
     const futuro = new Date(Date.now() + 999 * 3_600_000).toISOString();
     parts[2] = Buffer.from(futuro, 'utf8').toString('base64url');
 
-    expect(verifyRouteToken(parts.join('.'))).toEqual({ valid: false, reason: 'firma_invalida' });
+    expect(await verifyRouteToken(parts.join('.'))).toEqual({ valid: false, reason: 'firma_invalida' });
   });
 
-  it('rechaza un enlace vencido', () => {
+  it('rechaza un enlace vencido', async () => {
     const emitido = new Date('2026-08-27T08:00:00.000Z');
-    const issued = issueRouteToken(RUTA, { ttlHours: 8, now: emitido });
+    const issued = await issueRouteToken(RUTA, { ttlHours: 8, now: emitido });
 
-    const durante = verifyRouteToken(issued.token, { now: new Date('2026-08-27T15:00:00.000Z') });
+    const durante = await verifyRouteToken(issued.token, { now: new Date('2026-08-27T15:00:00.000Z') });
     expect(durante.valid).toBe(true);
 
-    const despues = verifyRouteToken(issued.token, { now: new Date('2026-08-27T17:00:00.000Z') });
+    const despues = await verifyRouteToken(issued.token, { now: new Date('2026-08-27T17:00:00.000Z') });
     expect(despues).toEqual({ valid: false, reason: 'token_expirado' });
   });
 
-  it('rechaza un enlace revocado aunque siga vigente', () => {
-    const issued = issueRouteToken(RUTA);
-    revokeRouteToken(issued.token);
+  it('rechaza un enlace revocado aunque siga vigente', async () => {
+    const issued = await issueRouteToken(RUTA);
+    await revokeRouteToken(issued.token);
 
-    expect(verifyRouteToken(issued.token)).toEqual({ valid: false, reason: 'token_revocado' });
+    expect(await verifyRouteToken(issued.token)).toEqual({ valid: false, reason: 'token_revocado' });
   });
 
-  it('rechaza basura sin lanzar', () => {
+  it('rechaza basura sin lanzar', async () => {
     for (const basura of ['', 'abc', 'v1.a.b.c', 'v2.a.b.c.d', '....', 'v1.a.b.c.d.e']) {
-      expect(verifyRouteToken(basura).valid).toBe(false);
+      expect((await verifyRouteToken(basura)).valid).toBe(false);
     }
   });
 
-  it('no acepta un enlace sin firma', () => {
-    const issued = issueRouteToken(RUTA);
+  it('no acepta un enlace sin firma', async () => {
+    const issued = await issueRouteToken(RUTA);
     const sinFirma = `${issued.token.split('.').slice(0, 4).join('.')}.`;
-    expect(verifyRouteToken(sinFirma).valid).toBe(false);
+    expect((await verifyRouteToken(sinFirma)).valid).toBe(false);
   });
 });

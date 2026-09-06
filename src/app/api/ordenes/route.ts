@@ -1,10 +1,13 @@
-import { handleApi } from '@/lib/api';
+import { guardApi, handleApi } from '@/lib/api';
 import { getOperationsProvider } from '@/services/registry';
 
 export const dynamic = 'force-dynamic';
 
 /** Ordenes de trabajo. Sin filtro de fecha devuelve la ventana disponible. */
 export async function GET(request: Request): Promise<Response> {
+  const denied = await guardApi('ordenes.ver');
+  if (denied) return denied;
+
   const url = new URL(request.url);
   const date = url.searchParams.get('fecha');
 

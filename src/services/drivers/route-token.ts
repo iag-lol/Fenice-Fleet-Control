@@ -1,8 +1,9 @@
 import 'server-only';
 
-import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
+import { createHash, createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 
 import { getServerEnv } from '@/config/env';
+import { getSupabaseClient, isSupabaseConfigured } from '@/lib/supabase/server-client';
 import type { RouteId } from '@/types/core';
 
 /**
@@ -20,11 +21,20 @@ import type { RouteId } from '@/types/core';
  * La firma va incluida en el propio enlace en vez de guardarse: asi un
  * token robado no se puede convertir en otro valido para otra ruta ni
  * extender su vigencia, aunque quien lo tenga entienda el formato.
+ *
+ * La REVOCACION si necesita guardarse en algun sitio (la firma, por diseno,
+ * sigue siendo valida hasta que expira). Se persiste en la tabla
+ * `enlaces_conductor` de Supabase cuando esta configurada; si no, en un `Set`
+ * en memoria del proceso. Esto ultimo es una limitacion real en un despliegue
+ * serverless con varias instancias o reinicios: un enlace "revocado" en una
+ * instancia seguiria funcionando en otra. Con Supabase configurado la
+ * revocacion es autoritativa y compartida.
  */
 
 const VERSION = 'v1';
 const NONCE_BYTES = 16;
 const SIGNATURE_BYTES = 32;
+const LEDGER_TABLE = 'enlaces_conductor';
 
 const globalForTokens = globalThis as unknown as {
   __feniceDriverSecret?: Buffer;
@@ -49,7 +59,7 @@ function getSecret(): Buffer {
   return globalForTokens.__feniceDriverSecret;
 }
 
-function getRevoked(): Set<string> {
+function getRevokedMemory(): Set<string> {
   if (!globalForTokens.__feniceRevokedTokens) {
     globalForTokens.__feniceRevokedTokens = new Set<string>();
   }
@@ -62,6 +72,11 @@ function encode(buffer: Buffer): string {
 
 function sign(payload: string): Buffer {
   return createHmac('sha256', getSecret()).update(payload).digest();
+}
+
+/** Hash del token para el ledger: nunca se guarda el token en si. */
+function hashToken(token: string): string {
+  return createHash('sha256').update(token).digest('hex');
 }
 
 export interface IssuedRouteToken {
@@ -89,7 +104,10 @@ export type RouteTokenVerification =
   | { valid: false; reason: RouteTokenFailure };
 
 /** Emite un enlace de ruta. `ttlHours` permite acortar la vigencia por caso. */
-export function issueRouteToken(routeId: RouteId, options?: { ttlHours?: number; now?: Date }): IssuedRouteToken {
+export async function issueRouteToken(
+  routeId: RouteId,
+  options?: { ttlHours?: number; now?: Date },
+): Promise<IssuedRouteToken> {
   const env = getServerEnv();
   const now = options?.now ?? new Date();
   const ttlHours = options?.ttlHours ?? env.DRIVER_TOKEN_TTL_HOURS;
@@ -99,7 +117,32 @@ export function issueRouteToken(routeId: RouteId, options?: { ttlHours?: number;
   const payload = [VERSION, encode(Buffer.from(routeId, 'utf8')), encode(Buffer.from(expiresAt, 'utf8')), nonce].join('.');
   const token = `${payload}.${encode(sign(payload))}`;
 
+  if (isSupabaseConfigured()) {
+    const { error } = await getSupabaseClient().from(LEDGER_TABLE).insert({
+      ruta_id: routeId,
+      token_hash: hashToken(token),
+      expira_at: expiresAt,
+    });
+    if (error) console.error('[route-token] no fue posible registrar el enlace emitido:', error.message);
+  }
+
   return { token, routeId, expiresAt, path: `/conductor/ruta/${token}` };
+}
+
+async function isRevoked(token: string): Promise<boolean> {
+  if (isSupabaseConfigured()) {
+    const { data, error } = await getSupabaseClient()
+      .from(LEDGER_TABLE)
+      .select('revocado_at')
+      .eq('token_hash', hashToken(token))
+      .maybeSingle<{ revocado_at: string | null }>();
+    if (error) {
+      console.error('[route-token] no fue posible verificar la revocacion:', error.message);
+      return false;
+    }
+    return Boolean(data?.revocado_at);
+  }
+  return getRevokedMemory().has(token);
 }
 
 /**
@@ -110,7 +153,10 @@ export function issueRouteToken(routeId: RouteId, options?: { ttlHours?: number;
  * ayuda a quien esta probando tokens. La interfaz solo separa el caso
  * "expirado" porque ahi el conductor legitimo necesita pedir uno nuevo.
  */
-export function verifyRouteToken(token: string, options?: { now?: Date }): RouteTokenVerification {
+export async function verifyRouteToken(
+  token: string,
+  options?: { now?: Date },
+): Promise<RouteTokenVerification> {
   const now = options?.now ?? new Date();
   const parts = token.split('.');
 
@@ -137,7 +183,7 @@ export function verifyRouteToken(token: string, options?: { now?: Date }): Route
   // cuanto tarda en fallar cuantos bytes iniciales acerto quien prueba.
   if (!timingSafeEqual(expected, signature)) return { valid: false, reason: 'firma_invalida' };
 
-  if (getRevoked().has(token)) return { valid: false, reason: 'token_revocado' };
+  if (await isRevoked(token)) return { valid: false, reason: 'token_revocado' };
 
   const routeId = Buffer.from(encodedRoute, 'base64url').toString('utf8') as RouteId;
   const expiresAt = Buffer.from(encodedExpiry, 'base64url').toString('utf8');
@@ -150,11 +196,19 @@ export function verifyRouteToken(token: string, options?: { now?: Date }): Route
 }
 
 /** Anula un enlace antes de su vencimiento (telefono perdido, cambio de turno). */
-export function revokeRouteToken(token: string): void {
-  getRevoked().add(token);
+export async function revokeRouteToken(token: string, reason?: string): Promise<void> {
+  if (isSupabaseConfigured()) {
+    const { error } = await getSupabaseClient()
+      .from(LEDGER_TABLE)
+      .update({ revocado_at: new Date().toISOString(), revocado_motivo: reason ?? null })
+      .eq('token_hash', hashToken(token));
+    if (error) console.error('[route-token] no fue posible revocar el enlace:', error.message);
+    return;
+  }
+  getRevokedMemory().add(token);
 }
 
 /** Solo para pruebas: reinicia la lista de revocados. */
 export function resetRevokedTokens(): void {
-  getRevoked().clear();
+  getRevokedMemory().clear();
 }
