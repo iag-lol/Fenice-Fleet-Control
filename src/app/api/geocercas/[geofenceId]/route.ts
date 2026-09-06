@@ -45,7 +45,12 @@ export async function PATCH(
   // Duplicar es una accion, no una edicion: se expresa en el mismo endpoint
   // para no multiplicar rutas por cada operacion sobre el recurso.
   if (body && typeof body === 'object' && 'action' in body && body.action === 'duplicate') {
-    const copy = await duplicateGeofence(asGeofenceId(geofenceId));
+    let copy;
+    try {
+      copy = await duplicateGeofence(asGeofenceId(geofenceId));
+    } catch (error) {
+      return apiError(error instanceof Error ? error.message : 'No fue posible duplicar la geocerca.', 503);
+    }
     if (!copy) return apiError('Geocerca no encontrada.', 404);
 
     void logAction({
