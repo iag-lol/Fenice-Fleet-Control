@@ -76,6 +76,9 @@ export interface TrafficProvider {
 
   /** Impacto de la congestion sobre un corredor concreto. */
   getRouteImpact(path: LatLng[]): Promise<RouteTrafficImpact | null>;
+
+  /** Diagnostico: una consulta real de prueba, para saber si la clave sirve. */
+  healthCheck(): Promise<{ ok: boolean; message: string; latencyMs: number | null }>;
 }
 
 const UNAVAILABLE_MESSAGE =
@@ -102,6 +105,10 @@ class UnavailableTrafficProvider implements TrafficProvider {
 
   async getRouteImpact(): Promise<null> {
     return null;
+  }
+
+  async healthCheck(): Promise<{ ok: boolean; message: string; latencyMs: number | null }> {
+    return { ok: false, message: UNAVAILABLE_MESSAGE, latencyMs: null };
   }
 }
 
@@ -179,13 +186,53 @@ class TomTomTrafficProvider implements TrafficProvider {
           freeFlowSpeedKmh: flow.freeFlowSpeed,
           delaySeconds: Math.max(0, flow.currentTravelTime - flow.freeFlowTravelTime),
         });
-      } catch {
-        // Un tramo que falla no invalida el resto del muestreo.
+      } catch (error) {
+        // Un tramo que falla no invalida el resto del muestreo, pero se
+        // registra: sin esto, una clave invalida o vencida fallaba en las
+        // 16 muestras sin dejar rastro, y el mapa se veia "conectado" pero
+        // sin una sola linea de trafico, sin ninguna pista de por que.
+        console.error('[trafico] TomTom fallo para un punto de muestreo:', error);
         continue;
       }
     }
 
     return segments;
+  }
+
+  async healthCheck(): Promise<{ ok: boolean; message: string; latencyMs: number | null }> {
+    const url = new URL('https://api.tomtom.com/traffic/services/4/flowSegmentData/absolute/10/json');
+    url.searchParams.set('key', this.apiKey);
+    // Centro de Santiago: sirve solo para confirmar que la clave responde,
+    // no para traer trafico real de una zona en particular.
+    url.searchParams.set('point', '-33.4489,-70.6693');
+
+    const started = performance.now();
+    try {
+      const response = await fetch(url, { signal: AbortSignal.timeout(8_000) });
+      const latencyMs = Math.round(performance.now() - started);
+
+      if (!response.ok) {
+        const body = await response.text().catch(() => '');
+        return {
+          ok: false,
+          message: `TomTom respondio ${response.status}: ${body.slice(0, 200) || response.statusText}`,
+          latencyMs,
+        };
+      }
+
+      const payload = (await response.json()) as { flowSegmentData?: unknown };
+      if (!payload.flowSegmentData) {
+        return { ok: false, message: 'TomTom respondio 200 pero sin datos de trafico reconocibles.', latencyMs };
+      }
+
+      return { ok: true, message: 'Conexion correcta con TomTom Traffic.', latencyMs };
+    } catch (error) {
+      return {
+        ok: false,
+        message: `No fue posible conectar con TomTom: ${error instanceof Error ? error.message : String(error)}`,
+        latencyMs: Math.round(performance.now() - started),
+      };
+    }
   }
 
   async getRouteImpact(path: LatLng[]): Promise<RouteTrafficImpact | null> {
