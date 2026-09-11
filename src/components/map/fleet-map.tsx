@@ -1,6 +1,7 @@
 'use client';
 
-import maplibregl, { type Map as MapLibreMap, type MapMouseEvent, type RasterTileSource } from 'maplibre-gl';
+import * as maplibregl from 'maplibre-gl';
+import type { Map as MapLibreMap, MapMouseEvent, RasterTileSource } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
@@ -168,8 +169,9 @@ export function FleetMap({
       minZoom: 6,
       maxZoom: 18,
       attributionControl: { compact: true },
-      // Rendimiento: no se necesitan capturas del canvas.
-      preserveDrawingBuffer: false,
+      // Rendimiento: no se necesitan capturas del canvas (ya es el valor por
+      // defecto de la libreria; se deja explicito para que quede documentado).
+      canvasContextAttributes: { preserveDrawingBuffer: false },
       dragRotate: false,
       pitchWithRotate: false,
     });

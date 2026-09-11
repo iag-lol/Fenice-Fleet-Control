@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 
 import { getServerEnv } from '@/config/env';
 import { getBlockedRoutes } from '@/product/feature-access';
+import { checkRateLimit } from '@/lib/rate-limit';
 import { resolveSessionByToken, SESSION_COOKIE_NAME } from '@/lib/session';
 
 /**
@@ -29,8 +30,62 @@ function isPublicPath(pathname: string): boolean {
   return PUBLIC_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));
 }
 
+/**
+ * Rutas de API que no pasan por sesion: el seguimiento publico del cliente,
+ * el portal del conductor (su credencial es el enlace firmado) y el login.
+ * Al no tener sesion que las limite indirectamente, quedan mas expuestas a
+ * scripts y se acotan mas fuerte. `/api/auth/login` YA tiene su propio
+ * bloqueo por cuenta e IP contra Supabase (`src/lib/login-guard.ts`); este
+ * limite generico es una capa adicional que ademas cubre el caso sin
+ * Supabase configurado, donde ese bloqueo especifico queda inactivo.
+ */
+const SENSITIVE_PUBLIC_PREFIXES = ['/api/seguimiento', '/api/conductor', '/api/auth/login'];
+
+function isSensitivePublicPath(pathname: string): boolean {
+  return SENSITIVE_PUBLIC_PREFIXES.some(
+    (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
+  );
+}
+
+/** Misma logica que `getClientIp()` de `src/lib/api.ts`, duplicada a proposito:
+ * ese modulo importa de `@/lib/auth`, que no es seguro de traer al bundle de
+ * Edge del middleware (es donde vivia el bug historico de `node:crypto`). */
+function clientIp(request: NextRequest): string {
+  const forwarded = request.headers.get('x-forwarded-for');
+  if (forwarded) return forwarded.split(',')[0]?.trim() || 'desconocida';
+  return request.headers.get('x-real-ip') ?? 'desconocida';
+}
+
+const RATE_LIMIT_WINDOW_MS = 60_000;
+/** Trafico normal de un panel en vivo: varias pestañas, sondeo cada pocos segundos. */
+const GENERAL_RATE_LIMIT = 600;
+/** Rutas sin sesion: mas expuestas a scripts, se acotan mas. */
+const SENSITIVE_RATE_LIMIT = 60;
+
+function tooManyRequests(retryAfterSeconds: number): NextResponse {
+  return NextResponse.json(
+    { error: 'Demasiadas solicitudes. Intenta nuevamente en unos segundos.' },
+    { status: 429, headers: { 'Retry-After': String(retryAfterSeconds) } },
+  );
+}
+
 export async function middleware(request: NextRequest): Promise<NextResponse> {
   const { pathname } = request.nextUrl;
+  const isApi = pathname.startsWith('/api/');
+
+  // Limite de tasa: aplica a paginas y a la API por igual, ANTES de
+  // cualquier otra comprobacion. Es deliberadamente lo primero que corre el
+  // middleware.
+  const ip = clientIp(request);
+  const sensitive = isSensitivePublicPath(pathname);
+  const limit = sensitive ? SENSITIVE_RATE_LIMIT : GENERAL_RATE_LIMIT;
+  const rate = checkRateLimit(`${sensitive ? 'sens' : 'gen'}:${ip}`, limit, RATE_LIMIT_WINDOW_MS);
+  if (!rate.allowed) return tooManyRequests(rate.retryAfterSeconds);
+
+  // La API gestiona su propia autenticacion y autorizacion por endpoint
+  // (`guardApi()`), no por ruta: lo unico que le corresponde a este
+  // middleware para `/api/**` es el limite de tasa de arriba.
+  if (isApi) return NextResponse.next();
 
   const blocked = BLOCKED.some(
     (route) => pathname === route || pathname.startsWith(`${route}/`),
@@ -60,10 +115,11 @@ export async function middleware(request: NextRequest): Promise<NextResponse> {
 
 export const config = {
   /**
-   * Se excluyen los recursos estaticos y la API.
-   *
-   * La API se protege en cada endpoint segun lo que hace, no por su ruta:
-   * varios endpoints sirven a la vez a funciones Basicas y Medias.
+   * Se excluyen solo los recursos estaticos. La API SI pasa por aqui ahora
+   * (a diferencia de antes): necesita el limite de tasa de arriba, aunque su
+   * autenticacion/autorizacion se resuelve en cada endpoint segun lo que
+   * hace, no por ruta (varios endpoints sirven a la vez a Plan Basico y
+   * Medio).
    */
-  matcher: ['/((?!api|_next/static|_next/image|favicon.ico|icon.svg).*)'],
+  matcher: ['/((?!_next/static|_next/image|favicon.ico|icon.svg).*)'],
 };
