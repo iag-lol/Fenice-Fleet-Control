@@ -1,11 +1,12 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
-import { Gauge, MapPin, Plus, RotateCcw, Truck, User } from 'lucide-react';
+import { Gauge, MapPin, Navigation, Plus, RotateCcw, Truck, User, WifiOff } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useMemo, useState } from 'react';
 
 import { PageHeader } from '@/components/common/page-header';
+import { StatChipRow } from '@/components/common/stat-chip';
 import { ConnectionBadge, VehicleStatusBadge } from '@/components/common/status';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -64,6 +65,16 @@ export function FleetView() {
       return haystack.includes(term);
     });
   }, [data, search, status]);
+
+  const counts = useMemo(() => {
+    const result = { en_ruta: 0, detenido: 0, offline: 0 };
+    for (const snapshot of data ?? []) {
+      if (snapshot.status === 'en_ruta') result.en_ruta += 1;
+      else if (snapshot.status === 'detenido') result.detenido += 1;
+      else if (snapshot.status === 'offline') result.offline += 1;
+    }
+    return result;
+  }, [data]);
 
   const hasFilters = search.trim().length > 0 || status.length > 0;
 
@@ -172,9 +183,52 @@ export function FleetView() {
       <PageHeader
         title="Flota"
         description={
-          data
-            ? `${data.length} vehiculos registrados · telemetria actualizada ${formatElapsed(secondsSinceUpdate)}`
-            : 'Cargando vehiculos...'
+          data ? (
+            <div className="space-y-1.5">
+              <StatChipRow
+                items={[
+                  {
+                    key: 'total',
+                    label: 'vehiculos',
+                    value: data.length,
+                    icon: <Truck className="h-3.5 w-3.5" />,
+                  },
+                  {
+                    key: 'en_ruta',
+                    label: 'en ruta',
+                    value: counts.en_ruta,
+                    icon: <Navigation className="h-3.5 w-3.5" />,
+                    tone: 'brand',
+                    active: status === 'en_ruta',
+                    onClick: () => setStatus(status === 'en_ruta' ? '' : 'en_ruta'),
+                  },
+                  {
+                    key: 'detenido',
+                    label: 'detenidos',
+                    value: counts.detenido,
+                    icon: <Gauge className="h-3.5 w-3.5" />,
+                    tone: 'warning',
+                    active: status === 'detenido',
+                    onClick: () => setStatus(status === 'detenido' ? '' : 'detenido'),
+                  },
+                  {
+                    key: 'offline',
+                    label: 'sin señal',
+                    value: counts.offline,
+                    icon: <WifiOff className="h-3.5 w-3.5" />,
+                    tone: 'danger',
+                    active: status === 'offline',
+                    onClick: () => setStatus(status === 'offline' ? '' : 'offline'),
+                  },
+                ]}
+              />
+              <p className="text-2xs text-ink-faint">
+                Telemetria actualizada {formatElapsed(secondsSinceUpdate)}
+              </p>
+            </div>
+          ) : (
+            'Cargando vehiculos...'
+          )
         }
         actions={
           <Button

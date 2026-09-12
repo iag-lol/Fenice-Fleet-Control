@@ -1,11 +1,12 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
-import { ClipboardList, MapPin, RotateCcw } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, ClipboardList, MapPin, RotateCcw, Truck } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useMemo, useState } from 'react';
 
 import { PageHeader } from '@/components/common/page-header';
+import { StatChipRow } from '@/components/common/stat-chip';
 import { PriorityBadge, WORK_ORDER_STATUS_LABEL, WorkOrderStatusBadge } from '@/components/common/status';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -77,6 +78,16 @@ export function WorkOrdersView() {
       ).includes(term);
     });
   }, [workOrders, search, status, clientFilter]);
+
+  const counts = useMemo(() => {
+    const result = { completada: 0, incidencia: 0, enCurso: 0 };
+    for (const workOrder of workOrders) {
+      if (workOrder.status === 'completada') result.completada += 1;
+      else if (workOrder.status === 'incidencia') result.incidencia += 1;
+      else if (workOrder.status !== 'cancelada') result.enCurso += 1;
+    }
+    return result;
+  }, [workOrders]);
 
   const hasFilters = Boolean(search || status || clientFilter);
 
@@ -199,9 +210,47 @@ export function WorkOrdersView() {
       <PageHeader
         title="Ordenes de trabajo"
         description={
-          data
-            ? `${workOrders.length} ordenes en la vista seleccionada`
-            : 'Cargando ordenes de trabajo...'
+          data ? (
+            <StatChipRow
+              items={[
+                {
+                  key: 'total',
+                  label: 'ordenes en la vista',
+                  value: workOrders.length,
+                  icon: <ClipboardList className="h-3.5 w-3.5" />,
+                },
+                {
+                  key: 'en_curso',
+                  label: 'en curso',
+                  value: counts.enCurso,
+                  icon: <Truck className="h-3.5 w-3.5" />,
+                  tone: 'brand',
+                  active: status === 'en_ruta',
+                  onClick: () => setStatus(status === 'en_ruta' ? '' : 'en_ruta'),
+                },
+                {
+                  key: 'completada',
+                  label: 'completadas',
+                  value: counts.completada,
+                  icon: <CheckCircle2 className="h-3.5 w-3.5" />,
+                  tone: 'active',
+                  active: status === 'completada',
+                  onClick: () => setStatus(status === 'completada' ? '' : 'completada'),
+                },
+                {
+                  key: 'incidencia',
+                  label: 'con incidencia',
+                  value: counts.incidencia,
+                  icon: <AlertTriangle className="h-3.5 w-3.5" />,
+                  tone: 'danger',
+                  active: status === 'incidencia',
+                  onClick: () => setStatus(status === 'incidencia' ? '' : 'incidencia'),
+                },
+              ]}
+            />
+          ) : (
+            'Cargando ordenes de trabajo...'
+          )
         }
         actions={
           <Button

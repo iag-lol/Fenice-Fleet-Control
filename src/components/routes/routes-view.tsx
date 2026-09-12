@@ -1,12 +1,13 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
-import { Route as RouteIcon } from 'lucide-react';
+import { CheckCircle2, Navigation, Route as RouteIcon } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useMemo, useState } from 'react';
 
 import { PageHeader } from '@/components/common/page-header';
 import { ProgressBar } from '@/components/common/progress';
+import { StatChipRow } from '@/components/common/stat-chip';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
 import { DataTable, type Column } from '@/components/ui/data-table';
@@ -40,6 +41,7 @@ const STATUS_LABEL = {
 export function RoutesView() {
   const router = useRouter();
   const [search, setSearch] = useState('');
+  const [status, setStatus] = useState<Route['status'] | ''>('');
 
   const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['routes'],
@@ -55,13 +57,23 @@ export function RoutesView() {
 
   const rows = useMemo(() => {
     const term = normalizeSearch(search);
-    if (term.length === 0) return routes;
-    return routes.filter((route) =>
-      normalizeSearch(
+    return routes.filter((route) => {
+      if (status && route.status !== status) return false;
+      if (term.length === 0) return true;
+      return normalizeSearch(
         `${route.code} ${route.name} ${route.vehiclePlate ?? ''} ${route.driverName ?? ''}`,
-      ).includes(term),
-    );
-  }, [routes, search]);
+      ).includes(term);
+    });
+  }, [routes, search, status]);
+
+  const counts = useMemo(() => {
+    const result = { en_curso: 0, completada: 0 };
+    for (const route of routes) {
+      if (route.status === 'en_curso') result.en_curso += 1;
+      else if (route.status === 'completada') result.completada += 1;
+    }
+    return result;
+  }, [routes]);
 
   const completedStops = (route: RouteRow): number =>
     route.stops.filter((s) => ['visita_detectada', 'completada'].includes(s.status)).length;
@@ -147,7 +159,38 @@ export function RoutesView() {
       <PageHeader
         title="Rutas"
         description={
-          data ? `${routes.length} rutas planificadas para hoy` : 'Cargando rutas...'
+          data ? (
+            <StatChipRow
+              items={[
+                {
+                  key: 'total',
+                  label: 'rutas planificadas para hoy',
+                  value: routes.length,
+                  icon: <RouteIcon className="h-3.5 w-3.5" />,
+                },
+                {
+                  key: 'en_curso',
+                  label: 'en curso',
+                  value: counts.en_curso,
+                  icon: <Navigation className="h-3.5 w-3.5" />,
+                  tone: 'brand',
+                  active: status === 'en_curso',
+                  onClick: () => setStatus(status === 'en_curso' ? '' : 'en_curso'),
+                },
+                {
+                  key: 'completada',
+                  label: 'completadas',
+                  value: counts.completada,
+                  icon: <CheckCircle2 className="h-3.5 w-3.5" />,
+                  tone: 'active',
+                  active: status === 'completada',
+                  onClick: () => setStatus(status === 'completada' ? '' : 'completada'),
+                },
+              ]}
+            />
+          ) : (
+            'Cargando rutas...'
+          )
         }
       />
 

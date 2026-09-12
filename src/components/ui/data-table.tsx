@@ -104,7 +104,7 @@ export function DataTable<T>({
       <div className="hidden overflow-x-auto md:block">
         <table className="w-full min-w-full border-collapse text-left">
           <thead>
-            <tr className="border-b border-line">
+            <tr className="border-b border-line bg-surface-800/60">
               {columns.map((column) => {
                 const sortable = Boolean(column.sortValue);
                 const isSorted = sort?.key === column.key;
@@ -151,8 +151,8 @@ export function DataTable<T>({
                 key={rowKey(row)}
                 onClick={onRowClick ? () => onRowClick(row) : undefined}
                 className={cn(
-                  'transition-colors',
-                  onRowClick && 'cursor-pointer hover:bg-surface-800',
+                  'border-l-2 border-l-transparent transition-colors',
+                  onRowClick && 'cursor-pointer hover:border-l-brand-500 hover:bg-brand-500/[0.04]',
                 )}
               >
                 {columns.map((column) => (

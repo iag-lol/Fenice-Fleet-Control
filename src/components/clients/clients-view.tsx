@@ -1,11 +1,12 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
-import { Building2, MapPin, RotateCcw } from 'lucide-react';
+import { Building2, CheckCircle2, Eye, MapPin, MoonStar, RotateCcw } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
 
 import { PageHeader } from '@/components/common/page-header';
+import { StatChipRow } from '@/components/common/stat-chip';
 import { ClientStatusBadge } from '@/components/common/status';
 import { Button, LinkButton } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -201,9 +202,47 @@ export function ClientsView() {
       <PageHeader
         title="Clientes"
         description={
-          data
-            ? `${clients.length} clientes geolocalizados · ${counts.active} activos, ${counts.warning} en observacion, ${counts.dormant} dormidos`
-            : 'Cargando cartera...'
+          data ? (
+            <StatChipRow
+              items={[
+                {
+                  key: 'total',
+                  label: 'clientes geolocalizados',
+                  value: clients.length,
+                  icon: <Building2 className="h-3.5 w-3.5" />,
+                },
+                {
+                  key: 'active',
+                  label: 'activos',
+                  value: counts.active,
+                  icon: <CheckCircle2 className="h-3.5 w-3.5" />,
+                  tone: 'active',
+                  active: status === 'active',
+                  onClick: () => setStatus(status === 'active' ? '' : 'active'),
+                },
+                {
+                  key: 'warning',
+                  label: 'en observacion',
+                  value: counts.warning,
+                  icon: <Eye className="h-3.5 w-3.5" />,
+                  tone: 'warning',
+                  active: status === 'warning',
+                  onClick: () => setStatus(status === 'warning' ? '' : 'warning'),
+                },
+                {
+                  key: 'dormant',
+                  label: 'dormidos',
+                  value: counts.dormant,
+                  icon: <MoonStar className="h-3.5 w-3.5" />,
+                  tone: 'danger',
+                  active: status === 'dormant',
+                  onClick: () => setStatus(status === 'dormant' ? '' : 'dormant'),
+                },
+              ]}
+            />
+          ) : (
+            'Cargando cartera...'
+          )
         }
         actions={
           <>

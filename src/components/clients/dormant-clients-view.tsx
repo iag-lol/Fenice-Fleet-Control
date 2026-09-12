@@ -1,7 +1,7 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
-import { MapPin, MoonStar, RotateCcw } from 'lucide-react';
+import { AlertTriangle, MapPin, MoonStar, RotateCcw, Skull } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useMemo, useState } from 'react';
 
@@ -237,31 +237,40 @@ export function DormantClientsView() {
       />
 
       <div className="mb-4 grid grid-cols-3 gap-2.5 sm:gap-3">
-        {(Object.keys(counts) as DormancyTier[]).map((key) => (
-          <button
-            key={key}
-            type="button"
-            onClick={() => setTier(tier === key ? '' : key)}
-            className={cn(
-              'rounded-lg border p-3 text-left transition-colors sm:p-4',
-              tier === key
-                ? 'border-brand-500 bg-brand-500/10'
-                : 'border-line bg-surface-850 hover:border-line-strong',
-            )}
-          >
-            <p className="text-2xs font-medium uppercase tracking-wider text-ink-faint">
-              {DORMANCY_TIER_LABEL[key]}
-            </p>
-            <p
+        {(Object.keys(counts) as DormancyTier[]).map((key) => {
+          const TierIcon = key === 'en_riesgo' ? AlertTriangle : key === 'dormido' ? MoonStar : Skull;
+          const active = tier === key;
+          const tone =
+            key === 'en_riesgo'
+              ? { text: 'text-status-warning', chip: 'bg-status-warning/10 text-status-warning' }
+              : { text: 'text-status-dormant', chip: 'bg-status-dormant/10 text-status-dormant' };
+
+          return (
+            <button
+              key={key}
+              type="button"
+              onClick={() => setTier(active ? '' : key)}
               className={cn(
-                'numeric mt-1.5 text-2xl font-semibold leading-none',
-                key === 'en_riesgo' ? 'text-status-warning' : 'text-status-dormant',
+                'flex items-center gap-3 rounded-xl border p-3 text-left shadow-card transition-all sm:p-4',
+                active
+                  ? 'border-brand-500 bg-brand-500/10 shadow-float'
+                  : 'border-line bg-surface-850 hover:-translate-y-0.5 hover:border-line-strong hover:shadow-float',
               )}
             >
-              {counts[key]}
-            </p>
-          </button>
-        ))}
+              <span className={cn('flex h-10 w-10 shrink-0 items-center justify-center rounded-full', tone.chip)}>
+                <TierIcon className="h-5 w-5" />
+              </span>
+              <span className="min-w-0">
+                <span className="block truncate text-2xs font-medium uppercase tracking-wider text-ink-faint">
+                  {DORMANCY_TIER_LABEL[key]}
+                </span>
+                <span className={cn('numeric block text-2xl font-semibold leading-none', tone.text)}>
+                  {counts[key]}
+                </span>
+              </span>
+            </button>
+          );
+        })}
       </div>
 
       <Card className="overflow-hidden">
