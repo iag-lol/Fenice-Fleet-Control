@@ -39,6 +39,23 @@ import type {
 } from '@/types/views';
 
 /**
+ * MapLibre 6.x carga su worker con `new Worker(new URL(..., import.meta.url))`,
+ * un patron pensado para Vite/esbuild. El bundler de Next (Webpack, incluso
+ * con `transpilePackages`) no lo resuelve: la URL termina apuntando a una
+ * ruta que no existe, Next responde su pagina 404 en HTML, y el navegador
+ * rechaza el worker por MIME type ("non-JavaScript MIME type of text/html").
+ * Sin el worker, el mapa base (tiles raster) se ve normal porque no lo
+ * necesita, pero NINGUNA capa vectorial (clientes, vehiculos, rutas,
+ * geocercas...) llega a pintarse: su proceso de tiling nunca corre.
+ *
+ * El fix es apuntar el worker a una copia servida como estatico desde
+ * `public/maplibre/` (fuera del pipeline de Webpack), via la API que la
+ * propia libreria expone para este caso. Debe ejecutarse antes de crear
+ * cualquier `Map`, por eso vive a nivel de modulo.
+ */
+maplibregl.setWorkerUrl('/maplibre/maplibre-gl-worker.js');
+
+/**
  * Mapa operacional.
  *
  * Responsable de: instancia de MapLibre, animacion de marcadores, encuadres,
