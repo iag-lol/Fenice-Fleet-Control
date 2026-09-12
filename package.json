@@ -9,6 +9,7 @@
   "scripts": {
     "predev": "node scripts/clean-stale-build.mjs",
     "dev": "next dev",
+    "prebuild": "node scripts/clean-stale-build.mjs --force",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
