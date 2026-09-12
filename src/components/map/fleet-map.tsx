@@ -29,6 +29,7 @@ import {
 import { resolveMapStyle } from '@/components/map/map-style';
 import { OPERATION_CENTER } from '@/data/communes';
 import { isUsableCoordinate } from '@/lib/geo';
+import { geofencePoints } from '@/lib/map-navigation';
 import { useMapStore, type MapLayerId } from '@/stores/map-store';
 import type { Geofence, HeatmapPoint, LatLng, Position } from '@/types/core';
 import type {
@@ -153,6 +154,7 @@ export function FleetMap({
 }: FleetMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
+  const cameraRef = useRef<{ center: [number, number]; zoom: number } | null>(null);
   const animatedRef = useRef<Map<string, AnimatedVehicle>>(new Map());
   const frameRef = useRef<number | null>(null);
   const trailRef = useRef<LatLng[]>([]);
@@ -172,6 +174,8 @@ export function FleetMap({
 
   const selectedClientId = selection?.type === 'client' ? selection.id : null;
   const selectedVehicleId = selection?.type === 'vehicle' ? selection.id : null;
+  const selectedGeofenceId = selection?.type === 'geofence' ? selection.id : null;
+  const selectedAlertId = selection?.type === 'alert' ? selection.id : null;
 
   const viewMode = useMapStore((s) => s.viewMode);
   const resolved = useMemo(() => resolveMapStyle(viewMode), [viewMode]);
@@ -183,8 +187,8 @@ export function FleetMap({
     const map = new maplibregl.Map({
       container: containerRef.current,
       style: resolved.style,
-      center: [OPERATION_CENTER.lng, OPERATION_CENTER.lat],
-      zoom: 10.4,
+      center: cameraRef.current?.center ?? [OPERATION_CENTER.lng, OPERATION_CENTER.lat],
+      zoom: cameraRef.current?.zoom ?? 10.4,
       minZoom: 6,
       maxZoom: 18,
       attributionControl: { compact: true },
@@ -256,6 +260,8 @@ export function FleetMap({
     return () => {
       if (frameRef.current !== null) cancelAnimationFrame(frameRef.current);
       resizeObserver.disconnect();
+      const center = map.getCenter();
+      cameraRef.current = { center: [center.lng, center.lat], zoom: map.getZoom() };
       map.remove();
       mapRef.current = null;
       setReady(false);
@@ -278,11 +284,30 @@ export function FleetMap({
 
     // Resolve a single topmost operational entity. Independent delegated
     // listeners also selected the commune underneath every truck or client.
-    const priority = [LAYER.vehicles, LAYER.clientPoints, LAYER.clientClusters,
-      LAYER.workOrders, LAYER.routeStops, LAYER.alerts, LAYER.geofenceFill,
-      LAYER.routePlanned, LAYER.routeExecuted, LAYER.communesFill];
+    const priority = [
+      LAYER.vehicles,
+      LAYER.vehicleLabels,
+      LAYER.clientPoints,
+      LAYER.clientLabels,
+      LAYER.clientClusters,
+      LAYER.clientClusterCount,
+      LAYER.workOrders,
+      LAYER.routeStops,
+      LAYER.routeStopLabels,
+      LAYER.alerts,
+      LAYER.geofenceLine,
+      LAYER.geofenceLabel,
+      LAYER.routeExecuted,
+      LAYER.routePlanned,
+      LAYER.geofenceFill,
+      LAYER.communesLabel,
+      LAYER.communesLine,
+      LAYER.communesFill,
+    ];
     const hitAt = (event: MapMouseEvent) => {
-      const features = map.queryRenderedFeatures(event.point, { layers: priority.filter((id) => Boolean(map.getLayer(id))) });
+      const features = map.queryRenderedFeatures(event.point, {
+        layers: priority.filter((id) => Boolean(map.getLayer(id))),
+      });
       return priority.flatMap((id) => features.filter((f) => f.layer.id === id))[0];
     };
     const onClick = (event: MapMouseEvent): void => {
@@ -290,25 +315,41 @@ export function FleetMap({
       if (!feature) return;
       const props = feature.properties;
       const layer = feature.layer.id;
-      if (layer === LAYER.clientClusters) {
+      if (layer === LAYER.clientClusters || layer === LAYER.clientClusterCount) {
         const source = map.getSource(SOURCE.clients) as maplibregl.GeoJSONSource;
-        void source.getClusterExpansionZoom(Number(props['cluster_id'])).then((zoom) => {
-          if (mapRef.current !== map || feature.geometry.type !== 'Point') return;
-          useMapStore.setState({ followingVehicleId: null });
-          map.easeTo({ center: feature.geometry.coordinates as [number, number], zoom: Math.min(zoom + 0.2, 17), duration: 500 });
-        }).catch(() => { /* The source may have changed while expanding a cluster. */ });
+        void source
+          .getClusterExpansionZoom(Number(props['cluster_id']))
+          .then((zoom) => {
+            if (mapRef.current !== map || feature.geometry.type !== 'Point') return;
+            useMapStore.setState({ followingVehicleId: null });
+            map.easeTo({
+              center: feature.geometry.coordinates as [number, number],
+              zoom: Math.min(zoom + 0.2, 17),
+              duration: 500,
+            });
+          })
+          .catch(() => {
+            /* The source may have changed while expanding a cluster. */
+          });
         return;
       }
-      if (layer === LAYER.communesFill) {
+      if (
+        layer === LAYER.communesFill ||
+        layer === LAYER.communesLine ||
+        layer === LAYER.communesLabel
+      ) {
         if (typeof props['code'] === 'string') onSelectCommune?.(props['code']);
         return;
       }
       if (typeof props['vehicleId'] === 'string') {
-        select({ type: 'vehicle', id: props['vehicleId'] }); onSelectVehicle?.(props['vehicleId']);
+        select({ type: 'vehicle', id: props['vehicleId'] });
+        onSelectVehicle?.(props['vehicleId']);
       } else if (typeof props['clientId'] === 'string') {
-        select({ type: 'client', id: props['clientId'] }); onSelectClient?.(props['clientId']);
+        select({ type: 'client', id: props['clientId'] });
+        onSelectClient?.(props['clientId']);
       } else if (typeof props['workOrderId'] === 'string') {
-        select({ type: 'workOrder', id: props['workOrderId'] }); onSelectWorkOrder?.(props['workOrderId']);
+        select({ type: 'workOrder', id: props['workOrderId'] });
+        onSelectWorkOrder?.(props['workOrderId']);
       } else if (typeof props['alertId'] === 'string') {
         select({ type: 'alert', id: props['alertId'] });
       } else if (typeof props['geofenceId'] === 'string') {
@@ -319,19 +360,29 @@ export function FleetMap({
     };
     let hoveredCommune: string | number | null = null;
     const clearHover = () => {
-      if (hoveredCommune !== null && map.getSource(SOURCE.communes)) map.setFeatureState({ source: SOURCE.communes, id: hoveredCommune }, { hover: false });
+      if (hoveredCommune !== null && map.getSource(SOURCE.communes))
+        map.setFeatureState({ source: SOURCE.communes, id: hoveredCommune }, { hover: false });
       hoveredCommune = null;
     };
     const onMove = (event: MapMouseEvent) => {
       const feature = hitAt(event);
       map.getCanvas().style.cursor = feature ? 'pointer' : '';
-      const next = feature?.layer.id === LAYER.communesFill ? feature.id ?? null : null;
+      const next =
+        feature?.layer.id === LAYER.communesFill ||
+        feature?.layer.id === LAYER.communesLine ||
+        feature?.layer.id === LAYER.communesLabel
+          ? (feature.id ?? null)
+          : null;
       if (next === hoveredCommune) return;
       clearHover();
       hoveredCommune = next;
-      if (next !== null) map.setFeatureState({ source: SOURCE.communes, id: next }, { hover: true });
+      if (next !== null)
+        map.setFeatureState({ source: SOURCE.communes, id: next }, { hover: true });
     };
-    const onLeave = () => { clearHover(); map.getCanvas().style.cursor = ''; };
+    const onLeave = () => {
+      clearHover();
+      map.getCanvas().style.cursor = '';
+    };
     map.on('click', onClick);
     map.on('mousemove', onMove);
     map.getCanvas().addEventListener('mouseleave', onLeave);
@@ -458,7 +509,10 @@ export function FleetMap({
 
           const trail = trailRef.current;
           const last = trail[trail.length - 1];
-          if (!last || Math.hypot(last.lat - state.current.lat, last.lng - state.current.lng) > 0.00008) {
+          if (
+            !last ||
+            Math.hypot(last.lat - state.current.lat, last.lng - state.current.lng) > 0.00008
+          ) {
             trail.push({ lat: state.current.lat, lng: state.current.lng });
             if (trail.length > 300) trail.shift();
             updateFollowTrail(map, trail);
@@ -508,14 +562,14 @@ export function FleetMap({
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !ready) return;
-    updateGeofences(map, geofences);
-  }, [ready, geofences]);
+    updateGeofences(map, geofences, selectedGeofenceId);
+  }, [ready, geofences, selectedGeofenceId]);
 
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !ready) return;
-    updateAlerts(map, alerts);
-  }, [ready, alerts]);
+    updateAlerts(map, alerts, selectedAlertId);
+  }, [ready, alerts, selectedAlertId]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -527,7 +581,14 @@ export function FleetMap({
     const map = mapRef.current;
     if (!map || !ready) return;
     updateCommunes(map, communes);
-    communes.filter((c) => c.boundary.length >= 3).forEach((c, index) => map.setFeatureState({ source: SOURCE.communes, id: index + 1 }, { selected: c.code === inspectedCommuneCode }));
+    communes
+      .filter((c) => c.boundary.length >= 3)
+      .forEach((c) =>
+        map.setFeatureState(
+          { source: SOURCE.communes, id: c.code },
+          { selected: c.code === inspectedCommuneCode },
+        ),
+      );
   }, [ready, communes, inspectedCommuneCode]);
 
   useEffect(() => {
@@ -560,10 +621,7 @@ export function FleetMap({
   }, [ready, trafficEnabled]);
 
   // --- Visibilidad de capas ------------------------------------------------
-  const effectiveLayers = useMemo(
-    () => ({ ...layers, ...layerOverride }),
-    [layers, layerOverride],
-  );
+  const effectiveLayers = useMemo(() => ({ ...layers, ...layerOverride }), [layers, layerOverride]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -622,10 +680,18 @@ export function FleetMap({
       }
     }
     for (const route of routes) {
-      for (const p of route.plannedPath) puntos.push([p.lng, p.lat]);
-      for (const stop of route.stops) puntos.push([stop.lng, stop.lat]);
+      for (const p of [...route.plannedPath, ...route.executedPath, ...route.stops]) {
+        if (isUsableCoordinate(p)) puntos.push([p.lng, p.lat]);
+      }
     }
-    for (const client of clients) puntos.push([client.lng, client.lat]);
+    for (const point of [...clients, ...workOrders, ...alerts]) {
+      if (isUsableCoordinate(point)) puntos.push([point.lng, point.lat]);
+    }
+    for (const geofence of geofences) {
+      for (const p of geofencePoints(geofence)) {
+        if (isUsableCoordinate(p)) puntos.push([p.lng, p.lat]);
+      }
+    }
     if (puntos.length === 0) return;
 
     autoFitDone.current = true;
@@ -653,7 +719,7 @@ export function FleetMap({
       ],
       { padding: 64, maxZoom: 15.5, duration: 0 },
     );
-  }, [ready, autoFit, vehicles, routes, clients]);
+  }, [ready, autoFit, vehicles, routes, clients, workOrders, alerts, geofences]);
 
   /**
    * Cambio de agrupamiento.
@@ -673,7 +739,12 @@ export function FleetMap({
       removeClientLayers(map);
       registerClientLayers(map, clusterClients);
       updateClients(map, clients, selection?.type === 'client' ? selection.id : null);
-      const clientLayers = [LAYER.clientClusters, LAYER.clientClusterCount, LAYER.clientPoints, LAYER.clientLabels];
+      const clientLayers = [
+        LAYER.clientClusters,
+        LAYER.clientClusterCount,
+        LAYER.clientPoints,
+        LAYER.clientLabels,
+      ];
       setLayerVisibility(map, clientLayers, effectiveLayers.clientes);
       // Recreated client layers must stay below orders and vehicles.
       for (const id of clientLayers) map.moveLayer(id, LAYER.workOrders);
@@ -688,7 +759,11 @@ export function FleetMap({
     if (!map || !ready || !focus) return;
 
     if (focus.bounds) {
-      const padding = Math.min(64, map.getContainer().clientWidth / 5, map.getContainer().clientHeight / 5);
+      const padding = Math.min(
+        64,
+        map.getContainer().clientWidth / 5,
+        map.getContainer().clientHeight / 5,
+      );
       map.fitBounds(boundsToLngLatBounds(focus.bounds), { padding, maxZoom: 16, duration: 700 });
       return;
     }

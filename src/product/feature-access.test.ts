@@ -57,6 +57,7 @@ describe('Plan Basico contratado', () => {
     for (const id of [
       'dashboard',
       'operational-map',
+      'control-tower',
       'fleet-tracking',
       'client-portfolio',
       'dormant-clients',
@@ -77,7 +78,6 @@ describe('Plan Basico contratado', () => {
   it('NO permite usar funciones del Plan Medio', async () => {
     const { access } = await loadWith(env);
 
-    expect(access.hasFeature('control-tower')).toBe(false);
     expect(access.hasFeature('driver-portal')).toBe(false);
     expect(access.hasFeature('proof-of-delivery')).toBe(false);
     expect(access.hasFeature('route-replay')).toBe(false);
@@ -93,7 +93,6 @@ describe('Plan Basico contratado', () => {
   it('anuncia Medio y Avanzado como mejora cuando la venta cruzada esta activa', async () => {
     const { access } = await loadWith(env);
 
-    expect(access.resolveFeature('control-tower').showsAsUpgrade).toBe(true);
     expect(access.resolveFeature('smart-dispatch').showsAsUpgrade).toBe(true);
   });
 });
@@ -106,7 +105,7 @@ describe('Plan Basico sin venta cruzada', () => {
 
     // Esta es la garantia que permite entregar una version Basica limpia sin
     // revisar decenas de componentes a mano.
-    expect(access.isFeatureVisible('control-tower')).toBe(false);
+    expect(access.isFeatureVisible('control-tower')).toBe(true);
     expect(access.isFeatureVisible('driver-portal')).toBe(false);
     expect(access.isFeatureVisible('smart-dispatch')).toBe(false);
     expect(access.isFeatureVisible('operational-ai')).toBe(false);

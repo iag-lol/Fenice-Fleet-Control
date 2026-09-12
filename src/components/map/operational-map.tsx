@@ -1,17 +1,7 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
-import {
-  AlertTriangle,
-  Building2,
-  Filter,
-  Maximize2,
-  Minimize2,
-  Navigation,
-  Package,
-  Target,
-  Truck,
-} from 'lucide-react';
+import { Building2, Filter, Maximize2, Minimize2, Navigation, Target, Truck } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import {
@@ -33,7 +23,11 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ErrorBoundary } from '@/components/ui/error-boundary';
 import { Sheet } from '@/components/ui/sheet';
-import { GpsDegradedNotice, PendingIntegrationNotice, QueryError } from '@/components/ui/query-state';
+import {
+  GpsDegradedNotice,
+  PendingIntegrationNotice,
+  QueryError,
+} from '@/components/ui/query-state';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useLiveFleet } from '@/hooks/use-live-fleet';
 import { OPERATION_BOUNDS } from '@/data/communes';
@@ -42,7 +36,8 @@ import { useMapStore } from '@/stores/map-store';
 import { mapQuery, communesQuery, systemModeQuery } from '@/hooks/use-control-data';
 import { operationPoints } from '@/lib/map-navigation';
 import { MapEntityPanel } from '@/components/map/map-entity-panel';
-import type { MapSnapshot, TerritoryAnalysis } from '@/types/views';
+import { WorkOrderPanel } from '@/components/map/work-order-panel';
+import type { TerritoryAnalysis } from '@/types/views';
 
 /**
  * Centro operacional.
@@ -76,13 +71,7 @@ export function OperationalMap() {
   const scopedCommuneCode = useMapStore((s) => s.scopedCommuneCode);
   const scopeToCommune = useMapStore((s) => s.scopeToCommune);
 
-  const {
-    data: snapshot,
-    isLoading,
-    isError,
-    error,
-    refetch,
-  } = useQuery(mapQuery);
+  const { data: snapshot, isLoading, isError, error, refetch } = useQuery(mapQuery);
 
   // El mismo estado que alimenta el indicador del header: distingue una
   // integracion sin configurar (permanente, se arregla en el servidor) de un
@@ -103,7 +92,11 @@ export function OperationalMap() {
 
   // Los limites comunales pesan cientos de kilobytes: solo se descargan
   // cuando el operador enciende la capa.
-  const { data: communesData, error: communesError, refetch: retryCommunes } = useQuery({
+  const {
+    data: communesData,
+    error: communesError,
+    refetch: retryCommunes,
+  } = useQuery({
     ...communesQuery,
     enabled: layers.comunas || Boolean(inspectedCommuneCode || scopedCommuneCode),
   });
@@ -208,21 +201,34 @@ export function OperationalMap() {
     const store = useMapStore.getState();
     store.showAll();
     const points = snapshot ? operationPoints(snapshot) : [];
-    points.push(...vehicles.flatMap((v) => v.position ? [v.position] : []));
+    points.push(...vehicles.flatMap((v) => (v.position ? [v.position] : [])));
     if (points.length) store.fitPoints(points);
-    else focusOn({ lat: (OPERATION_BOUNDS.minLat + OPERATION_BOUNDS.maxLat) / 2, lng: (OPERATION_BOUNDS.minLng + OPERATION_BOUNDS.maxLng) / 2 }, 10.4);
+    else
+      focusOn(
+        {
+          lat: (OPERATION_BOUNDS.minLat + OPERATION_BOUNDS.maxLat) / 2,
+          lng: (OPERATION_BOUNDS.minLng + OPERATION_BOUNDS.maxLng) / 2,
+        },
+        10.4,
+      );
   }, [snapshot, vehicles, focusOn]);
 
   // Pantalla completa dentro de la aplicacion.
   const toggleFullscreen = useCallback(() => {
     const node = containerRef.current;
     if (!node) return;
-    if (fullscreen && !document.fullscreenElement) { setFullscreen(false); return; }
+    if (fullscreen && !document.fullscreenElement) {
+      setFullscreen(false);
+      return;
+    }
 
     if (document.fullscreenElement) {
       void document.exitFullscreen();
     } else {
-      if (!node.requestFullscreen) { setFullscreen((value) => !value); return; }
+      if (!node.requestFullscreen) {
+        setFullscreen((value) => !value);
+        return;
+      }
       void node.requestFullscreen().catch(() => {
         // Algunos navegadores moviles lo bloquean: se degrada al modo interno.
         setFullscreen((value) => !value);
@@ -255,7 +261,10 @@ export function OperationalMap() {
   };
 
   return (
-    <div ref={containerRef} className={cn('relative h-full w-full bg-surface-950', fullscreen && 'fixed inset-0 z-[70]')}>
+    <div
+      ref={containerRef}
+      className={cn('relative h-full w-full bg-surface-950', fullscreen && 'fixed inset-0 z-[70]')}
+    >
       {isLoading || !snapshot ? (
         <div className="absolute inset-0 p-4">
           <Skeleton className="h-full w-full" />
@@ -313,7 +322,9 @@ export function OperationalMap() {
 
           <div className="hidden items-center gap-2 whitespace-nowrap rounded-md border border-line-strong bg-surface-900/95 px-2.5 py-1.5 text-2xs shadow-float backdrop-blur sm:flex">
             <Building2 className="h-3.5 w-3.5 text-brand-700" />
-            <span className="numeric font-medium text-ink">{layers.clientes ? clientesEnfocados.length : 0}</span>
+            <span className="numeric font-medium text-ink">
+              {layers.clientes ? clientesEnfocados.length : 0}
+            </span>
             <span className="text-ink-faint">de</span>
             <span className="numeric font-medium text-ink">{allClients.length}</span>
             <span className="text-ink-faint">clientes visibles</span>
@@ -329,7 +340,11 @@ export function OperationalMap() {
           >
             <Filter className="h-4 w-4 text-brand-700" />
             <span className="hidden sm:inline">Filtros</span>
-            {activeFilterCount > 0 ? <Badge tone="brand" size="sm">{activeFilterCount}</Badge> : null}
+            {activeFilterCount > 0 ? (
+              <Badge tone="brand" size="sm">
+                {activeFilterCount}
+              </Badge>
+            ) : null}
           </button>
 
           <LayerControl />
@@ -357,10 +372,24 @@ export function OperationalMap() {
         </div>
       </div>
 
-      {(isError || (layers.comunas && communesError)) ? (
-        <div role="alert" className="absolute left-3 right-3 top-28 z-20 rounded-md border border-status-warning/30 bg-surface-900 p-3 text-xs text-status-warning">
-          {isError ? 'No se pudo actualizar la operación. Se conservan los últimos datos.' : 'No se pudieron cargar las comunas.'}
-          <button type="button" className="ml-2 underline" onClick={() => { void refetch(); void retryCommunes(); }}>Reintentar</button>
+      {isError || (layers.comunas && communesError) ? (
+        <div
+          role="alert"
+          className="absolute left-3 right-3 top-28 z-20 rounded-md border border-status-warning/30 bg-surface-900 p-3 text-xs text-status-warning"
+        >
+          {isError
+            ? 'No se pudo actualizar la operación. Se conservan los últimos datos.'
+            : 'No se pudieron cargar las comunas.'}
+          <button
+            type="button"
+            className="ml-2 underline"
+            onClick={() => {
+              void refetch();
+              void retryCommunes();
+            }}
+          >
+            Reintentar
+          </button>
         </div>
       ) : null}
       {/* --- Aviso de degradacion GPS --- */}
@@ -370,8 +399,8 @@ export function OperationalMap() {
             <PendingIntegrationNotice
               what={
                 <>
-                  La flota no aparece en el mapa: el proveedor de telemetria GPS
-                  no esta conectado. Requiere credenciales en el servidor.{' '}
+                  La flota no aparece en el mapa: el proveedor de telemetria GPS no esta conectado.
+                  Requiere credenciales en el servidor.{' '}
                   <a href="/configuracion" className="font-medium underline">
                     Ver estado del sistema
                   </a>
@@ -385,12 +414,24 @@ export function OperationalMap() {
         </div>
       ) : null}
 
-      <Sheet open={Boolean(inspectedCommune)} onClose={() => inspectCommune(null)} title="Detalle de comuna" transparentOverlay>
-        {inspectedCommune ? <div className="flex justify-center p-3"><CommunePanel commune={inspectedCommune} onClose={() => inspectCommune(null)} /></div> : null}
+      <Sheet
+        open={Boolean(inspectedCommune)}
+        onClose={() => inspectCommune(null)}
+        title="Detalle de comuna"
+        transparentOverlay
+      >
+        {inspectedCommune ? (
+          <div className="flex justify-center p-3">
+            <CommunePanel commune={inspectedCommune} onClose={() => inspectCommune(null)} />
+          </div>
+        ) : null}
       </Sheet>
 
       {/* --- Que se esta mirando --- */}
-      {scopeActivo || currentSelection?.type === 'vehicle' || highlightedRouteId || scopedCommuneCode ? (
+      {scopeActivo ||
+      currentSelection?.type === 'vehicle' ||
+      highlightedRouteId ||
+      scopedCommuneCode ? (
         <div className="absolute bottom-24 left-2.5 z-20 sm:bottom-4">
           <FocusBanner
             vehiclePlate={
@@ -498,9 +539,13 @@ export function OperationalMap() {
             ? 'Ficha del vehiculo'
             : currentSelection?.type === 'client'
               ? 'Ficha del cliente'
-              : currentSelection?.type === 'geofence' ? 'Detalle de geocerca'
-                : currentSelection?.type === 'route' ? 'Detalle de ruta'
-                  : currentSelection?.type === 'alert' ? 'Detalle de alerta' : 'Orden de trabajo'
+              : currentSelection?.type === 'geofence'
+                ? 'Detalle de geocerca'
+                : currentSelection?.type === 'route'
+                  ? 'Detalle de ruta'
+                  : currentSelection?.type === 'alert'
+                    ? 'Detalle de alerta'
+                    : 'Orden de trabajo'
         }
         transparentOverlay
       >
@@ -510,73 +555,12 @@ export function OperationalMap() {
           ) : currentSelection?.type === 'client' ? (
             <ClientPanel clientId={currentSelection.id} />
           ) : currentSelection?.type === 'workOrder' ? (
-            <WorkOrderQuickPanel
-              workOrderId={currentSelection.id}
-              snapshot={snapshot ?? null}
-            />
+            <WorkOrderPanel workOrderId={currentSelection.id} snapshot={snapshot ?? null} />
           ) : currentSelection ? (
             <MapEntityPanel selection={currentSelection} snapshot={snapshot ?? null} />
           ) : null}
         </ErrorBoundary>
       </Sheet>
-    </div>
-  );
-}
-
-/** Vista rapida de una OT seleccionada en el mapa. */
-function WorkOrderQuickPanel({
-  workOrderId,
-  snapshot,
-}: {
-  workOrderId: string;
-  snapshot: MapSnapshot | null;
-}) {
-  const workOrder = snapshot?.pendingWorkOrders.find((w) => w.workOrderId === workOrderId);
-  const stop = snapshot?.routes
-    .flatMap((route) => route.stops.map((s) => ({ ...s, routeId: route.routeId, code: route.code })))
-    .find((s) => s.workOrderId === workOrderId);
-
-  const focusOn = useMapStore((s) => s.focusOn);
-
-  const name = workOrder?.clientName ?? stop?.clientName ?? 'Orden de trabajo';
-  const address = workOrder?.addressLine ?? stop?.addressLine ?? null;
-  const coordinates =
-    workOrder !== undefined
-      ? { lat: workOrder.lat, lng: workOrder.lng }
-      : stop
-        ? { lat: stop.lat, lng: stop.lng }
-        : null;
-
-  return (
-    <div className="space-y-4 p-4">
-      <div>
-        <div className="flex items-center gap-2">
-          <Package className="h-4 w-4 text-brand-700" />
-          <p className="numeric text-[13px] font-semibold text-brand-700">
-            {workOrder?.number ?? `Parada ${stop?.sequence ?? ''}`}
-          </p>
-        </div>
-        <p className="mt-1.5 text-sm font-medium text-ink">{name}</p>
-        {address ? <p className="text-xs text-ink-faint">{address}</p> : null}
-      </div>
-
-      <div className="grid grid-cols-2 gap-2">
-        <Button
-          variant="secondary"
-          size="sm"
-          onClick={() => coordinates && focusOn(coordinates, 16)}
-          disabled={!coordinates}
-        >
-          Centrar mapa
-        </Button>
-        <a
-          href={`/ordenes/${workOrderId}`}
-          className="inline-flex h-11 items-center justify-center gap-2 rounded-md border border-line-strong bg-surface-750 px-3 text-[13px] text-ink transition-colors hover:bg-surface-700 sm:h-8 sm:text-xs"
-        >
-          <AlertTriangle className="h-3.5 w-3.5" />
-          Ver orden completa
-        </a>
-      </div>
     </div>
   );
 }

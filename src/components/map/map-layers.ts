@@ -1,10 +1,6 @@
-import type {
-  GeoJSONSource,
-  LngLatBoundsLike,
-  Map as MapLibreMap,
-} from 'maplibre-gl';
+import type { GeoJSONSource, LngLatBoundsLike, Map as MapLibreMap } from 'maplibre-gl';
 
-import { circleToPolygon } from '@/lib/geo';
+import { circleToPolygon, isUsableCoordinate } from '@/lib/geo';
 import { closedRing } from '@/lib/map-navigation';
 import type { Geofence, HeatmapPoint, LatLng } from '@/types/core';
 import type {
@@ -107,14 +103,18 @@ export function registerLayers(map: MapLibreMap): void {
       // sin que el relleno tape la operacion que hay encima.
       'fill-color': [
         'case',
-        ['boolean', ['feature-state', 'selected'], false], '#0d90ae',
-        ['boolean', ['feature-state', 'hover'], false], '#22aecb',
+        ['boolean', ['feature-state', 'selected'], false],
+        '#0d90ae',
+        ['boolean', ['feature-state', 'hover'], false],
+        '#22aecb',
         '#64748b',
       ],
       'fill-opacity': [
         'case',
-        ['boolean', ['feature-state', 'selected'], false], 0.2,
-        ['boolean', ['feature-state', 'hover'], false], 0.12,
+        ['boolean', ['feature-state', 'selected'], false],
+        0.2,
+        ['boolean', ['feature-state', 'hover'], false],
+        0.12,
         0.03,
       ],
     },
@@ -129,7 +129,8 @@ export function registerLayers(map: MapLibreMap): void {
       // gris claro y menos de un pixel de grosor era invisible.
       'line-color': [
         'case',
-        ['boolean', ['feature-state', 'selected'], false], '#0b5c75',
+        ['boolean', ['feature-state', 'selected'], false],
+        '#0b5c75',
         '#5b6a7e',
       ],
       'line-width': [
@@ -186,12 +187,18 @@ export function registerLayers(map: MapLibreMap): void {
         'interpolate',
         ['linear'],
         ['heatmap-density'],
-        0, 'rgba(59, 130, 246, 0)',
-        0.2, 'rgba(59, 130, 246, 0.45)',
-        0.4, 'rgba(14, 165, 233, 0.6)',
-        0.6, 'rgba(234, 179, 8, 0.7)',
-        0.8, 'rgba(234, 88, 12, 0.8)',
-        1, 'rgba(190, 18, 60, 0.88)',
+        0,
+        'rgba(59, 130, 246, 0)',
+        0.2,
+        'rgba(59, 130, 246, 0.45)',
+        0.4,
+        'rgba(14, 165, 233, 0.6)',
+        0.6,
+        'rgba(234, 179, 8, 0.7)',
+        0.8,
+        'rgba(234, 88, 12, 0.8)',
+        1,
+        'rgba(190, 18, 60, 0.88)',
       ],
       'heatmap-radius': ['interpolate', ['linear'], ['zoom'], 8, 14, 12, 26, 16, 46],
       'heatmap-opacity': ['interpolate', ['linear'], ['zoom'], 8, 0.85, 17, 0.55],
@@ -205,7 +212,10 @@ export function registerLayers(map: MapLibreMap): void {
     type: 'fill',
     source: SOURCE.geofences,
     layout: { visibility: 'none' },
-    paint: { 'fill-color': ['get', 'color'], 'fill-opacity': 0.1 },
+    paint: {
+      'fill-color': ['case', ['get', 'active'], ['get', 'color'], '#64748b'],
+      'fill-opacity': ['case', ['get', 'selected'], 0.24, ['get', 'active'], 0.1, 0.035],
+    },
   });
   map.addLayer({
     id: LAYER.geofenceLine,
@@ -213,9 +223,9 @@ export function registerLayers(map: MapLibreMap): void {
     source: SOURCE.geofences,
     layout: { visibility: 'none' },
     paint: {
-      'line-color': ['get', 'color'],
-      'line-width': 1.5,
-      'line-opacity': 0.75,
+      'line-color': ['case', ['get', 'active'], ['get', 'color'], '#64748b'],
+      'line-width': ['case', ['get', 'selected'], 3.5, 1.8],
+      'line-opacity': ['case', ['get', 'selected'], 1, ['get', 'active'], 0.85, 0.5],
       'line-dasharray': [2, 2],
     },
   });
@@ -233,7 +243,7 @@ export function registerLayers(map: MapLibreMap): void {
       'text-max-width': 10,
     },
     paint: {
-      'text-color': ['get', 'color'],
+      'text-color': ['case', ['get', 'active'], ['get', 'color'], '#64748b'],
       'text-halo-color': '#ffffff',
       'text-halo-width': 1.6,
     },
@@ -271,7 +281,15 @@ export function registerLayers(map: MapLibreMap): void {
     paint: {
       // La ruta resaltada se distingue por color y grosor, no solo por opacidad.
       'line-color': ['case', ['get', 'highlighted'], '#0d90ae', '#94a3b8'],
-      'line-width': ['interpolate', ['linear'], ['zoom'], 9, 1.5, 14, ['case', ['get', 'highlighted'], 4, 2.5]],
+      'line-width': [
+        'interpolate',
+        ['linear'],
+        ['zoom'],
+        9,
+        1.5,
+        14,
+        ['case', ['get', 'highlighted'], 4, 2.5],
+      ],
       'line-opacity': ['case', ['get', 'highlighted'], 0.95, 0.65],
       'line-dasharray': [3, 2],
     },
@@ -300,8 +318,10 @@ export function registerLayers(map: MapLibreMap): void {
       'circle-color': [
         'match',
         ['get', 'state'],
-        'visitado', '#15803d',
-        'proximo', '#b45309',
+        'visitado',
+        '#15803d',
+        'proximo',
+        '#b45309',
         '#94a3b8',
       ],
       'circle-stroke-width': 2,
@@ -345,20 +365,28 @@ export function registerLayers(map: MapLibreMap): void {
     source: SOURCE.alerts,
     layout: { visibility: 'none' },
     paint: {
-      'circle-radius': ['interpolate', ['linear'], ['zoom'], 10, 7, 15, 12],
+      'circle-radius': [
+        '+',
+        ['interpolate', ['linear'], ['zoom'], 10, 7, 15, 12],
+        ['case', ['get', 'selected'], 3, 0],
+      ],
       'circle-color': [
         'match',
         ['get', 'severity'],
-        'critical', 'rgba(220, 38, 38, 0.22)',
-        'warning', 'rgba(180, 83, 9, 0.22)',
+        'critical',
+        'rgba(220, 38, 38, 0.22)',
+        'warning',
+        'rgba(180, 83, 9, 0.22)',
         'rgba(13, 144, 174, 0.2)',
       ],
-      'circle-stroke-width': 2.5,
+      'circle-stroke-width': ['case', ['get', 'selected'], 4, 2.5],
       'circle-stroke-color': [
         'match',
         ['get', 'severity'],
-        'critical', '#dc2626',
-        'warning', '#b45309',
+        'critical',
+        '#dc2626',
+        'warning',
+        '#b45309',
         '#0d90ae',
       ],
     },
@@ -389,16 +417,20 @@ export function registerLayers(map: MapLibreMap): void {
       'circle-color': [
         'match',
         ['get', 'status'],
-        'warning', 'rgba(220, 38, 38, 0.14)',
-        'deviated', 'rgba(194, 65, 12, 0.14)',
+        'warning',
+        'rgba(220, 38, 38, 0.14)',
+        'deviated',
+        'rgba(194, 65, 12, 0.14)',
         'rgba(21, 128, 61, 0.12)',
       ],
       'circle-stroke-width': 1,
       'circle-stroke-color': [
         'match',
         ['get', 'status'],
-        'warning', 'rgba(220, 38, 38, 0.35)',
-        'deviated', 'rgba(194, 65, 12, 0.35)',
+        'warning',
+        'rgba(220, 38, 38, 0.35)',
+        'deviated',
+        'rgba(194, 65, 12, 0.35)',
         'rgba(21, 128, 61, 0.28)',
       ],
     },
@@ -469,7 +501,7 @@ export interface VehicleFeatureInput {
 export function updateVehicles(map: MapLibreMap, vehicles: VehicleFeatureInput[]): void {
   setData(map, SOURCE.vehicles, {
     type: 'FeatureCollection',
-    features: vehicles.map((v) => ({
+    features: vehicles.filter(isUsableCoordinate).map((v) => ({
       type: 'Feature',
       id: v.vehicleId,
       geometry: { type: 'Point', coordinates: [v.lng, v.lat] },
@@ -477,7 +509,7 @@ export function updateVehicles(map: MapLibreMap, vehicles: VehicleFeatureInput[]
         vehicleId: v.vehicleId,
         plate: v.plate,
         fleetCode: v.fleetCode,
-        heading: v.heading,
+        heading: Number.isFinite(v.heading) ? v.heading : 0,
         status: v.status,
         moving: v.moving,
         selected: v.selected,
@@ -497,7 +529,7 @@ export function updateClients(
     // identificadores numericos y descarta en silencio las entidades cuyo id
     // es una cadena, dejando la capa vacia. El identificador del cliente
     // viaja en las propiedades, que es de donde lo leen las interacciones.
-    features: clients.map((c) => ({
+    features: clients.filter(isUsableCoordinate).map((c) => ({
       type: 'Feature',
       geometry: { type: 'Point', coordinates: [c.lng, c.lat] },
       properties: {
@@ -515,11 +547,13 @@ export function updateClients(
 export function updateHeatmap(map: MapLibreMap, points: HeatmapPoint[]): void {
   setData(map, SOURCE.heatmap, {
     type: 'FeatureCollection',
-    features: points.map((p) => ({
-      type: 'Feature',
-      geometry: { type: 'Point', coordinates: [p.lng, p.lat] },
-      properties: { weight: p.weight },
-    })),
+    features: points
+      .filter((p) => isUsableCoordinate(p) && Number.isFinite(p.weight))
+      .map((p) => ({
+        type: 'Feature',
+        geometry: { type: 'Point', coordinates: [p.lng, p.lat] },
+        properties: { weight: p.weight },
+      })),
   });
 }
 
@@ -531,12 +565,13 @@ export function updateRoutes(
   const planned: FeatureCollection = {
     type: 'FeatureCollection',
     features: routes
-      .filter((r) => r.plannedPath.length >= 2)
-      .map((r) => ({
+      .map((r) => ({ route: r, points: r.plannedPath.filter(isUsableCoordinate) }))
+      .filter(({ points }) => points.length >= 2)
+      .map(({ route: r, points }) => ({
         type: 'Feature',
         geometry: {
           type: 'LineString',
-          coordinates: r.plannedPath.map((p) => [p.lng, p.lat]),
+          coordinates: points.map((p) => [p.lng, p.lat]),
         },
         properties: {
           routeId: r.routeId,
@@ -549,12 +584,13 @@ export function updateRoutes(
   const executed: FeatureCollection = {
     type: 'FeatureCollection',
     features: routes
-      .filter((r) => r.executedPath.length >= 2)
-      .map((r) => ({
+      .map((r) => ({ route: r, points: r.executedPath.filter(isUsableCoordinate) }))
+      .filter(({ points }) => points.length >= 2)
+      .map(({ route: r, points }) => ({
         type: 'Feature',
         geometry: {
           type: 'LineString',
-          coordinates: r.executedPath.map((p) => [p.lng, p.lat]),
+          coordinates: points.map((p) => [p.lng, p.lat]),
         },
         properties: {
           routeId: r.routeId,
@@ -566,7 +602,7 @@ export function updateRoutes(
   const stops: FeatureCollection = {
     type: 'FeatureCollection',
     features: routes.flatMap((route) =>
-      route.stops.map((stop) => ({
+      route.stops.filter(isUsableCoordinate).map((stop) => ({
         type: 'Feature' as const,
         geometry: { type: 'Point' as const, coordinates: [stop.lng, stop.lat] },
         properties: {
@@ -590,40 +626,53 @@ export function updateRoutes(
   setData(map, SOURCE.routeStops, stops);
 }
 
-export function updateGeofences(map: MapLibreMap, geofences: Geofence[]): void {
+export function updateGeofences(
+  map: MapLibreMap,
+  geofences: Geofence[],
+  selectedId: string | null = null,
+): void {
   setData(map, SOURCE.geofences, {
     type: 'FeatureCollection',
     features: geofences
-      .filter((g) => g.active && (g.geometry.shape === 'circle' || closedRing(g.geometry.vertices).length > 0))
       .map((geofence) => {
         // Los circulos se aproximan a poligono: MapLibre no tiene primitiva de
         // circulo geografico y `circle-radius` esta en pixeles, no en metros.
         const vertices: LatLng[] =
           geofence.geometry.shape === 'circle'
-            ? circleToPolygon(geofence.geometry.center, geofence.geometry.radiusMeters)
+            ? isUsableCoordinate(geofence.geometry.center) &&
+              Number.isFinite(geofence.geometry.radiusMeters) &&
+              geofence.geometry.radiusMeters > 0
+              ? circleToPolygon(geofence.geometry.center, geofence.geometry.radiusMeters)
+              : []
             : geofence.geometry.vertices;
+
+        const ring = closedRing(vertices);
+        if (ring.length < 4) return null;
 
         return {
           type: 'Feature' as const,
           geometry: {
             type: 'Polygon' as const,
-            coordinates: [closedRing(vertices)],
+            coordinates: [ring],
           },
           properties: {
             geofenceId: geofence.id,
             name: geofence.name,
             kind: geofence.kind,
             color: geofence.color,
+            active: geofence.active,
+            selected: geofence.id === selectedId,
           },
         };
-      }),
+      })
+      .filter((feature): feature is NonNullable<typeof feature> => feature !== null),
   });
 }
 
 export function updateWorkOrders(map: MapLibreMap, workOrders: WorkOrderMapPoint[]): void {
   setData(map, SOURCE.workOrders, {
     type: 'FeatureCollection',
-    features: workOrders.map((w) => ({
+    features: workOrders.filter(isUsableCoordinate).map((w) => ({
       type: 'Feature',
       geometry: { type: 'Point', coordinates: [w.lng, w.lat] },
       properties: {
@@ -636,13 +685,22 @@ export function updateWorkOrders(map: MapLibreMap, workOrders: WorkOrderMapPoint
   });
 }
 
-export function updateAlerts(map: MapLibreMap, alerts: AlertMapPoint[]): void {
+export function updateAlerts(
+  map: MapLibreMap,
+  alerts: AlertMapPoint[],
+  selectedId: string | null = null,
+): void {
   setData(map, SOURCE.alerts, {
     type: 'FeatureCollection',
-    features: alerts.map((a) => ({
+    features: alerts.filter(isUsableCoordinate).map((a) => ({
       type: 'Feature',
       geometry: { type: 'Point', coordinates: [a.lng, a.lat] },
-      properties: { alertId: a.alertId, severity: a.severity, title: a.title },
+      properties: {
+        alertId: a.alertId,
+        severity: a.severity,
+        title: a.title,
+        selected: a.alertId === selectedId,
+      },
     })),
   });
 }
@@ -660,15 +718,16 @@ export function updateCommunes(map: MapLibreMap, communes: CommuneFeatureInput[]
   setData(map, SOURCE.communes, {
     type: 'FeatureCollection',
     features: communes
-      .filter((c) => c.boundary.length >= 3)
-      .map((c, index) => ({
+      .map((c) => ({ commune: c, ring: closedRing(c.boundary) }))
+      .filter(({ ring }) => ring.length >= 4)
+      .map(({ commune: c, ring }) => ({
         type: 'Feature',
-        // Identificador numerico: `setFeatureState` lo exige para poder
-        // resaltar la comuna bajo el cursor y la seleccionada.
-        id: index + 1,
+        // La clave territorial permanece estable aunque cambie el orden del
+        // servidor: el hover y la seleccion no saltan a otra comuna.
+        id: c.code,
         geometry: {
           type: 'Polygon',
-          coordinates: [[...c.boundary, c.boundary[0]!].map((p) => [p.lng, p.lat])],
+          coordinates: [ring],
         },
         properties: { code: c.code, name: c.name, clients: c.clients ?? 0 },
       })),
@@ -746,8 +805,10 @@ export function registerClientLayers(map: MapLibreMap, cluster: boolean): void {
       // ve rojo aunque este agrupado. Un grupo gris ocultaria el problema.
       'circle-color': [
         'case',
-        ['>', ['/', ['get', 'dormidos'], ['get', 'point_count']], 0.4], 'rgba(220, 38, 38, 0.92)',
-        ['>', ['/', ['get', 'observacion'], ['get', 'point_count']], 0.4], 'rgba(180, 83, 9, 0.92)',
+        ['>', ['/', ['get', 'dormidos'], ['get', 'point_count']], 0.4],
+        'rgba(220, 38, 38, 0.92)',
+        ['>', ['/', ['get', 'observacion'], ['get', 'point_count']], 0.4],
+        'rgba(180, 83, 9, 0.92)',
         'rgba(13, 144, 174, 0.92)',
       ],
       'circle-radius': ['step', ['get', 'point_count'], 15, 10, 19, 30, 24, 80, 30],

@@ -154,11 +154,19 @@ export const FEATURES: readonly FeatureDefinition[] = [
     minimumPlan: 'base',
     category: 'mapa',
     implementationState: 'active',
-    // Una sola pantalla de mapa para todos los planes. En Basico es el mapa a
-    // pantalla completa; el Plan Medio le anade el panel de operacion encima.
-    // Tener dos entradas distintas para el mismo mapa confundia sin aportar.
+    // Una sola pantalla de mapa y panel para todos los planes.
     route: '/control',
     showInNavigation: true,
+  },
+  {
+    id: 'control-tower',
+    name: 'Panel de operacion en la torre',
+    description: 'Panel lateral con flota, clientes, geocercas, comunas, despachos, alertas y rutas junto al mapa.',
+    minimumPlan: 'base',
+    category: 'mapa',
+    implementationState: 'active',
+    // Forma parte de la pantalla unica de mapa; no declara otra ruta.
+    showInNavigation: false,
   },
   {
     id: 'fleet-tracking',
@@ -295,19 +303,6 @@ export const FEATURES: readonly FeatureDefinition[] = [
   // -------------------------------------------------------------------------
   // PLAN MEDIO
   // -------------------------------------------------------------------------
-  {
-    id: 'control-tower',
-    name: 'Panel de operacion en la torre',
-    description: 'Panel lateral con flota, despachos, alertas y rutas junto al mapa.',
-    minimumPlan: 'medium',
-    category: 'mapa',
-    implementationState: 'active',
-    // NO declara ruta: no es una pantalla aparte, sino el panel que se suma a
-    // la torre de control. Si declarara `/control`, el middleware bloquearia
-    // en Plan Basico la unica pantalla de mapa que ese plan si incluye.
-    showInNavigation: false,
-    showAsUpgrade: true,
-  },
   {
     id: 'vehicle-operational-panel',
     name: 'Panel operacional del vehiculo',

@@ -52,7 +52,7 @@ NEXT_PUBLIC_PRODUCT_PLAN=base
 NEXT_PUBLIC_SHOW_UPSELL=false
 ```
 
-Desaparecen: Torre de control, Despachos, portal del conductor, evidencia,
+Desaparecen: Despachos, portal del conductor, evidencia,
 replay, todas las previsualizaciones del Avanzado, los distintivos de plan y
 los textos promocionales.
 
@@ -84,8 +84,8 @@ Ocultar un enlace no es control de acceso. El sistema actúa en tres niveles:
 3. **Componentes** — `FeatureGate` y `UpgradeAction` deciden qué se muestra
    dentro de una pantalla.
 
-Verificado: con `NEXT_PUBLIC_PRODUCT_PLAN=base`, `/control` y `/despachos`
-devuelven 404 y las doce rutas del Plan Básico siguen en 200.
+Verificado: con `NEXT_PUBLIC_PRODUCT_PLAN=base`, `/control` está disponible
+con mapa y panel; `/despachos` conserva su restricción de Plan Medio.
 
 ## Aislamiento del código
 

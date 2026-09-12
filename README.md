@@ -11,7 +11,7 @@ Centraliza en una sola aplicación la flota, los pedidos, las órdenes de
 trabajo, las rutas, las geocercas, las visitas, las alertas y el estado
 comercial de la cartera de clientes.
 
-**Plan actual: Medio.** El sistema de planes permite entregar exactamente lo
+**Plan predeterminado: Básico.** El sistema de planes permite entregar exactamente lo
 contratado cambiando una variable — ver
 [`docs/PLAN-ARCHITECTURE.md`](docs/PLAN-ARCHITECTURE.md).
 
@@ -46,11 +46,14 @@ abierta para desarrollo y demostración. Para producción, `AUTH_ENABLED=true`
 exige iniciar sesión con RUT y contraseña contra una tabla propia en Supabase
 — sin Supabase Auth. Ver [`docs/SUPABASE-INTEGRATION.md`](docs/SUPABASE-INTEGRATION.md).
 
-Al arrancar sin configuración, el sistema opera en **modo demostración**: un
-simulador GPS mueve la flota por rutas reales de Santiago y un dataset interno
-de 372 clientes, 12 vehículos y 11 rutas alimenta todos los módulos. No es
-decorado: los datos recorren exactamente los mismos motores de reglas que
-recorrerán los datos reales.
+Sin fuentes configuradas, la torre muestra el estado de conexión y conserva
+las listas vacías: no inventa posiciones ni clientes. Para probar el mundo
+de demostración localmente, configura `DEMO_MODE=true`,
+`NEXT_PUBLIC_DEMO_MODE=true`, `GPS_PROVIDER=mock` y
+`OPERATIONS_PROVIDER=mock` antes de iniciar el servidor. El simulador y el
+dataset interno alimentan los mismos motores que las fuentes reales: 597
+clientes de los cuales 572 tienen coordenadas, 12 vehículos, 9 rutas
+y geocercas con reglas de detección.
 
 ---
 
@@ -76,9 +79,10 @@ recorrerán los datos reales.
 
 ### El principio central: proveedores desacoplados
 
-La plataforma **no está acoplada a ninguna fuente de datos**. Hoy consume un
-simulador y un dataset interno; mañana consumirá un servidor Traccar y la base
-de datos de Fenice. Cambiar de fuente es cambiar una variable de entorno.
+La plataforma **no está acoplada a ninguna fuente de datos**. Puede consumir
+un simulador, 3DTracking o Traccar para GPS, y un dataset interno o la base
+de datos de Fenice para operaciones. Las fuentes se eligen mediante variables
+de entorno; las credenciales reales siguen pendientes de configurar.
 
 Esto se sostiene sobre dos contratos:
 
@@ -158,7 +162,7 @@ src/
 | Ruta | Plan | Contenido |
 |---|---|---|
 | `/` | Básico | Panel operacional: KPIs de flota, despachos, cartera y alertas |
-| `/control` | **Medio** | Torre de control: mapa y panel operacional en una pantalla |
+| `/control` | Básico | Torre de control: mapa, flota, clientes, geocercas, comunas, despachos, alertas y rutas |
 | `/despachos` | **Medio** | Entregas en curso y cumplimiento de ventana |
 | `/configuracion/geocercas` | Básico | Editor de geocercas con reglas de alerta |
 | `/mapa` | Básico | Centro de control: capas, filtros, seguimiento y fichas |
@@ -354,7 +358,7 @@ Diseñada para operar desde el teléfono en terreno, no solo desde el escritorio
 npm test
 ```
 
-245 pruebas sobre lo que decide el comportamiento del sistema: estado comercial
+Más de 420 pruebas sobre lo que decide el comportamiento del sistema: estado comercial
 del cliente, motor de geocercas, cumplimiento de ruta, salud y normalización
 GPS, filtros del mapa, mapeo de datos externos, estados de OT, ETA, geodesia y
 formato.

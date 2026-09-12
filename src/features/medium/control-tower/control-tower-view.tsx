@@ -1,5 +1,7 @@
 'use client';
 
+import { useQuery } from '@tanstack/react-query';
+import type { SystemModeInfo } from '@/services/registry';
 import { PanelRightClose, PanelRightOpen } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
@@ -17,12 +19,8 @@ import { useControlData } from '@/hooks/use-control-data';
  *
  * Es la misma pantalla en todos los planes, y crece con el contratado:
  *
- *  - PLAN BASICO: el mapa a pantalla completa, con todas sus capas, filtros
- *    y seleccion. Es la pantalla nucleo del plan y no se degrada en nada.
- *  - PLAN MEDIO en adelante: se le suma el panel de operacion, con flota,
- *    despachos, alertas y rutas junto al mapa. La division se puede arrastrar
- *    y se recuerda entre sesiones, porque cada operador reparte su atencion
- *    de forma distinta.
+ * El mapa y su panel operan juntos en todos los planes. La division puede
+ * arrastrarse y conserva el ancho elegido por cada operador.
  *
  * Antes esto eran dos pantallas de menu ("Mapa operacional" y "Torre de
  * control") sobre el mismo mapa. Se unificaron: la diferencia era el panel,
@@ -44,8 +42,7 @@ const DEFAULT_PANEL = 360;
 const STORAGE_KEY = 'fenice.control.panelWidth';
 
 export function ControlTowerView() {
-  // El panel de operacion es Plan Medio. Sin el, la torre es exactamente el
-  // mapa a pantalla completa que el Plan Basico siempre incluyo.
+  // El panel operativo acompaña al mapa en todos los planes.
   const hasOperationsPanel = hasFeature('control-tower');
   const isDesktop = useIsDesktop();
   const { positions } = useLiveFleet();
@@ -57,7 +54,9 @@ export function ControlTowerView() {
   const [hydrated, setHydrated] = useState(false);
   const draggingRef = useRef(false);
   const panelWidthRef = useRef(panelWidth);
-  useEffect(() => { panelWidthRef.current = panelWidth; }, [panelWidth]);
+  useEffect(() => {
+    panelWidthRef.current = panelWidth;
+  }, [panelWidth]);
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -73,8 +72,21 @@ export function ControlTowerView() {
   }, []);
 
   const { map, alerts, communes } = useControlData();
+  const { data: mode } = useQuery({
+    queryKey: ['system', 'mode'],
+    staleTime: 60_000,
+    queryFn: async (): Promise<SystemModeInfo> => {
+      const response = await fetch('/api/system/mode');
+      if (!response.ok) throw new Error('Estado de fuentes no disponible');
+      return response.json() as Promise<SystemModeInfo>;
+    },
+  });
   const snapshot = map.data;
-  const refreshAll = () => { void map.refetch(); void alerts.refetch(); void communes.refetch(); };
+  const refreshAll = () => {
+    void map.refetch();
+    void alerts.refetch();
+    void communes.refetch();
+  };
 
   // --- Arrastre del divisor ------------------------------------------------
   const startDrag = useCallback(() => {
@@ -126,10 +138,18 @@ export function ControlTowerView() {
   const panel = (
     <OperationsPanel
       snapshot={snapshot ?? null}
+      sourceStatus={
+        mode && (mode.gps.provider === 'unavailable' || mode.operations.provider === 'mock')
+          ? `GPS: ${mode.gps.label}. Operaciones: ${mode.operations.label}.`
+          : undefined
+      }
       alerts={alerts.data?.alerts ?? []}
       communes={communes.data?.communes ?? []}
       loading={map.isLoading}
-      error={[map.error, alerts.error, communes.error].filter(Boolean).map((e) => e?.message).join(' ')}
+      error={[map.error, alerts.error, communes.error]
+        .filter(Boolean)
+        .map((e) => e?.message)
+        .join(' ')}
       refreshing={map.isFetching || alerts.isFetching || communes.isFetching}
       onRefresh={refreshAll}
       positions={positions}
@@ -174,9 +194,21 @@ export function ControlTowerView() {
             onKeyDown={(event) => {
               if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
               event.preventDefault();
-              const width = event.key === 'Home' ? MIN_PANEL : event.key === 'End' ? MAX_PANEL : Math.max(MIN_PANEL, Math.min(MAX_PANEL, panelWidth + (event.key === 'ArrowLeft' ? 20 : -20)));
+              const width =
+                event.key === 'Home'
+                  ? MIN_PANEL
+                  : event.key === 'End'
+                    ? MAX_PANEL
+                    : Math.max(
+                        MIN_PANEL,
+                        Math.min(MAX_PANEL, panelWidth + (event.key === 'ArrowLeft' ? 20 : -20)),
+                      );
               setPanelWidth(width);
-              try { window.localStorage.setItem(STORAGE_KEY, String(width)); } catch { /* Optional persistence. */ }
+              try {
+                window.localStorage.setItem(STORAGE_KEY, String(width));
+              } catch {
+                /* Optional persistence. */
+              }
             }}
             aria-label="Redimensionar panel operacional"
             onPointerDown={startDrag}
@@ -207,11 +239,11 @@ export function ControlTowerView() {
           <div className="pointer-events-auto flex h-full flex-col overflow-hidden rounded-t-2xl border-t border-line bg-surface-900 shadow-panel">
             <button
               type="button"
-              onClick={() => setSheetStep((step) => ((step + 1) % SHEET_HEIGHTS.length) as SheetStep)}
+              onClick={() =>
+                setSheetStep((step) => ((step + 1) % SHEET_HEIGHTS.length) as SheetStep)
+              }
               aria-label={
-                sheetStep === SHEET_HEIGHTS.length - 1
-                  ? 'Reducir el panel'
-                  : 'Ampliar el panel'
+                sheetStep === SHEET_HEIGHTS.length - 1 ? 'Reducir el panel' : 'Ampliar el panel'
               }
               className="flex min-h-11 w-full shrink-0 items-center justify-center"
             >

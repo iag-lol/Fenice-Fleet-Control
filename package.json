@@ -7,9 +7,9 @@
   },
   "description": "Fenice Fleet Control - Plataforma de control GPS y gestion logistica para Fenice SpA",
   "scripts": {
-    "predev": "node scripts/clean-stale-build.mjs",
+    "predev": "node scripts/copy-maplibre-worker.mjs && node scripts/clean-stale-build.mjs",
     "dev": "next dev",
-    "prebuild": "node scripts/clean-stale-build.mjs --force",
+    "prebuild": "node scripts/copy-maplibre-worker.mjs && node scripts/clean-stale-build.mjs --force",
     "build": "next build",
     "start": "next start",
     "lint": "eslint src",
