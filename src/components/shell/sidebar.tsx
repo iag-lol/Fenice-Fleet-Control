@@ -8,6 +8,7 @@ import { useEffect, useState } from 'react';
 import { BrandLockup } from '@/components/shell/brand';
 import { getVisibleNavGroups, isActivePath } from '@/components/shell/navigation';
 import { PlanBadge } from '@/components/product/plan-badge';
+import { useMediaQuery } from '@/hooks/use-media-query';
 import { cn } from '@/lib/cn';
 
 /**
@@ -16,24 +17,42 @@ import { cn } from '@/lib/cn';
  * Se puede colapsar a iconos: en el mapa operacional cada pixel horizontal
  * cuenta, y el operador que ya conoce la navegacion no necesita las etiquetas.
  * La preferencia se recuerda entre sesiones.
+ *
+ * Sin preferencia guardada, el ancho se adapta solo en tablet (768-1023px):
+ * el sidebar completo (236px) le restaba casi un tercio del ancho al mapa o
+ * a las tablas en esa franja. Un usuario que expande o colapsa a mano fija su
+ * eleccion para siempre, en cualquier ancho.
  */
+const TABLET_RANGE_QUERY = '(min-width: 768px) and (max-width: 1023px)';
+
 export function Sidebar() {
   const pathname = usePathname();
+  const isTabletRange = useMediaQuery(TABLET_RANGE_QUERY);
   const [collapsed, setCollapsed] = useState(false);
+  const [hasStoredPreference, setHasStoredPreference] = useState(false);
   const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
     try {
-      setCollapsed(window.localStorage.getItem('fenice.sidebar.collapsed') === '1');
+      const stored = window.localStorage.getItem('fenice.sidebar.collapsed');
+      if (stored !== null) {
+        setCollapsed(stored === '1');
+        setHasStoredPreference(true);
+      }
     } catch {
       // Almacenamiento no disponible: se usa el valor por defecto.
     }
     setHydrated(true);
   }, []);
 
+  useEffect(() => {
+    if (!hasStoredPreference) setCollapsed(isTabletRange);
+  }, [isTabletRange, hasStoredPreference]);
+
   const toggle = (): void => {
     setCollapsed((current) => {
       const next = !current;
+      setHasStoredPreference(true);
       try {
         window.localStorage.setItem('fenice.sidebar.collapsed', next ? '1' : '0');
       } catch {

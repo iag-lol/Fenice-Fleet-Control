@@ -1,12 +1,12 @@
 'use client';
 
-import { LockKeyhole } from 'lucide-react';
+import { IdCard, LockKeyhole } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useState, type FormEvent } from 'react';
 
+import { LoginShowcase } from '@/components/auth/login-showcase';
 import { BrandLockup } from '@/components/shell/brand';
 import { Button } from '@/components/ui/button';
-import { Card, CardBody, CardHeader } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { isValidRut, normalizeRut } from '@/lib/rut';
 
@@ -68,19 +68,31 @@ export function LoginForm() {
   }
 
   return (
-    <div className="flex min-h-app items-center justify-center bg-surface-950 p-4">
-      <Card className="w-full max-w-sm">
-        <CardHeader
-          title="Iniciar sesion"
-          description="Fenice Fleet Control"
-          icon={<LockKeyhole className="h-4 w-4" />}
-        />
-        <CardBody>
-          <div className="mb-4 flex justify-center">
+    <div className="relative flex min-h-app items-center justify-center overflow-hidden bg-surface-950 p-4 sm:p-6 lg:p-10">
+      {/* Resplandor de fondo sutil: le da profundidad al blanco/gris plano
+          sin competir con el contenido, visible incluso donde no llega el
+          panel de marca (movil y tablet). */}
+      <div
+        className="pointer-events-none absolute left-1/2 top-0 h-[36rem] w-[64rem] -translate-x-1/2 rounded-full bg-brand-300/20 blur-3xl"
+        aria-hidden
+      />
+
+      <div className="relative flex w-full max-w-4xl animate-fade-in items-stretch gap-6">
+        <LoginShowcase />
+
+        <div className="flex w-full flex-col justify-center rounded-2xl border border-line bg-surface-900 p-6 shadow-panel animate-slide-up sm:p-9 lg:max-w-sm lg:shrink-0">
+          <div className="mb-7 flex items-center gap-2.5 lg:hidden">
             <BrandLockup />
           </div>
 
-          <form onSubmit={handleSubmit} className="space-y-3" noValidate>
+          <div className="mb-6">
+            <h1 className="text-xl font-semibold tracking-tight text-ink">Iniciar sesion</h1>
+            <p className="mt-1 text-[13px] text-ink-faint">
+              Ingresa con tu RUT y contrasena de Fenice Fleet Control.
+            </p>
+          </div>
+
+          <form onSubmit={handleSubmit} className="space-y-4" noValidate>
             <label className="block">
               <span className="field-label">RUT</span>
               <Input
@@ -88,6 +100,7 @@ export function LoginForm() {
                 autoComplete="username"
                 inputMode="text"
                 placeholder="12345678-9"
+                icon={<IdCard className="h-4 w-4" />}
                 value={rut}
                 onChange={(event) => setRut(event.target.value)}
                 disabled={submitting}
@@ -99,6 +112,7 @@ export function LoginForm() {
               <Input
                 type="password"
                 autoComplete="current-password"
+                icon={<LockKeyhole className="h-4 w-4" />}
                 value={password}
                 onChange={(event) => setPassword(event.target.value)}
                 disabled={submitting}
@@ -111,12 +125,16 @@ export function LoginForm() {
               </p>
             ) : null}
 
-            <Button type="submit" variant="primary" size="lg" block loading={submitting}>
+            <Button type="submit" variant="primary" size="lg" block loading={submitting} className="shadow-glow">
               Entrar
             </Button>
           </form>
-        </CardBody>
-      </Card>
+
+          <p className="mt-6 text-center text-2xs text-ink-faint">
+            ¿Problemas para ingresar? Contacta a tu administrador de flota.
+          </p>
+        </div>
+      </div>
     </div>
   );
 }

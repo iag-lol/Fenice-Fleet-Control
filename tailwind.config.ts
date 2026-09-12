@@ -59,9 +59,11 @@ const config: Config = {
         DEFAULT: '0.375rem',
       },
       boxShadow: {
-        card: '0 1px 2px rgba(15, 28, 46, 0.04), 0 1px 3px rgba(15, 28, 46, 0.06)',
-        float: '0 4px 12px rgba(15, 28, 46, 0.08), 0 2px 4px rgba(15, 28, 46, 0.05)',
-        panel: '0 10px 30px rgba(15, 28, 46, 0.14), 0 3px 8px rgba(15, 28, 46, 0.08)',
+        card: '0 1px 3px rgba(15, 28, 46, 0.07), 0 1px 2px rgba(15, 28, 46, 0.05)',
+        float: '0 8px 24px rgba(15, 28, 46, 0.10), 0 2px 6px rgba(15, 28, 46, 0.06)',
+        panel: '0 20px 50px rgba(15, 28, 46, 0.18), 0 4px 14px rgba(15, 28, 46, 0.08)',
+        /** Halo de marca para CTAs y elementos destacados (login, upsell). */
+        glow: '0 0 0 1px rgba(13, 144, 174, 0.18), 0 12px 32px rgba(13, 144, 174, 0.22)',
       },
       keyframes: {
         'fade-in': { from: { opacity: '0' }, to: { opacity: '1' } },
