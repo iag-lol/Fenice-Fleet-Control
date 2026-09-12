@@ -9,6 +9,7 @@ import {
   Minimize2,
   Navigation,
   Route as RouteIcon,
+  Satellite,
 } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -25,6 +26,7 @@ import {
   WorkOrderStatusBadge,
 } from '@/components/common/status';
 import { Timeline } from '@/components/common/timeline';
+import { ConnectGpsDialog } from '@/components/fleet/connect-gps-dialog';
 import { FleetMap } from '@/components/map/fleet-map';
 import { Button, LinkButton } from '@/components/ui/button';
 import { Card, CardBody, CardHeader } from '@/components/ui/card';
@@ -58,6 +60,7 @@ export function VehicleDetailView({ vehicleId }: { vehicleId: string }) {
   const followVehicle = useMapStore((s) => s.followVehicle);
   // El mapa puede ocupar toda la altura util cuando el operador lo necesita.
   const [mapExpanded, setMapExpanded] = useState(false);
+  const [gpsDialogOpen, setGpsDialogOpen] = useState(false);
 
   const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['vehicle', vehicleId],
@@ -126,6 +129,15 @@ export function VehicleDetailView({ vehicleId }: { vehicleId: string }) {
         }
         actions={
           <>
+            <Button
+              variant="secondary"
+              size="sm"
+              icon={<Satellite className="h-3.5 w-3.5" />}
+              onClick={() => setGpsDialogOpen(true)}
+            >
+              {vehicle.device ? 'GPS: Traccar' : 'Conectar GPS'}
+            </Button>
+
             <Button
               variant="secondary"
               size="sm"
@@ -416,6 +428,13 @@ export function VehicleDetailView({ vehicleId }: { vehicleId: string }) {
           </Card>
         </div>
       </div>
+
+      <ConnectGpsDialog
+        open={gpsDialogOpen}
+        onClose={() => setGpsDialogOpen(false)}
+        vehicleId={vehicleId}
+        vehicleLabel={`${vehicle.plate} · ${vehicle.fleetCode}`}
+      />
     </>
   );
 }

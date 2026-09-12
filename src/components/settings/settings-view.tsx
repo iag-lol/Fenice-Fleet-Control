@@ -21,6 +21,7 @@ import { Card, CardBody, CardHeader } from '@/components/ui/card';
 import { NumberField, Select, Toggle } from '@/components/ui/input';
 import { QueryError } from '@/components/ui/query-state';
 import { SkeletonRows } from '@/components/ui/skeleton';
+import { TraccarIntegrationCard } from '@/components/settings/traccar-integration-card';
 import {
   GEOFENCE_RADIUS_PRESETS,
   validateSettingsCoherence,
@@ -508,6 +509,8 @@ export function SettingsView() {
             />
           </CardBody>
         </Card>
+
+        <TraccarIntegrationCard />
 
         {/* --- Estado del sistema --- */}
         <Card className="lg:col-span-2">

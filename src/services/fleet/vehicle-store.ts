@@ -46,6 +46,8 @@ interface DeviceRow {
   sim_numero: string | null;
   proveedor_id_externo: string | null;
   instalado_at: string | null;
+  proveedor: 'traccar' | '3dtracking' | null;
+  servidor_url: string | null;
 }
 
 interface VehicleRow {
@@ -72,6 +74,8 @@ function rowToDevice(row: DeviceRow): GpsDevice {
     simNumber: row.sim_numero ?? undefined,
     externalId: row.proveedor_id_externo ?? undefined,
     installedAt: row.instalado_at ?? undefined,
+    provider: row.proveedor ?? undefined,
+    serverUrl: row.servidor_url ?? undefined,
   };
 }
 
@@ -213,4 +217,19 @@ export async function deleteVehicleFromStore(id: VehicleId): Promise<boolean> {
 
   const { error, count } = await getSupabaseClient().from(TABLE).delete({ count: 'exact' }).eq('id', id);
   return !error && (count ?? 0) > 0;
+}
+
+/**
+ * Actualiza el dispositivo GPS de un vehiculo cuando la flota vive en memoria
+ * (sin Supabase configurado). Usado por "Conectar GPS": en modo Supabase esa
+ * asociacion se resuelve directamente sobre `dispositivos_gps`/`vehiculos`,
+ * pero en memoria no existe esa tabla, asi que el vinculo se escribe aqui,
+ * sobre el mismo objeto que `listVehicles()` devuelve.
+ */
+export function setVehicleDeviceInMemory(id: VehicleId, device: GpsDevice | null): boolean {
+  if (isSupabaseConfigured()) return false;
+  const vehicle = memoryStore().get(id);
+  if (!vehicle) return false;
+  memoryStore().set(id, { ...vehicle, device });
+  return true;
 }

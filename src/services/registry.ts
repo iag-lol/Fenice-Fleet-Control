@@ -5,6 +5,7 @@ import type { GpsProvider } from '@/services/gps/gps-provider';
 import { MockGpsProvider } from '@/services/gps/mock/mock-gps-provider';
 import type { ExternalOperationsProvider } from '@/services/operations/operations-provider';
 import { MockOperationsProvider } from '@/services/operations/mock/mock-operations-provider';
+import { withTraccarDeviceLinks } from '@/services/gps/traccar/traccar-device-links-provider';
 import { TraccarGpsProvider } from '@/services/gps/traccar/traccar-gps-provider';
 import { TridTrackingGpsProvider } from '@/services/gps/tridtracking/tridtracking-gps-provider';
 import { UnavailableGpsProvider } from '@/services/gps/unavailable-gps-provider';
@@ -77,7 +78,11 @@ function createOperationsProvider(): ExternalOperationsProvider {
 
 export function getGpsProvider(): GpsProvider {
   if (!globalForProviders.__feniceGpsProvider) {
-    globalForProviders.__feniceGpsProvider = createGpsProvider();
+    // Los vehiculos conectados por "Conectar GPS" (ficha del vehiculo) se
+    // superponen SIEMPRE al proveedor elegido por GPS_PROVIDER, sin importar
+    // cual sea: es el camino para incorporar un equipo Traccar de a uno,
+    // sin migrar (ni redeployar) toda la flota.
+    globalForProviders.__feniceGpsProvider = withTraccarDeviceLinks(createGpsProvider());
   }
   return globalForProviders.__feniceGpsProvider;
 }

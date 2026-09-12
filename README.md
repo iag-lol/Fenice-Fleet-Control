@@ -288,6 +288,7 @@ Ninguna de ellas se finge: sin proveedor, la función aparece marcada como
 | [`GEOFENCE-DELIVERY.md`](docs/GEOFENCE-DELIVERY.md) | Cómo se detecta una entrega y por qué se corta el seguimiento |
 | [`CUSTOMER-TRACKING.md`](docs/CUSTOMER-TRACKING.md) | Seguimiento público del cliente y su privacidad |
 | [`GPS-INTEGRATION.md`](docs/GPS-INTEGRATION.md) | Conectar el servidor Traccar |
+| [`TRACCAR-CLIENT-INTEGRATION.md`](docs/TRACCAR-CLIENT-INTEGRATION.md) | Conectar un vehículo a Traccar Client desde su ficha, sin variables de entorno por dispositivo |
 | [`3DTRACKING-INTEGRATION.md`](docs/3DTRACKING-INTEGRATION.md) | Conectar la telemetría real de 3DTracking |
 | [`EXTERNAL-DATABASE-INTEGRATION.md`](docs/EXTERNAL-DATABASE-INTEGRATION.md) | Conectar la base de Fenice (solo clientes y despachos) |
 | [`SUPABASE-INTEGRATION.md`](docs/SUPABASE-INTEGRATION.md) | Login, flota, rutas, geocercas y evidencia en Supabase |

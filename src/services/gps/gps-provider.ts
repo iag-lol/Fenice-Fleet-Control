@@ -79,6 +79,9 @@ export interface GpsProvider {
    * disponible y degrada a polling sin que el consumidor se entere.
    */
   subscribeToPositions(handlers: PositionSubscriptionHandlers): Unsubscribe;
+
+  /** Diagnostico opcional para `/api/system/gps`: no todos los proveedores lo implementan. */
+  healthCheck?(): Promise<{ ok: boolean; message: string; latencyMs: number | null }>;
 }
 
 /** Error tipado para que la UI distinga fallas de telemetria de otras. */

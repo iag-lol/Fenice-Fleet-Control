@@ -181,11 +181,37 @@ create table if not exists dispositivos_gps (
   sim_numero            text,
   proveedor_id_externo  text,
   instalado_at          timestamptz,
+  proveedor             text not null default 'traccar',
+  servidor_url          text,
+  habilitado            boolean not null default true,
+  ultima_conexion_at    timestamptz,
   creado_at             timestamptz not null default now(),
-  actualizado_at        timestamptz not null default now()
+  actualizado_at        timestamptz not null default now(),
+
+  constraint dispositivos_gps_proveedor_valido check (proveedor in ('traccar', '3dtracking'))
 );
 comment on table dispositivos_gps is 'Equipos GPS instalados en los camiones (Traccar / 3DTracking).';
-comment on column dispositivos_gps.proveedor_id_externo is 'Identificador del dispositivo en el proveedor de telemetria (ej. deviceId de Traccar).';
+comment on column dispositivos_gps.imei is 'Identificador del dispositivo tal como lo reporta el equipo: IMEI real en un Teltonika, o el "Device Identifier" configurado en Traccar Client.';
+comment on column dispositivos_gps.proveedor_id_externo is 'Identificador NUMERICO interno que Traccar/3DTracking asigna al dispositivo (deviceId), resuelto automaticamente a partir del imei. No lo ingresa el operador.';
+comment on column dispositivos_gps.servidor_url is 'Servidor Traccar de ESTE dispositivo. Vacio = usa el servidor configurado por variables de entorno (TRACCAR_BASE_URL), que es el caso normal cuando toda la flota comparte un unico servidor.';
+comment on column dispositivos_gps.habilitado is 'Permite pausar la conexion sin perder la asociacion (ej. equipo retirado temporalmente).';
+comment on column dispositivos_gps.ultima_conexion_at is 'Ultima vez que se confirmo una conexion exitosa (prueba manual o telemetria recibida). Alimenta el diagnostico de "Conectar GPS", no el estado en vivo del mapa.';
+
+-- Columnas nuevas sobre una tabla creada por una version anterior de este
+-- script: `create table if not exists` no la modifica, así que se agregan
+-- aparte para que volver a correr este archivo siga siendo seguro.
+alter table dispositivos_gps add column if not exists proveedor text not null default 'traccar';
+alter table dispositivos_gps add column if not exists servidor_url text;
+alter table dispositivos_gps add column if not exists habilitado boolean not null default true;
+alter table dispositivos_gps add column if not exists ultima_conexion_at timestamptz;
+do $$ begin
+  if not exists (
+    select 1 from pg_constraint where conname = 'dispositivos_gps_proveedor_valido'
+  ) then
+    alter table dispositivos_gps
+      add constraint dispositivos_gps_proveedor_valido check (proveedor in ('traccar', '3dtracking'));
+  end if;
+end $$;
 
 drop trigger if exists trg_dispositivos_gps_actualizado_at on dispositivos_gps;
 create trigger trg_dispositivos_gps_actualizado_at

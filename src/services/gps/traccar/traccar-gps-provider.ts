@@ -1,7 +1,7 @@
 import 'server-only';
 
 import { getServerEnv } from '@/config/env';
-import { getDemoDataset as getDataset } from '@/demo';
+import { listVehicles } from '@/services/fleet/vehicle-store';
 import { GpsProviderError } from '@/services/gps/gps-provider';
 import type {
   GpsProvider,
@@ -11,13 +11,13 @@ import type {
   Unsubscribe,
   VehicleEventsQuery,
 } from '@/services/gps/gps-provider';
+import { buildTraccarAuthHeader, TraccarClient } from '@/services/gps/traccar/traccar-client';
 import {
   buildDeviceIndex,
   mapTraccarDeviceStatus,
   mapTraccarEvent,
   mapTraccarPosition,
   type DeviceVehicleLink,
-  type TraccarDevice,
   type TraccarEvent,
   type TraccarPosition,
 } from '@/services/gps/traccar/traccar-mapper';
@@ -29,10 +29,6 @@ import type { DeviceStatus, GpsEvent, Position, Vehicle, VehicleId } from '@/typ
  * SEGURIDAD: esta clase solo se instancia en el servidor. Las credenciales
  * viajan en la cabecera de autenticacion desde Node, nunca desde el navegador.
  * El navegador consume `/api/gps/*`, que actua como proxy.
- *
- * Estado: implementado y listo. Se activa con `GPS_PROVIDER=traccar` mas las
- * variables TRACCAR_*. No ha sido ejecutado contra un servidor real porque
- * todavia no existe la instancia de Fenice.
  */
 export class TraccarGpsProvider implements GpsProvider {
   readonly info: GpsProviderInfo = {
@@ -42,8 +38,7 @@ export class TraccarGpsProvider implements GpsProvider {
     preferredTransport: 'websocket',
   };
 
-  private readonly baseUrl: string;
-  private readonly authHeader: string;
+  private readonly client: TraccarClient;
   private readonly websocketUrl: string | null;
 
   /** Cache del enlace dispositivo Traccar <-> vehiculo interno. */
@@ -58,58 +53,33 @@ export class TraccarGpsProvider implements GpsProvider {
       );
     }
 
-    this.baseUrl = env.TRACCAR_BASE_URL.replace(/\/+$/, '');
-    this.websocketUrl = env.TRACCAR_WEBSOCKET_URL ?? null;
-
-    if (env.TRACCAR_TOKEN) {
-      this.authHeader = `Bearer ${env.TRACCAR_TOKEN}`;
-    } else if (env.TRACCAR_USERNAME && env.TRACCAR_PASSWORD) {
-      const encoded = Buffer.from(`${env.TRACCAR_USERNAME}:${env.TRACCAR_PASSWORD}`).toString('base64');
-      this.authHeader = `Basic ${encoded}`;
-    } else {
+    const authHeader = buildTraccarAuthHeader({
+      token: env.TRACCAR_TOKEN,
+      username: env.TRACCAR_USERNAME,
+      password: env.TRACCAR_PASSWORD,
+    });
+    if (!authHeader) {
       throw new GpsProviderError(
         'GPS_PROVIDER=traccar requiere TRACCAR_TOKEN, o bien TRACCAR_USERNAME y TRACCAR_PASSWORD.',
       );
     }
-  }
 
-  private async request<T>(path: string, params?: Record<string, string>): Promise<T> {
-    const url = new URL(`${this.baseUrl}/api${path}`);
-    for (const [key, value] of Object.entries(params ?? {})) url.searchParams.set(key, value);
-
-    let response: Response;
-    try {
-      response = await fetch(url, {
-        headers: { Authorization: this.authHeader, Accept: 'application/json' },
-        cache: 'no-store',
-        // Un servidor GPS lento no debe bloquear el render de la plataforma.
-        signal: AbortSignal.timeout(10_000),
-      });
-    } catch (error) {
-      throw new GpsProviderError('No fue posible contactar al servidor Traccar.', error);
-    }
-
-    if (!response.ok) {
-      throw new GpsProviderError(
-        `El servidor Traccar respondio ${response.status} en ${path}.`,
-        await response.text().catch(() => null),
-      );
-    }
-
-    return (await response.json()) as T;
+    this.client = new TraccarClient({ baseUrl: env.TRACCAR_BASE_URL, authHeader });
+    this.websocketUrl = env.TRACCAR_WEBSOCKET_URL ?? null;
   }
 
   /**
    * Resuelve la correspondencia entre dispositivos de Traccar y vehiculos.
    *
    * Estrategia: enlazar por `GpsDevice.externalId`; si falta, por IMEI
-   * (`uniqueId` en Traccar). Cuando Fenice entregue su maestro de equipos,
-   * este metodo es el unico punto a ajustar.
+   * (`uniqueId` en Traccar, o el "Device Identifier" de Traccar Client). El
+   * operador lo fija asociando un dispositivo desde la ficha del vehiculo
+   * ("Conectar GPS"); esa asociacion vive en `dispositivos_gps`.
    */
   private async getLinks(): Promise<DeviceVehicleLink[]> {
     if (this.linkCache && this.linkCache.expiresAt > Date.now()) return this.linkCache.links;
 
-    const devices = await this.request<TraccarDevice[]>('/devices');
+    const devices = await this.client.getDevices();
     const vehicles = await this.getVehicles();
 
     const byExternalId = new Map(
@@ -136,17 +106,18 @@ export class TraccarGpsProvider implements GpsProvider {
   }
 
   /**
-   * El maestro de vehiculos pertenece a la operacion de Fenice, no a Traccar.
-   * Traccar solo aporta telemetria, por eso se lee de la fuente operacional.
+   * La flota es un artefacto propio de la plataforma (`vehicle-store`, sobre
+   * Supabase), no del ERP de Fenice: Traccar solo aporta telemetria sobre esos
+   * mismos vehiculos.
    */
   async getVehicles(): Promise<Vehicle[]> {
-    return getDataset().vehicles;
+    return listVehicles();
   }
 
   async getAllCurrentPositions(): Promise<Position[]> {
     const links = await this.getLinks();
     const index = buildDeviceIndex(links);
-    const raw = await this.request<TraccarPosition[]>('/positions');
+    const raw = await this.client.getPositions();
 
     return raw
       .map((position) => {
@@ -166,7 +137,7 @@ export class TraccarGpsProvider implements GpsProvider {
     const link = links.find((l) => l.vehicleId === query.vehicleId);
     if (!link) return [];
 
-    const raw = await this.request<TraccarPosition[]>('/positions', {
+    const raw = await this.client.request<TraccarPosition[]>('/positions', {
       deviceId: String(link.traccarDeviceId),
       from: new Date(query.from).toISOString(),
       to: new Date(query.to).toISOString(),
@@ -199,7 +170,7 @@ export class TraccarGpsProvider implements GpsProvider {
       params['deviceId'] = String(link.traccarDeviceId);
     }
 
-    const raw = await this.request<TraccarEvent[]>('/reports/events', params);
+    const raw = await this.client.request<TraccarEvent[]>('/reports/events', params);
 
     return raw
       .map((event) => {
@@ -213,7 +184,7 @@ export class TraccarGpsProvider implements GpsProvider {
   async getDeviceStatus(vehicleId?: VehicleId): Promise<DeviceStatus[]> {
     const links = await this.getLinks();
     const index = buildDeviceIndex(links);
-    const devices = await this.request<TraccarDevice[]>('/devices');
+    const devices = await this.client.getDevices();
     const now = new Date();
 
     return devices
@@ -324,5 +295,24 @@ export class TraccarGpsProvider implements GpsProvider {
       socket?.close();
       handlers.onTransportChange?.('disconnected');
     };
+  }
+
+  /** Diagnostico rapido: usado por `/api/system/gps` y por la pantalla de configuracion de GPS. */
+  async healthCheck(): Promise<{ ok: boolean; message: string; latencyMs: number | null }> {
+    const start = Date.now();
+    try {
+      const devices = await this.client.getDevices();
+      return {
+        ok: true,
+        message: `Conectado. ${devices.length} dispositivo(s) visibles en el servidor.`,
+        latencyMs: Date.now() - start,
+      };
+    } catch (error) {
+      return {
+        ok: false,
+        message: error instanceof Error ? error.message : String(error),
+        latencyMs: null,
+      };
+    }
   }
 }

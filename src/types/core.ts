@@ -174,6 +174,10 @@ export interface GpsDevice {
   /** Identificador que usa el proveedor externo (ej. Traccar deviceId). */
   externalId?: string;
   installedAt?: IsoDateTime;
+  /** Proveedor de telemetria de ESTE equipo. Determina como se resuelve su posicion en vivo. */
+  provider?: 'traccar' | '3dtracking';
+  /** Servidor propio del equipo. `undefined` = usa el configurado por variables de entorno. */
+  serverUrl?: string;
 }
 
 export type VehicleType = 'cisterna_semirremolque' | 'cisterna_rigido' | 'camioneta_estanque';
