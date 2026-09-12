@@ -27,9 +27,9 @@ import type { DeviceStatus, Position, Vehicle, VehicleId } from '@/types/core';
  * vehiculo con un dispositivo Traccar asociado; sin ninguno, es un no-op.
  */
 
-const POLL_INTERVAL_MS = 5_000;
+const POLL_INTERVAL_MS = 3_000;
 /** Vida del cache de posiciones: evita golpear Traccar una vez por cada pestana con el mapa abierto. */
-const POSITIONS_CACHE_MS = 3_000;
+const POSITIONS_CACHE_MS = 2_000;
 
 interface LinkedGroup {
   serverUrl: string;

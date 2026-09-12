@@ -1,10 +1,13 @@
 import { haversineMeters, pointInPolygon, polygonCentroid } from '@/lib/geo';
 import type {
+  AlertSeverity,
+  AlertType,
   Geofence,
   GeofenceEvent,
   IsoDateTime,
   LatLng,
   Position,
+  VehicleId,
 } from '@/types/core';
 
 /**
@@ -246,4 +249,76 @@ export function scanTrackForGeofenceEvents(
   }
 
   return { events };
+}
+
+// ---------------------------------------------------------------------------
+// Decision de alerta a partir de una transicion real (usado por
+// `geofence-detector.ts`, que es quien la persiste)
+// ---------------------------------------------------------------------------
+
+/** `allowedFrom`/`allowedTo` en formato "HH:mm". Sin ventana definida, siempre dentro. */
+export function isWithinAllowedWindow(from: string | null, to: string | null, at: Date): boolean {
+  if (!from || !to) return true;
+
+  const parse = (value: string): number | null => {
+    const match = /^(\d{1,2}):(\d{2})$/.exec(value);
+    if (!match) return null;
+    return Number(match[1]) * 60 + Number(match[2]);
+  };
+
+  const fromMinutes = parse(from);
+  const toMinutes = parse(to);
+  if (fromMinutes === null || toMinutes === null) return true;
+
+  const nowMinutes = at.getHours() * 60 + at.getMinutes();
+  // Ventana que cruza medianoche (ej. 22:00 a 06:00).
+  if (fromMinutes <= toMinutes) return nowMinutes >= fromMinutes && nowMinutes <= toMinutes;
+  return nowMinutes >= fromMinutes || nowMinutes <= toMinutes;
+}
+
+export interface GeofenceAlertDecision {
+  alertType: AlertType;
+  severity: AlertSeverity;
+  title: string;
+  reason: 'trigger' | 'vehiculo_no_autorizado' | 'fuera_de_horario';
+}
+
+/**
+ * Decide si una transicion enter/exit debe generar una alerta, y con que
+ * severidad y titulo, segun las reglas de la geocerca. `null` si ninguna
+ * regla pide alertar por ella (el evento crudo se registra siempre, esto
+ * solo decide la alerta).
+ */
+export function resolveGeofenceAlertDecision(
+  geofence: Geofence,
+  type: 'enter' | 'exit',
+  vehicleId: VehicleId,
+  at: Date,
+): GeofenceAlertDecision | null {
+  const rules = geofence.rules;
+  const authorized = rules.allowedVehicleIds.length === 0 || rules.allowedVehicleIds.includes(vehicleId);
+  const withinWindow = isWithinAllowedWindow(rules.allowedFrom, rules.allowedTo, at);
+
+  const unauthorizedEntry = type === 'enter' && !authorized && rules.triggers.includes('vehiculo_no_autorizado');
+  const outOfWindow =
+    !withinWindow &&
+    ((type === 'enter' && rules.triggers.includes('entrada_fuera_horario')) ||
+      (type === 'exit' && rules.triggers.includes('salida_fuera_horario')));
+  const plainTrigger = type === 'enter' ? rules.triggers.includes('entrada') : rules.triggers.includes('salida');
+
+  if (!unauthorizedEntry && !outOfWindow && !plainTrigger) return null;
+
+  const accion = type === 'enter' ? 'entro a' : 'salio de';
+  const title = unauthorizedEntry
+    ? `Vehiculo no autorizado entro a "${geofence.name}"`
+    : outOfWindow
+      ? `${type === 'enter' ? 'Entrada' : 'Salida'} fuera de horario en "${geofence.name}"`
+      : `Vehiculo ${accion} "${geofence.name}"`;
+
+  return {
+    alertType: type === 'enter' ? 'geocerca_entrada' : 'geocerca_salida',
+    severity: unauthorizedEntry ? 'critical' : rules.severity,
+    title,
+    reason: unauthorizedEntry ? 'vehiculo_no_autorizado' : outOfWindow ? 'fuera_de_horario' : 'trigger',
+  };
 }

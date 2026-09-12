@@ -1,24 +1,41 @@
 import 'server-only';
 
+import { randomUUID } from 'node:crypto';
+
 import { getSupabaseClient, isSupabaseConfigured } from '@/lib/supabase/server-client';
+import { getGeofence } from '@/services/geofences/geofence-store';
 import {
   asGeofenceId,
   asVehicleId,
   asWorkOrderId,
-  type GeofenceEvent,
   type GeofenceEventType,
+  type GeofenceEvent,
+  type GeofenceId,
+  type LatLng,
+  type VehicleId,
 } from '@/types/core';
 
 /**
  * Historial de entradas/salidas de geocerca (tabla `eventos_geocerca`).
  *
- * Se escribe desde el procesamiento de telemetria (fuera del alcance de esta
- * entrega: ver nota en `docs/SUPABASE-INTEGRATION.md`). Sin Supabase
- * configurado, o mientras no exista ese procesamiento, la lista viene vacia
- * en lugar de inventar eventos.
+ * Se escribe desde `geofence-detector.ts`, que evalua cada posicion nueva
+ * contra las geocercas activas.
  */
 
 const TABLE = 'eventos_geocerca';
+
+// ---------------------------------------------------------------------------
+// Backend en memoria (modo demostracion, sin Supabase configurado)
+// ---------------------------------------------------------------------------
+
+const globalForEvents = globalThis as unknown as {
+  __feniceGeofenceEvents?: GeofenceEvent[];
+};
+
+function memoryStore(): GeofenceEvent[] {
+  if (!globalForEvents.__feniceGeofenceEvents) globalForEvents.__feniceGeofenceEvents = [];
+  return globalForEvents.__feniceGeofenceEvents;
+}
 
 interface EventRow {
   id: string;
@@ -53,7 +70,11 @@ function rowToEvent(row: EventRow): GeofenceEvent {
 }
 
 export async function listGeofenceEvents(limit = 100): Promise<GeofenceEvent[]> {
-  if (!isSupabaseConfigured()) return [];
+  if (!isSupabaseConfigured()) {
+    return [...memoryStore()]
+      .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+      .slice(0, limit);
+  }
 
   const { data, error } = await getSupabaseClient()
     .from(TABLE)
@@ -66,4 +87,46 @@ export async function listGeofenceEvents(limit = 100): Promise<GeofenceEvent[]> 
     return [];
   }
   return (data as EventRow[]).map(rowToEvent);
+}
+
+export interface RecordGeofenceEventInput {
+  geofenceId: string;
+  vehicleId: VehicleId;
+  type: GeofenceEventType;
+  timestamp: string;
+  position: LatLng;
+  distanceMeters: number;
+}
+
+/** Registra una entrada/salida detectada. */
+export async function recordGeofenceEvent(input: RecordGeofenceEventInput): Promise<void> {
+  if (!isSupabaseConfigured()) {
+    const geofence = await getGeofence(input.geofenceId as GeofenceId);
+    memoryStore().push({
+      id: randomUUID(),
+      geofenceId: asGeofenceId(input.geofenceId),
+      geofenceName: geofence?.name ?? 'Geocerca',
+      vehicleId: input.vehicleId,
+      workOrderId: null,
+      orderId: null,
+      clientId: null,
+      type: input.type,
+      timestamp: input.timestamp,
+      position: input.position,
+      distanceMeters: input.distanceMeters,
+    });
+    return;
+  }
+
+  const { error } = await getSupabaseClient().from(TABLE).insert({
+    geocerca_id: input.geofenceId,
+    vehiculo_id: input.vehicleId,
+    tipo: input.type,
+    marca_tiempo: input.timestamp,
+    lat: input.position.lat,
+    lng: input.position.lng,
+    distancia_metros: input.distanceMeters,
+  });
+
+  if (error) console.error('[geofence-event-store] no fue posible registrar el evento:', error.message);
 }

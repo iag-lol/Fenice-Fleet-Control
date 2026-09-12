@@ -14,6 +14,7 @@ import { evaluateConnectionState } from '@/lib/engines/gps-health';
 import { haversineMeters } from '@/lib/geo';
 import { normalizeSearch } from '@/lib/format';
 import { listGeofences } from '@/services/geofences/geofence-store';
+import { listAlerts as listRealAlerts } from '@/services/fleet/alert-store';
 import { listDrivers } from '@/services/fleet/driver-store';
 import { listVehicles } from '@/services/fleet/vehicle-store';
 import { fleetSimulator } from '@/services/gps/mock/simulator';
@@ -786,7 +787,12 @@ export class MockOperationsProvider implements ExternalOperationsProvider {
   }
 
   async getAlerts(query: AlertQuery = {}): Promise<Alert[]> {
-    let alerts = this.buildAlerts();
+    // Las sinteticas se calculan sobre el mundo de demostracion completo
+    // (dataset ficticio); las reales vienen de telemetria en vivo evaluada
+    // contra geocercas reales (ver `geofence-detector.ts`). Se combinan para
+    // no perder ninguna: un vehiculo conectado por "Conectar GPS" aparece
+    // aqui aunque el resto de la flota siga siendo la de demostracion.
+    let alerts = [...(await listRealAlerts()), ...this.buildAlerts()];
 
     if (query.states?.length) {
       const wanted = new Set(query.states);

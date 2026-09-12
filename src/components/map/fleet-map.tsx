@@ -121,10 +121,38 @@ export interface FleetMapProps {
 interface AnimatedVehicle {
   current: { lat: number; lng: number; heading: number };
   target: { lat: number; lng: number; heading: number };
+  /** Punto de partida del tramo en curso: permite interpolar linealmente en vez de a saltos. */
+  segmentStart: { lat: number; lng: number; heading: number };
+  /** `performance.now()` de cuando se fijo el target actual. */
+  segmentStartedAt: number;
+  /** Cuanto deberia tardar en llegar al target, estimado del intervalo real entre reportes. */
+  segmentDurationMs: number;
   status: string;
   moving: boolean;
   plate: string;
   fleetCode: string;
+}
+
+/**
+ * Duracion del tramo de interpolacion.
+ *
+ * Se estima con el intervalo real entre las dos ultimas posiciones: si el
+ * equipo reporta cada 15 s, el marcador tarda 15 s en deslizarse de un punto
+ * al siguiente, en vez de saltar en menos de un segundo y quedarse quieto
+ * el resto. Acotado hacia arriba para no inventar un trayecto de varios
+ * minutos cuando el equipo estuvo un rato sin reportar (el vehiculo pudo
+ * haber girado varias veces en ese hueco; una linea recta larga mentiria
+ * sobre su recorrido real). Acotado hacia abajo para que el simulador, que
+ * reporta cada 1-2 s, se siga viendo fluido.
+ */
+const MIN_SEGMENT_MS = 800;
+const MAX_SEGMENT_MS = 20_000;
+/** Duracion por defecto cuando aun no hay dos reportes para estimar el intervalo real. */
+const DEFAULT_SEGMENT_MS = 3_000;
+
+/** Progreso 0-1 con suavizado en ambos extremos: arranca y frena, no se mueve a velocidad constante y en seco. */
+function easeInOutQuad(t: number): number {
+  return t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
 }
 
 /** Interpolacion angular por el camino corto: evita giros de 350 grados. */
@@ -402,6 +430,7 @@ export function FleetMap({
   useEffect(() => {
     const animated = animatedRef.current;
     const seen = new Set<string>();
+    const now = performance.now();
 
     for (const vehicle of vehicles) {
       // Un equipo puede reportar SIN fijacion satelital: manda (0,0), que cae
@@ -425,13 +454,32 @@ export function FleetMap({
         animated.set(vehicle.vehicleId, {
           current: { ...target },
           target,
+          segmentStart: { ...target },
+          segmentStartedAt: now,
+          segmentDurationMs: 0,
           status: vehicle.status,
           moving,
           plate: vehicle.plate,
           fleetCode: vehicle.fleetCode,
         });
-      } else {
+      } else if (existing.target.lat !== target.lat || existing.target.lng !== target.lng) {
+        // Posicion realmente nueva: el intervalo desde el ultimo cambio de
+        // target es la mejor estimacion de cuanto tardara el proximo reporte.
+        const observedInterval = now - existing.segmentStartedAt;
+        existing.segmentStart = { ...existing.current };
+        existing.segmentDurationMs = Math.min(
+          MAX_SEGMENT_MS,
+          Math.max(MIN_SEGMENT_MS, observedInterval || DEFAULT_SEGMENT_MS),
+        );
+        existing.segmentStartedAt = now;
         existing.target = target;
+        existing.status = vehicle.status;
+        existing.moving = moving;
+        existing.plate = vehicle.plate;
+        existing.fleetCode = vehicle.fleetCode;
+      } else {
+        // Mismo punto que ya se tenia (ej. republicacion sin cambios): solo
+        // refresca metadatos, sin reiniciar el tramo de animacion en curso.
         existing.status = vehicle.status;
         existing.moving = moving;
         existing.plate = vehicle.plate;
@@ -456,29 +504,25 @@ export function FleetMap({
       const animated = animatedRef.current;
       const features: VehicleFeatureInput[] = [];
       let needsFrame = false;
+      const now = performance.now();
 
       for (const [vehicleId, state] of animated) {
-        const latDelta = state.target.lat - state.current.lat;
-        const lngDelta = state.target.lng - state.current.lng;
-        const distance = Math.hypot(latDelta, lngDelta);
+        // Progreso en el tiempo, no en la distancia: el vehiculo se desliza
+        // durante todo el intervalo real entre reportes (ver `segmentDurationMs`
+        // mas arriba) en vez de llegar en menos de un segundo y quedarse quieto
+        // esperando el proximo dato.
+        const elapsed = now - state.segmentStartedAt;
+        const t = state.segmentDurationMs > 0 ? Math.min(1, elapsed / state.segmentDurationMs) : 1;
 
-        if (distance > 0.0000015) {
-          // Suavizado exponencial: rapido al inicio, asintotico al final.
-          state.current.lat += latDelta * 0.12;
-          state.current.lng += lngDelta * 0.12;
+        if (t < 1) {
+          const eased = easeInOutQuad(t);
+          state.current.lat = state.segmentStart.lat + (state.target.lat - state.segmentStart.lat) * eased;
+          state.current.lng = state.segmentStart.lng + (state.target.lng - state.segmentStart.lng) * eased;
+          state.current.heading = lerpAngle(state.segmentStart.heading, state.target.heading, eased);
           needsFrame = true;
         } else {
           state.current.lat = state.target.lat;
           state.current.lng = state.target.lng;
-        }
-
-        const headingDelta = Math.abs(
-          ((((state.target.heading - state.current.heading) % 360) + 540) % 360) - 180,
-        );
-        if (headingDelta > 0.6) {
-          state.current.heading = lerpAngle(state.current.heading, state.target.heading, 0.14);
-          needsFrame = true;
-        } else {
           state.current.heading = state.target.heading;
         }
 

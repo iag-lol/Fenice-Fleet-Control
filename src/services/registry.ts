@@ -5,6 +5,7 @@ import type { GpsProvider } from '@/services/gps/gps-provider';
 import { MockGpsProvider } from '@/services/gps/mock/mock-gps-provider';
 import type { ExternalOperationsProvider } from '@/services/operations/operations-provider';
 import { MockOperationsProvider } from '@/services/operations/mock/mock-operations-provider';
+import { withGeofenceDetection } from '@/services/geofences/geofence-detector';
 import { withTraccarDeviceLinks } from '@/services/gps/traccar/traccar-device-links-provider';
 import { TraccarGpsProvider } from '@/services/gps/traccar/traccar-gps-provider';
 import { TridTrackingGpsProvider } from '@/services/gps/tridtracking/tridtracking-gps-provider';
@@ -81,8 +82,12 @@ export function getGpsProvider(): GpsProvider {
     // Los vehiculos conectados por "Conectar GPS" (ficha del vehiculo) se
     // superponen SIEMPRE al proveedor elegido por GPS_PROVIDER, sin importar
     // cual sea: es el camino para incorporar un equipo Traccar de a uno,
-    // sin migrar (ni redeployar) toda la flota.
-    globalForProviders.__feniceGpsProvider = withTraccarDeviceLinks(createGpsProvider());
+    // sin migrar (ni redeployar) toda la flota. La deteccion de geocercas
+    // se aplica encima de todo eso, para que alcance por igual a la flota
+    // del proveedor global y a los vinculos manuales.
+    globalForProviders.__feniceGpsProvider = withGeofenceDetection(
+      withTraccarDeviceLinks(createGpsProvider()),
+    );
   }
   return globalForProviders.__feniceGpsProvider;
 }

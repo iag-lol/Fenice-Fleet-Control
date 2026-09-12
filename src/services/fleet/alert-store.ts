@@ -2,7 +2,19 @@ import 'server-only';
 
 import { getSupabaseClient, isSupabaseConfigured } from '@/lib/supabase/server-client';
 import type { AlertQuery } from '@/services/operations/operations-provider';
-import { asAlertId, asVehicleId, asWorkOrderId, type Alert, type AlertId, type AlertState } from '@/types/core';
+import {
+  asAlertId,
+  asVehicleId,
+  asWorkOrderId,
+  type Alert,
+  type AlertId,
+  type AlertState,
+  type AlertType,
+  type AlertCategory,
+  type AlertSeverity,
+  type LatLng,
+  type VehicleId,
+} from '@/types/core';
 
 /**
  * Alertas (tabla `alertas`).
@@ -18,6 +30,19 @@ import { asAlertId, asVehicleId, asWorkOrderId, type Alert, type AlertId, type A
  */
 
 const TABLE = 'alertas';
+
+// ---------------------------------------------------------------------------
+// Backend en memoria (modo demostracion, sin Supabase configurado)
+// ---------------------------------------------------------------------------
+
+const globalForRealAlerts = globalThis as unknown as {
+  __feniceRealAlerts?: Map<string, Alert>;
+};
+
+function memoryStore(): Map<string, Alert> {
+  if (!globalForRealAlerts.__feniceRealAlerts) globalForRealAlerts.__feniceRealAlerts = new Map();
+  return globalForRealAlerts.__feniceRealAlerts;
+}
 
 interface AlertRow {
   id: string;
@@ -65,7 +90,23 @@ function rowToAlert(row: AlertRow): Alert {
 }
 
 export async function listAlerts(query: AlertQuery = {}): Promise<Alert[]> {
-  if (!isSupabaseConfigured()) return [];
+  if (!isSupabaseConfigured()) {
+    let alerts = [...memoryStore().values()];
+    if (query.states?.length) {
+      const wanted = new Set(query.states);
+      alerts = alerts.filter((a) => wanted.has(a.state));
+    }
+    if (query.from || query.to) {
+      const fromMs = query.from ? new Date(query.from).getTime() : Number.NEGATIVE_INFINITY;
+      const toMs = query.to ? new Date(query.to).getTime() : Number.POSITIVE_INFINITY;
+      alerts = alerts.filter((a) => {
+        const ms = new Date(a.timestamp).getTime();
+        return ms >= fromMs && ms <= toMs;
+      });
+    }
+    alerts.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+    return query.limit ? alerts.slice(0, query.limit) : alerts;
+  }
 
   let builder = getSupabaseClient().from(TABLE).select('*');
   if (query.states?.length) builder = builder.in('estado', query.states);
@@ -82,8 +123,92 @@ export async function listAlerts(query: AlertQuery = {}): Promise<Alert[]> {
   return (data as AlertRow[]).map(rowToAlert);
 }
 
+export interface CreateAlertInput {
+  /** Id deterministico (ej. `geocerca-entrada:<geofenceId>:<vehicleId>:<timestamp>`): protege contra duplicados si el mismo evento se evalua mas de una vez. */
+  id: string;
+  type: AlertType;
+  category: AlertCategory;
+  severity: AlertSeverity;
+  title: string;
+  description: string;
+  timestamp: string;
+  vehicleId?: VehicleId | null;
+  vehiclePlate?: string | null;
+  position?: LatLng | null;
+  metadata?: Record<string, string | number> | null;
+}
+
+/**
+ * Crea una alerta real, generada por el procesamiento de telemetria en vivo
+ * (ver `geofence-detector.ts`). El id es deterministico: si el mismo evento
+ * se evalua mas de una vez (ej. varias pestañas con el mapa abierto
+ * disparando el mismo chequeo), el conflicto de llave primaria evita
+ * duplicarla en vez de que haya que deduplicar despues.
+ */
+export async function createAlert(input: CreateAlertInput): Promise<void> {
+  if (!isSupabaseConfigured()) {
+    // Mismo espiritu que el upsert real: si el id ya existe, no se duplica.
+    if (memoryStore().has(input.id)) return;
+    memoryStore().set(input.id, {
+      id: asAlertId(input.id),
+      type: input.type,
+      category: input.category,
+      severity: input.severity,
+      title: input.title,
+      description: input.description,
+      timestamp: input.timestamp,
+      vehicleId: input.vehicleId ?? null,
+      vehiclePlate: input.vehiclePlate ?? null,
+      clientId: null,
+      clientName: null,
+      workOrderId: null,
+      workOrderNumber: null,
+      position: input.position ?? null,
+      state: 'nueva',
+      acknowledgedAt: null,
+      resolvedAt: null,
+      metadata: input.metadata ?? null,
+    });
+    return;
+  }
+
+  const row = {
+    id: input.id,
+    tipo: input.type,
+    categoria: input.category,
+    severidad: input.severity,
+    titulo: input.title,
+    descripcion: input.description,
+    marca_tiempo: input.timestamp,
+    vehiculo_id: input.vehicleId ?? null,
+    vehiculo_patente: input.vehiclePlate ?? null,
+    lat: input.position?.lat ?? null,
+    lng: input.position?.lng ?? null,
+    estado: 'nueva' as const,
+    metadata: input.metadata ?? null,
+  };
+
+  const { error } = await getSupabaseClient()
+    .from(TABLE)
+    .upsert(row, { onConflict: 'id', ignoreDuplicates: true });
+
+  if (error) console.error('[alert-store] no fue posible crear la alerta:', error.message);
+}
+
 export async function updateAlertState(id: AlertId, state: AlertState): Promise<Alert | null> {
-  if (!isSupabaseConfigured()) return null;
+  if (!isSupabaseConfigured()) {
+    const existing = memoryStore().get(id);
+    if (!existing) return null;
+    const now = new Date().toISOString();
+    const updated: Alert = {
+      ...existing,
+      state,
+      acknowledgedAt: state === 'revisada' ? now : existing.acknowledgedAt,
+      resolvedAt: state === 'resuelta' ? now : existing.resolvedAt,
+    };
+    memoryStore().set(id, updated);
+    return updated;
+  }
 
   const now = new Date().toISOString();
   const patch: Record<string, unknown> = { estado: state };

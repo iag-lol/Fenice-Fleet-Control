@@ -9,6 +9,8 @@ import {
   distanceToCenter,
   evaluateDeliveryVisit,
   geofenceCenter,
+  isWithinAllowedWindow,
+  resolveGeofenceAlertDecision,
   scanTrackForGeofenceEvents,
 } from '@/lib/engines/geofence-engine';
 import { destinationPoint } from '@/lib/geo';
@@ -290,5 +292,93 @@ describe('scanTrackForGeofenceEvents', () => {
       [{ ...circle, active: false }],
     );
     expect(events).toHaveLength(0);
+  });
+});
+
+describe('isWithinAllowedWindow', () => {
+  it('sin ventana definida, siempre autorizado', () => {
+    expect(isWithinAllowedWindow(null, null, new Date('2026-01-01T03:00:00'))).toBe(true);
+  });
+
+  it('dentro de una ventana simple (no cruza medianoche)', () => {
+    const dentro = new Date('2026-01-01T10:00:00');
+    const fuera = new Date('2026-01-01T20:00:00');
+    expect(isWithinAllowedWindow('08:00', '18:00', dentro)).toBe(true);
+    expect(isWithinAllowedWindow('08:00', '18:00', fuera)).toBe(false);
+  });
+
+  it('ventana que cruza medianoche', () => {
+    const madrugada = new Date('2026-01-01T02:00:00');
+    const tarde = new Date('2026-01-01T15:00:00');
+    expect(isWithinAllowedWindow('22:00', '06:00', madrugada)).toBe(true);
+    expect(isWithinAllowedWindow('22:00', '06:00', tarde)).toBe(false);
+  });
+});
+
+describe('resolveGeofenceAlertDecision', () => {
+  const vehicleA = asVehicleId('veh-a');
+  const vehicleB = asVehicleId('veh-b');
+  const now = new Date('2026-01-01T12:00:00');
+
+  it('sin triggers activos, no alerta aunque haya transicion', () => {
+    const geofence = { ...circle, rules: { ...DEFAULT_GEOFENCE_RULES, triggers: [] } };
+    expect(resolveGeofenceAlertDecision(geofence, 'enter', vehicleA, now)).toBeNull();
+  });
+
+  it('con "entrada" en los triggers, una entrada genera alerta', () => {
+    const geofence = { ...circle, rules: { ...DEFAULT_GEOFENCE_RULES, triggers: ['entrada' as const] } };
+    const decision = resolveGeofenceAlertDecision(geofence, 'enter', vehicleA, now);
+    expect(decision).not.toBeNull();
+    expect(decision?.alertType).toBe('geocerca_entrada');
+    expect(decision?.severity).toBe(geofence.rules.severity);
+  });
+
+  it('"entrada" en los triggers no dispara alerta en una salida', () => {
+    const geofence = { ...circle, rules: { ...DEFAULT_GEOFENCE_RULES, triggers: ['entrada' as const] } };
+    expect(resolveGeofenceAlertDecision(geofence, 'exit', vehicleA, now)).toBeNull();
+  });
+
+  it('vehiculo no autorizado entrando: alerta critica aunque "entrada" no este en los triggers', () => {
+    const geofence = {
+      ...circle,
+      rules: {
+        ...DEFAULT_GEOFENCE_RULES,
+        triggers: ['vehiculo_no_autorizado' as const],
+        allowedVehicleIds: [vehicleA],
+      },
+    };
+    const decision = resolveGeofenceAlertDecision(geofence, 'enter', vehicleB, now);
+    expect(decision?.severity).toBe('critical');
+    expect(decision?.reason).toBe('vehiculo_no_autorizado');
+  });
+
+  it('vehiculo SI autorizado no dispara la alerta de no autorizado', () => {
+    const geofence = {
+      ...circle,
+      rules: {
+        ...DEFAULT_GEOFENCE_RULES,
+        triggers: ['vehiculo_no_autorizado' as const],
+        allowedVehicleIds: [vehicleA],
+      },
+    };
+    expect(resolveGeofenceAlertDecision(geofence, 'enter', vehicleA, now)).toBeNull();
+  });
+
+  it('entrada fuera de la ventana horaria autorizada', () => {
+    const geofence = {
+      ...circle,
+      rules: {
+        ...DEFAULT_GEOFENCE_RULES,
+        triggers: ['entrada_fuera_horario' as const],
+        allowedFrom: '08:00',
+        allowedTo: '18:00',
+      },
+    };
+    const fueraDeHorario = new Date('2026-01-01T22:00:00');
+    const decision = resolveGeofenceAlertDecision(geofence, 'enter', vehicleA, fueraDeHorario);
+    expect(decision?.reason).toBe('fuera_de_horario');
+
+    const dentroDeHorario = new Date('2026-01-01T10:00:00');
+    expect(resolveGeofenceAlertDecision(geofence, 'enter', vehicleA, dentroDeHorario)).toBeNull();
   });
 });
