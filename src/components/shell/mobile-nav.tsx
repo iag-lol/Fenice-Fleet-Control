@@ -141,6 +141,14 @@ export function MobileMenuSheet() {
             <Radio className="h-5 w-5 text-ink-faint" />
             Seguimiento publico
           </Link>
+          <a
+            href="https://zyteron.cl"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="mt-1 flex min-h-11 items-center justify-center rounded-md px-2 text-2xs text-ink-faint active:bg-surface-800"
+          >
+            Desarrollado por Zyteron
+          </a>
         </div>
       </div>
     </div>

@@ -154,6 +154,19 @@ export function Sidebar() {
           )}
           {!collapsed ? <span>Colapsar</span> : null}
         </button>
+
+        <a
+          href="https://zyteron.cl"
+          target="_blank"
+          rel="noopener noreferrer"
+          title="Desarrollado por Zyteron"
+          className={cn(
+            'mt-1 flex items-center justify-center gap-1.5 rounded-md px-2.5 py-2 text-2xs text-ink-faint transition-colors hover:bg-surface-800 hover:text-brand-700',
+            collapsed ? 'px-0' : 'justify-start',
+          )}
+        >
+          {!collapsed ? <span className="truncate">Desarrollado por Zyteron</span> : <span aria-hidden>Z</span>}
+        </a>
       </div>
     </aside>
   );

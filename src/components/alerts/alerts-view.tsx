@@ -2,11 +2,13 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
+  AlertOctagon,
   AlertTriangle,
   Building2,
   Check,
   ClipboardList,
   Eye,
+  Info,
   MapPin,
   RotateCcw,
   ShieldCheck,
@@ -148,35 +150,42 @@ export function AlertsView() {
       />
 
       <div className="mb-4 grid grid-cols-3 gap-2.5 sm:gap-3">
-        {(['critical', 'warning', 'info'] as AlertSeverity[]).map((key) => (
-          <button
-            key={key}
-            type="button"
-            onClick={() => setSeverity(severity === key ? '' : key)}
-            className={cn(
-              'rounded-lg border p-3 text-left transition-colors sm:p-4',
-              severity === key
-                ? 'border-brand-500 bg-brand-500/10'
-                : 'border-line bg-surface-850 hover:border-line-strong',
-            )}
-          >
-            <p className="text-2xs font-medium uppercase tracking-wider text-ink-faint">
-              {SEVERITY_LABEL[key]}
-            </p>
-            <p
+        {(['critical', 'warning', 'info'] as AlertSeverity[]).map((key) => {
+          const SeverityIcon = key === 'critical' ? AlertOctagon : key === 'warning' ? AlertTriangle : Info;
+          const tone =
+            key === 'critical'
+              ? { text: 'text-status-dormant', chip: 'bg-status-dormant/10 text-status-dormant' }
+              : key === 'warning'
+                ? { text: 'text-status-warning', chip: 'bg-status-warning/10 text-status-warning' }
+                : { text: 'text-brand-700', chip: 'bg-brand-500/10 text-brand-700' };
+          const active = severity === key;
+
+          return (
+            <button
+              key={key}
+              type="button"
+              onClick={() => setSeverity(active ? '' : key)}
               className={cn(
-                'numeric mt-1.5 text-2xl font-semibold leading-none',
-                key === 'critical'
-                  ? 'text-status-dormant'
-                  : key === 'warning'
-                    ? 'text-status-warning'
-                    : 'text-brand-700',
+                'flex items-center gap-3 rounded-xl border p-3 text-left shadow-card transition-all sm:p-4',
+                active
+                  ? 'border-brand-500 bg-brand-500/10 shadow-float'
+                  : 'border-line bg-surface-850 hover:-translate-y-0.5 hover:border-line-strong hover:shadow-float',
               )}
             >
-              {counts[key]}
-            </p>
-          </button>
-        ))}
+              <span className={cn('flex h-10 w-10 shrink-0 items-center justify-center rounded-full', tone.chip)}>
+                <SeverityIcon className="h-5 w-5" />
+              </span>
+              <span className="min-w-0">
+                <span className="block truncate text-2xs font-medium uppercase tracking-wider text-ink-faint">
+                  {SEVERITY_LABEL[key]}
+                </span>
+                <span className={cn('numeric block text-2xl font-semibold leading-none', tone.text)}>
+                  {counts[key]}
+                </span>
+              </span>
+            </button>
+          );
+        })}
       </div>
 
       <Card className="overflow-hidden">
