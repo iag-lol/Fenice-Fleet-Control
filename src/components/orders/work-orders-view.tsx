@@ -15,6 +15,7 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { SearchInput, Select } from '@/components/ui/input';
 import { QueryError } from '@/components/ui/query-state';
 import { SkeletonRows } from '@/components/ui/skeleton';
+import { useErpConnected } from '@/hooks/use-erp-connected';
 import { formatDistance, formatSmartDateTime, formatTime, normalizeSearch } from '@/lib/format';
 import { useMapStore } from '@/stores/map-store';
 import type { WorkOrder, WorkOrderStatus } from '@/types/core';
@@ -43,6 +44,7 @@ export function WorkOrdersView() {
   const searchParams = useSearchParams();
   const focusOn = useMapStore((s) => s.focusOn);
   const select = useMapStore((s) => s.select);
+  const erpConnected = useErpConnected();
 
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState(searchParams.get('estado') ?? '');
@@ -323,18 +325,26 @@ export function WorkOrdersView() {
             onRowClick={(row) => router.push(`/ordenes/${row.id}`)}
             initialSort={{ key: 'window', direction: 'asc' }}
             empty={
-              <EmptyState
-                icon={<ClipboardList className="h-5 w-5" />}
-                title="No hay ordenes que coincidan con los filtros seleccionados."
-                description="Cambia el estado, el rango de fechas o el termino de busqueda para ver otras ordenes."
-                action={
-                  hasFilters ? (
-                    <Button size="sm" variant="secondary" onClick={clearFilters}>
-                      Limpiar filtros
-                    </Button>
-                  ) : undefined
-                }
-              />
+              !erpConnected && !hasFilters ? (
+                <EmptyState
+                  icon={<ClipboardList className="h-5 w-5" />}
+                  title="Ordenes de trabajo sin fuente conectada."
+                  description="Las ordenes de trabajo viven en la base de datos de Fenice, que aun no esta configurada (EXTERNAL_DB_*). En cuanto se conecte, apareceran aqui automaticamente."
+                />
+              ) : (
+                <EmptyState
+                  icon={<ClipboardList className="h-5 w-5" />}
+                  title="No hay ordenes que coincidan con los filtros seleccionados."
+                  description="Cambia el estado, el rango de fechas o el termino de busqueda para ver otras ordenes."
+                  action={
+                    hasFilters ? (
+                      <Button size="sm" variant="secondary" onClick={clearFilters}>
+                        Limpiar filtros
+                      </Button>
+                    ) : undefined
+                  }
+                />
+              )
             }
             mobileCard={(row) => (
               <div className="space-y-1.5">

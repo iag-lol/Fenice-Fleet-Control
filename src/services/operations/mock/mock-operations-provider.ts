@@ -14,8 +14,14 @@ import { evaluateConnectionState } from '@/lib/engines/gps-health';
 import { haversineMeters } from '@/lib/geo';
 import { normalizeSearch } from '@/lib/format';
 import { listGeofences } from '@/services/geofences/geofence-store';
-import { listAlerts as listRealAlerts } from '@/services/fleet/alert-store';
+import {
+  listAlerts as listRealAlerts,
+  updateAlertState as updateRealAlertState,
+} from '@/services/fleet/alert-store';
+import { listCustomerVisits as listRealCustomerVisits } from '@/services/fleet/customer-visit-store';
 import { listDrivers } from '@/services/fleet/driver-store';
+import { listGeofenceEvents as listRealGeofenceEvents } from '@/services/fleet/geofence-event-store';
+import { getRouteByIdFromStore, listRoutes as listRealRoutes } from '@/services/fleet/route-store';
 import { listVehicles } from '@/services/fleet/vehicle-store';
 import { fleetSimulator } from '@/services/gps/mock/simulator';
 import type {
@@ -361,7 +367,15 @@ export class MockOperationsProvider implements ExternalOperationsProvider {
 
   async getRoutes(query: RouteQuery = {}): Promise<Route[]> {
     const live = this.buildLiveState();
-    let routes = getDataset().routes.map((r) => live.get(r.id)?.route ?? r);
+    const demoRoutes = getDataset().routes.map((r) => live.get(r.id)?.route ?? r);
+
+    // Las rutas reales viven en `rutas`/`paradas_ruta` (Supabase), igual que en
+    // el proveedor "external". Sin Supabase configurado, `listRealRoutes`
+    // devuelve el mismo dataset de demostracion: se descarta por id para no
+    // duplicar la ruta ya procesada (con su estado en vivo) arriba.
+    const realRoutes = await listRealRoutes();
+    const demoIds = new Set(demoRoutes.map((r) => r.id));
+    let routes: Route[] = [...demoRoutes, ...realRoutes.filter((r) => !demoIds.has(r.id))];
 
     if (query.date) {
       const target = new Date(query.date);
@@ -373,7 +387,8 @@ export class MockOperationsProvider implements ExternalOperationsProvider {
   }
 
   async getRouteById(id: RouteId): Promise<Route | null> {
-    return this.buildLiveState().get(id)?.route ?? getDataset().index.routeById.get(id) ?? null;
+    const demo = this.buildLiveState().get(id)?.route ?? getDataset().index.routeById.get(id) ?? null;
+    return demo ?? getRouteByIdFromStore(id);
   }
 
   // -------------------------------------------------------------------------
@@ -402,7 +417,8 @@ export class MockOperationsProvider implements ExternalOperationsProvider {
     return listGeofences();
   }
 
-  async getGeofenceEvents(limit = 100): Promise<GeofenceEvent[]> {
+  /** Entradas/salidas de la simulacion de demostracion, para complementar las reales. */
+  private buildDemoGeofenceEvents(limit: number): GeofenceEvent[] {
     const dataset = getDataset();
     const events = fleetSimulator.getEvents(undefined, limit * 3);
 
@@ -432,6 +448,19 @@ export class MockOperationsProvider implements ExternalOperationsProvider {
         } satisfies GeofenceEvent;
       })
       .filter((e) => e.geofenceId !== undefined)
+      .slice(0, limit);
+  }
+
+  async getGeofenceEvents(limit = 100): Promise<GeofenceEvent[]> {
+    // Los eventos reales vienen de `geofence-detector.ts`, que evalua la
+    // telemetria real contra geocercas reales (tabla `eventos_geocerca`). Se
+    // combinan con los de la simulacion de demostracion para no perder
+    // ninguno mientras conviven ambos mundos.
+    const realEvents = await listRealGeofenceEvents(limit);
+    const demoEvents = this.buildDemoGeofenceEvents(limit);
+
+    return [...realEvents, ...demoEvents]
+      .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
       .slice(0, limit);
   }
 
@@ -471,7 +500,13 @@ export class MockOperationsProvider implements ExternalOperationsProvider {
       }
     }
 
-    return visits
+    // Las visitas reales (tabla `visitas_cliente`) se suman a las derivadas de
+    // la demostracion: hoy no hay proceso que escriba en esa tabla (ver
+    // `customer-visit-store.ts`), asi que sin Supabase configurado vendra
+    // vacia, pero el punto de conexion ya queda listo para cuando exista.
+    const realVisits = await listRealCustomerVisits(limit);
+
+    return [...realVisits, ...visits]
       .sort((a, b) => new Date(b.enteredAt).getTime() - new Date(a.enteredAt).getTime())
       .slice(0, limit);
   }
@@ -812,6 +847,12 @@ export class MockOperationsProvider implements ExternalOperationsProvider {
   }
 
   async updateAlertState(id: AlertId, state: AlertState): Promise<Alert | null> {
+    // Las alertas reales (geocerca-entrada:..., ver alert-store.ts) se
+    // resuelven contra su propio almacen. Si el id no corresponde a una
+    // alerta real, es una de las sinteticas de esta clase.
+    const real = await updateRealAlertState(id, state);
+    if (real) return real;
+
     alertStateOverrides.set(id, { state, at: new Date().toISOString() });
     return this.buildAlerts().find((a) => a.id === id) ?? null;
   }

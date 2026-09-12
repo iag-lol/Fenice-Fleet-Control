@@ -17,6 +17,7 @@ import { SkeletonRows } from '@/components/ui/skeleton';
 import { DORMANCY_TIER_LABEL, type DormancyTier } from '@/lib/engines/client-activity';
 import { formatCurrency, formatDays, formatSmartDateTime, normalizeSearch } from '@/lib/format';
 import { cn } from '@/lib/cn';
+import { useErpConnected } from '@/hooks/use-erp-connected';
 import type { DormantClientRow } from '@/services/aggregation/client-aggregator';
 import { useMapStore } from '@/stores/map-store';
 
@@ -44,6 +45,7 @@ export function DormantClientsView() {
   const setLayer = useMapStore((s) => s.setLayer);
   const focusOn = useMapStore((s) => s.focusOn);
   const select = useMapStore((s) => s.select);
+  const erpConnected = useErpConnected();
 
   const [search, setSearch] = useState('');
   const [tier, setTier] = useState('');
@@ -333,8 +335,16 @@ export function DormantClientsView() {
             empty={
               <EmptyState
                 icon={<MoonStar className="h-5 w-5" />}
-                title="No hay clientes que coincidan con los filtros seleccionados."
-                description="Toda la cartera filtrada se mantiene dentro del umbral de actividad configurado."
+                title={
+                  !erpConnected && !hasFilters
+                    ? 'Clientes sin fuente conectada.'
+                    : 'No hay clientes que coincidan con los filtros seleccionados.'
+                }
+                description={
+                  !erpConnected && !hasFilters
+                    ? 'La cartera de clientes vive en la base de datos de Fenice, que aun no esta configurada (EXTERNAL_DB_*).'
+                    : 'Toda la cartera filtrada se mantiene dentro del umbral de actividad configurado.'
+                }
                 action={
                   hasFilters ? (
                     <Button size="sm" variant="secondary" onClick={clearFilters}>

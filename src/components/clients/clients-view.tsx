@@ -15,6 +15,7 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { SearchInput, Select } from '@/components/ui/input';
 import { QueryError } from '@/components/ui/query-state';
 import { SkeletonRows } from '@/components/ui/skeleton';
+import { useErpConnected } from '@/hooks/use-erp-connected';
 import { CLIENT_STATUS_LABEL } from '@/lib/engines/client-activity';
 import { formatCurrency, formatDays, normalizeSearch } from '@/lib/format';
 import { useMapStore } from '@/stores/map-store';
@@ -41,6 +42,7 @@ export function ClientsView() {
   const focusOn = useMapStore((s) => s.focusOn);
   const select = useMapStore((s) => s.select);
   const setFilters = useMapStore((s) => s.setFilters);
+  const erpConnected = useErpConnected();
 
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState(searchParams.get('estado') ?? '');
@@ -332,18 +334,26 @@ export function ClientsView() {
             onRowClick={(row) => router.push(`/clientes/${row.clientId}`)}
             initialSort={{ key: 'days', direction: 'desc' }}
             empty={
-              <EmptyState
-                icon={<Building2 className="h-5 w-5" />}
-                title="No hay clientes que coincidan con los filtros seleccionados."
-                description="Ajusta el estado comercial, la comuna o el termino de busqueda para ampliar el resultado."
-                action={
-                  hasFilters ? (
-                    <Button size="sm" variant="secondary" onClick={clearFilters}>
-                      Limpiar filtros
-                    </Button>
-                  ) : undefined
-                }
-              />
+              !erpConnected && !hasFilters ? (
+                <EmptyState
+                  icon={<Building2 className="h-5 w-5" />}
+                  title="Clientes sin fuente conectada."
+                  description="La cartera de clientes vive en la base de datos de Fenice, que aun no esta configurada (EXTERNAL_DB_*). En cuanto se conecte, esta lista se llenara sola."
+                />
+              ) : (
+                <EmptyState
+                  icon={<Building2 className="h-5 w-5" />}
+                  title="No hay clientes que coincidan con los filtros seleccionados."
+                  description="Ajusta el estado comercial, la comuna o el termino de busqueda para ampliar el resultado."
+                  action={
+                    hasFilters ? (
+                      <Button size="sm" variant="secondary" onClick={clearFilters}>
+                        Limpiar filtros
+                      </Button>
+                    ) : undefined
+                  }
+                />
+              )
             }
             mobileCard={(row) => (
               <div className="space-y-1.5">
