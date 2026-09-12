@@ -3,7 +3,8 @@
 import { create } from 'zustand';
 
 import type { MapViewMode } from '@/components/map/map-style';
-import type { ClientActivityStatus, LatLng } from '@/types/core';
+import { boundsForPoints } from '@/lib/map-navigation';
+import type { BoundingBox, ClientActivityStatus, LatLng } from '@/types/core';
 import type { HeatmapMode } from '@/types/views';
 
 /**
@@ -55,11 +56,14 @@ export type MapSelection =
   | { type: 'client'; id: string }
   | { type: 'workOrder'; id: string }
   | { type: 'route'; id: string }
+  | { type: 'geofence'; id: string }
+  | { type: 'alert'; id: string }
   | null;
 
 export interface MapFocusRequest {
   center: LatLng;
   zoom?: number;
+  bounds?: BoundingBox;
   /** Marca temporal: fuerza a reaccionar aunque el centro se repita. */
   requestedAt: number;
 }
@@ -90,6 +94,8 @@ interface MapState {
 
   focus: MapFocusRequest | null;
   focusOn: (center: LatLng, zoom?: number) => void;
+  fitPoints: (points: LatLng[]) => void;
+  showAll: () => void;
 
   /** Ruta resaltada al abrir "Ver ruta" desde una ficha. */
   highlightedRouteId: string | null;
@@ -149,11 +155,11 @@ export const useMapStore = create<MapState>((set, get) => ({
     camiones: true,
     clientes: true,
     rutas: true,
-    geocercas: false,
+    geocercas: true,
     calor: false,
-    pedidos: false,
-    alertas: false,
-    comunas: false,
+    pedidos: true,
+    alertas: true,
+    comunas: true,
   },
   toggleLayer: (layer) =>
     set((state) => ({ layers: { ...state.layers, [layer]: !state.layers[layer] } })),
@@ -183,7 +189,13 @@ export const useMapStore = create<MapState>((set, get) => ({
   setVehicleStatusFilter: (statuses) => set({ vehicleStatusFilter: statuses }),
 
   selection: null,
-  select: (selection) => set({ selection }),
+  select: (selection) => set((state) => ({
+    selection,
+    followingVehicleId: null,
+    inspectedCommuneCode: null,
+    highlightedRouteId: selection?.type === 'route' ? selection.id : null,
+    layers: selection ? { ...state.layers, [{ vehicle: 'camiones', client: 'clientes', workOrder: 'pedidos', route: 'rutas', geofence: 'geocercas', alert: 'alertas' }[selection.type]]: true } : state.layers,
+  })),
 
   followingVehicleId: null,
   followVehicle: (vehicleId) =>
@@ -194,12 +206,29 @@ export const useMapStore = create<MapState>((set, get) => ({
     }),
 
   focus: null,
-  focusOn: (center, zoom) => set({ focus: { center, zoom, requestedAt: Date.now() } }),
+  focusOn: (center, zoom) => {
+    if (!boundsForPoints([center])) return;
+    set({ followingVehicleId: null, focus: { center, zoom, requestedAt: Date.now() } });
+  },
+  fitPoints: (points) => {
+    const bounds = boundsForPoints(points);
+    if (!bounds) return;
+    set({ followingVehicleId: null, focus: {
+      center: { lat: (bounds.minLat + bounds.maxLat) / 2, lng: (bounds.minLng + bounds.maxLng) / 2 },
+      bounds, requestedAt: Date.now(),
+    } });
+  },
+  showAll: () => set((state) => ({
+    layers: { ...state.layers, camiones: true, clientes: true, rutas: true, geocercas: true, pedidos: true, alertas: true, comunas: true },
+    filters: DEFAULT_CLIENT_FILTERS, vehicleStatusFilter: [], isolate: false,
+    selection: null, followingVehicleId: null, highlightedRouteId: null,
+    scopedCommuneCode: null, inspectedCommuneCode: null,
+  })),
 
   highlightedRouteId: null,
   highlightRoute: (routeId) => set({ highlightedRouteId: routeId }),
 
-  isolate: true,
+  isolate: false,
   setIsolate: (isolate) => set({ isolate }),
 
   clusterClients: true,
@@ -209,6 +238,7 @@ export const useMapStore = create<MapState>((set, get) => ({
   scopeToCommune: (code) =>
     set({
       scopedCommuneCode: code,
+      isolate: code !== null,
       // Enfocar una comuna abre tambien su ficha: son la misma intencion.
       inspectedCommuneCode: code,
       // Y libera cualquier aislamiento previo, que competiria con este.
@@ -218,7 +248,7 @@ export const useMapStore = create<MapState>((set, get) => ({
     }),
 
   inspectedCommuneCode: null,
-  inspectCommune: (code) => set({ inspectedCommuneCode: code }),
+  inspectCommune: (code) => set((state) => ({ inspectedCommuneCode: code, selection: null, followingVehicleId: null, layers: code ? { ...state.layers, comunas: true } : state.layers })),
 
   // El mapa aprobado sigue siendo el predeterminado: los otros modos se
   // eligen, nunca se imponen.

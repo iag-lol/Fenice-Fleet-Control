@@ -1,6 +1,5 @@
 'use client';
 
-import { useQuery } from '@tanstack/react-query';
 import { PanelRightClose, PanelRightOpen } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
@@ -11,8 +10,7 @@ import { useIsDesktop } from '@/hooks/use-media-query';
 import { useLiveFleet } from '@/hooks/use-live-fleet';
 import { cn } from '@/lib/cn';
 import { useMapStore } from '@/stores/map-store';
-import type { Alert } from '@/types/core';
-import type { MapSnapshot } from '@/types/views';
+import { useControlData } from '@/hooks/use-control-data';
 
 /**
  * Torre de control: la unica pantalla de mapa del sistema.
@@ -37,7 +35,7 @@ import type { MapSnapshot } from '@/types/views';
  * Arranca en la minima: en un telefono el mapa es lo que no cabe en ningun
  * otro sitio, y la lista siempre esta a un toque.
  */
-const SHEET_HEIGHTS = ['30%', '55%', '88%'] as const;
+const SHEET_HEIGHTS = ['40%', '60%', '88%'] as const;
 type SheetStep = 0 | 1 | 2;
 
 const MIN_PANEL = 280;
@@ -58,6 +56,8 @@ export function ControlTowerView() {
   const [sheetStep, setSheetStep] = useState<SheetStep>(0);
   const [hydrated, setHydrated] = useState(false);
   const draggingRef = useRef(false);
+  const panelWidthRef = useRef(panelWidth);
+  useEffect(() => { panelWidthRef.current = panelWidth; }, [panelWidth]);
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -72,25 +72,9 @@ export function ControlTowerView() {
     setHydrated(true);
   }, []);
 
-  const { data: snapshot } = useQuery({
-    queryKey: ['map', 'snapshot'],
-    refetchInterval: 120_000,
-    queryFn: async (): Promise<MapSnapshot> => {
-      const response = await fetch('/api/map');
-      if (!response.ok) throw new Error('No fue posible cargar la informacion del mapa.');
-      return (await response.json()) as MapSnapshot;
-    },
-  });
-
-  const { data: alertsData } = useQuery({
-    queryKey: ['alerts'],
-    refetchInterval: 45_000,
-    queryFn: async (): Promise<{ alerts: Alert[] }> => {
-      const response = await fetch('/api/alertas');
-      if (!response.ok) throw new Error('No fue posible cargar las alertas.');
-      return (await response.json()) as { alerts: Alert[] };
-    },
-  });
+  const { map, alerts, communes } = useControlData();
+  const snapshot = map.data;
+  const refreshAll = () => { void map.refetch(); void alerts.refetch(); void communes.refetch(); };
 
   // --- Arrastre del divisor ------------------------------------------------
   const startDrag = useCallback(() => {
@@ -114,7 +98,7 @@ export function ControlTowerView() {
       document.body.style.cursor = '';
       document.body.style.userSelect = '';
       try {
-        window.localStorage.setItem(STORAGE_KEY, String(panelWidth));
+        window.localStorage.setItem(STORAGE_KEY, String(panelWidthRef.current));
       } catch {
         // Sin persistencia: el ancho sigue aplicando en esta sesion.
       }
@@ -125,8 +109,10 @@ export function ControlTowerView() {
     return () => {
       window.removeEventListener('pointermove', onMove);
       window.removeEventListener('pointerup', onUp);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
     };
-  }, [panelWidth]);
+  }, []);
 
   const openVehicle = useCallback(
     (vehicleId: string) => select({ type: 'vehicle', id: vehicleId }),
@@ -140,7 +126,12 @@ export function ControlTowerView() {
   const panel = (
     <OperationsPanel
       snapshot={snapshot ?? null}
-      alerts={alertsData?.alerts ?? []}
+      alerts={alerts.data?.alerts ?? []}
+      communes={communes.data?.communes ?? []}
+      loading={map.isLoading}
+      error={[map.error, alerts.error, communes.error].filter(Boolean).map((e) => e?.message).join(' ')}
+      refreshing={map.isFetching || alerts.isFetching || communes.isFetching}
+      onRefresh={refreshAll}
       positions={positions}
       onSelectVehicle={openVehicle}
       onSelectWorkOrder={openWorkOrder}
@@ -176,6 +167,17 @@ export function ControlTowerView() {
           <div
             role="separator"
             aria-orientation="vertical"
+            tabIndex={0}
+            aria-valuemin={MIN_PANEL}
+            aria-valuemax={MAX_PANEL}
+            aria-valuenow={panelWidth}
+            onKeyDown={(event) => {
+              if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+              event.preventDefault();
+              const width = event.key === 'Home' ? MIN_PANEL : event.key === 'End' ? MAX_PANEL : Math.max(MIN_PANEL, Math.min(MAX_PANEL, panelWidth + (event.key === 'ArrowLeft' ? 20 : -20)));
+              setPanelWidth(width);
+              try { window.localStorage.setItem(STORAGE_KEY, String(width)); } catch { /* Optional persistence. */ }
+            }}
             aria-label="Redimensionar panel operacional"
             onPointerDown={startDrag}
             className="w-1 shrink-0 cursor-col-resize bg-line transition-colors hover:bg-brand-400"

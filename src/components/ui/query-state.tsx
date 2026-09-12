@@ -1,6 +1,7 @@
 'use client';
 
 import { AlertTriangle, RotateCw, WifiOff } from 'lucide-react';
+import type { ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
 import { formatTimeWithSeconds } from '@/lib/format';
 
@@ -89,7 +90,7 @@ export function GpsDegradedNotice({
  * Marca de funcionalidad que depende de una integracion aun no conectada.
  * La arquitectura interna existe; lo que falta son credenciales externas.
  */
-export function PendingIntegrationNotice({ what }: { what: string }) {
+export function PendingIntegrationNotice({ what }: { what: ReactNode }) {
   return (
     <div className="rounded-md border border-brand-500/25 bg-brand-500/5 px-3 py-2.5 text-xs text-ink-muted">
       <span className="font-medium text-brand-700">Disponible al conectar fuente externa.</span>{' '}

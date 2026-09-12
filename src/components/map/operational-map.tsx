@@ -23,7 +23,7 @@ import {
 } from '@/lib/engines/map-scope';
 import { FocusBanner } from '@/components/map/focus-banner';
 import { ClientFiltersPanel, applyClientFilters } from '@/components/map/client-filters-panel';
-import { CommunePanel, type CommuneWithSummary } from '@/components/map/commune-panel';
+import { CommunePanel } from '@/components/map/commune-panel';
 import { ClientPanel } from '@/components/map/client-panel';
 import { FleetMap, type FleetMapVehicle } from '@/components/map/fleet-map';
 import { LayerControl } from '@/components/map/layer-control';
@@ -33,19 +33,16 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ErrorBoundary } from '@/components/ui/error-boundary';
 import { Sheet } from '@/components/ui/sheet';
-import { GpsDegradedNotice, QueryError } from '@/components/ui/query-state';
+import { GpsDegradedNotice, PendingIntegrationNotice, QueryError } from '@/components/ui/query-state';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useLiveFleet } from '@/hooks/use-live-fleet';
 import { OPERATION_BOUNDS } from '@/data/communes';
 import { cn } from '@/lib/cn';
 import { useMapStore } from '@/stores/map-store';
-import type { BoundaryMetadata } from '@/data/administrative-boundaries';
+import { mapQuery, communesQuery, systemModeQuery } from '@/hooks/use-control-data';
+import { operationPoints } from '@/lib/map-navigation';
+import { MapEntityPanel } from '@/components/map/map-entity-panel';
 import type { MapSnapshot, TerritoryAnalysis } from '@/types/views';
-
-interface CommunesResponse {
-  metadata: BoundaryMetadata;
-  communes: CommuneWithSummary[];
-}
 
 /**
  * Centro operacional.
@@ -85,16 +82,12 @@ export function OperationalMap() {
     isError,
     error,
     refetch,
-  } = useQuery({
-    queryKey: ['map', 'snapshot'],
-    // La instantanea trae capas estaticas; las posiciones llegan por el stream.
-    refetchInterval: 120_000,
-    queryFn: async (): Promise<MapSnapshot> => {
-      const response = await fetch('/api/map');
-      if (!response.ok) throw new Error('No fue posible cargar la informacion del mapa.');
-      return (await response.json()) as MapSnapshot;
-    },
-  });
+  } = useQuery(mapQuery);
+
+  // El mismo estado que alimenta el indicador del header: distingue una
+  // integracion sin configurar (permanente, se arregla en el servidor) de un
+  // corte de senal transitorio (se arregla solo, o con "Reintentar").
+  const { data: mode } = useQuery(systemModeQuery);
 
   // El mapa de calor solo se descarga cuando la capa esta activa.
   const { data: territory } = useQuery({
@@ -110,15 +103,9 @@ export function OperationalMap() {
 
   // Los limites comunales pesan cientos de kilobytes: solo se descargan
   // cuando el operador enciende la capa.
-  const { data: communesData } = useQuery({
-    queryKey: ['communes'],
-    enabled: layers.comunas,
-    staleTime: 5 * 60_000,
-    queryFn: async (): Promise<CommunesResponse> => {
-      const response = await fetch('/api/comunas');
-      if (!response.ok) throw new Error('No fue posible cargar los limites comunales.');
-      return (await response.json()) as CommunesResponse;
-    },
+  const { data: communesData, error: communesError, refetch: retryCommunes } = useQuery({
+    ...communesQuery,
+    enabled: layers.comunas || Boolean(inspectedCommuneCode || scopedCommuneCode),
   });
 
   const communeFeatures = useMemo(
@@ -207,7 +194,7 @@ export function OperationalMap() {
 
   // Abrir la ficha automaticamente al seleccionar desde el mapa.
   useEffect(() => {
-    if (currentSelection?.type === 'vehicle' || currentSelection?.type === 'client') {
+    if (currentSelection) {
       setDetailOpen(true);
     }
   }, [currentSelection]);
@@ -218,27 +205,30 @@ export function OperationalMap() {
   }, [selection]);
 
   const fitOperation = useCallback(() => {
-    const center = {
-      lat: (OPERATION_BOUNDS.minLat + OPERATION_BOUNDS.maxLat) / 2,
-      lng: (OPERATION_BOUNDS.minLng + OPERATION_BOUNDS.maxLng) / 2,
-    };
-    focusOn(center, 10.4);
-  }, [focusOn]);
+    const store = useMapStore.getState();
+    store.showAll();
+    const points = snapshot ? operationPoints(snapshot) : [];
+    points.push(...vehicles.flatMap((v) => v.position ? [v.position] : []));
+    if (points.length) store.fitPoints(points);
+    else focusOn({ lat: (OPERATION_BOUNDS.minLat + OPERATION_BOUNDS.maxLat) / 2, lng: (OPERATION_BOUNDS.minLng + OPERATION_BOUNDS.maxLng) / 2 }, 10.4);
+  }, [snapshot, vehicles, focusOn]);
 
   // Pantalla completa dentro de la aplicacion.
   const toggleFullscreen = useCallback(() => {
     const node = containerRef.current;
     if (!node) return;
+    if (fullscreen && !document.fullscreenElement) { setFullscreen(false); return; }
 
     if (document.fullscreenElement) {
       void document.exitFullscreen();
     } else {
-      void node.requestFullscreen?.().catch(() => {
+      if (!node.requestFullscreen) { setFullscreen((value) => !value); return; }
+      void node.requestFullscreen().catch(() => {
         // Algunos navegadores moviles lo bloquean: se degrada al modo interno.
         setFullscreen((value) => !value);
       });
     }
-  }, []);
+  }, [fullscreen]);
 
   useEffect(() => {
     const onChange = (): void => setFullscreen(Boolean(document.fullscreenElement));
@@ -246,7 +236,7 @@ export function OperationalMap() {
     return () => document.removeEventListener('fullscreenchange', onChange);
   }, []);
 
-  if (isError) {
+  if (isError && !snapshot) {
     return (
       <div className="p-4">
         <QueryError
@@ -277,6 +267,7 @@ export function OperationalMap() {
         <ErrorBoundary section="el mapa operacional">
           <FleetMap
             className="absolute inset-0"
+            autoFit
             vehicles={layers.camiones ? vehiculosEnfocados : []}
             clients={clientesEnfocados}
             routes={routesEnfocadas}
@@ -300,7 +291,7 @@ export function OperationalMap() {
         En una sola fila, el resumen y los cuatro botones sumaban mas de 390 px
         y el ultimo control quedaba cortado fuera de la pantalla.
       */}
-      <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex flex-col items-start gap-2 p-2.5 sm:flex-row sm:items-start sm:justify-between sm:p-3">
+      <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex flex-col items-start gap-2 p-2.5 xl:flex-row xl:items-start xl:justify-between sm:p-3">
         <div className="pointer-events-auto flex max-w-full flex-wrap items-center gap-2">
           <div className="flex items-center gap-1.5 whitespace-nowrap rounded-md border border-line-strong bg-surface-900/95 px-2.5 py-1.5 text-2xs shadow-float backdrop-blur sm:gap-2">
             <Truck className="h-3.5 w-3.5 text-brand-700" />
@@ -322,7 +313,7 @@ export function OperationalMap() {
 
           <div className="hidden items-center gap-2 whitespace-nowrap rounded-md border border-line-strong bg-surface-900/95 px-2.5 py-1.5 text-2xs shadow-float backdrop-blur sm:flex">
             <Building2 className="h-3.5 w-3.5 text-brand-700" />
-            <span className="numeric font-medium text-ink">{visibleClients.length}</span>
+            <span className="numeric font-medium text-ink">{layers.clientes ? clientesEnfocados.length : 0}</span>
             <span className="text-ink-faint">de</span>
             <span className="numeric font-medium text-ink">{allClients.length}</span>
             <span className="text-ink-faint">clientes visibles</span>
@@ -333,6 +324,7 @@ export function OperationalMap() {
           <button
             type="button"
             onClick={() => setFiltersOpen(true)}
+            aria-label="Filtros del mapa"
             className="tap relative flex items-center gap-2 rounded-md border border-line-strong bg-surface-900/95 px-3 text-[13px] text-ink shadow-float backdrop-blur transition-colors hover:border-brand-500 sm:h-9 sm:min-h-0"
           >
             <Filter className="h-4 w-4 text-brand-700" />
@@ -365,19 +357,37 @@ export function OperationalMap() {
         </div>
       </div>
 
+      {(isError || (layers.comunas && communesError)) ? (
+        <div role="alert" className="absolute left-3 right-3 top-28 z-20 rounded-md border border-status-warning/30 bg-surface-900 p-3 text-xs text-status-warning">
+          {isError ? 'No se pudo actualizar la operación. Se conservan los últimos datos.' : 'No se pudieron cargar las comunas.'}
+          <button type="button" className="ml-2 underline" onClick={() => { void refetch(); void retryCommunes(); }}>Reintentar</button>
+        </div>
+      ) : null}
       {/* --- Aviso de degradacion GPS --- */}
       {gpsError ? (
         <div className="pointer-events-auto absolute inset-x-2.5 top-16 z-10 sm:inset-x-auto sm:left-1/2 sm:w-[440px] sm:-translate-x-1/2">
-          <GpsDegradedNotice lastKnownAt={lastUpdateAt} onRetry={refresh} />
+          {mode?.gps.provider === 'unavailable' ? (
+            <PendingIntegrationNotice
+              what={
+                <>
+                  La flota no aparece en el mapa: el proveedor de telemetria GPS
+                  no esta conectado. Requiere credenciales en el servidor.{' '}
+                  <a href="/configuracion" className="font-medium underline">
+                    Ver estado del sistema
+                  </a>
+                  .
+                </>
+              }
+            />
+          ) : (
+            <GpsDegradedNotice lastKnownAt={lastUpdateAt} onRetry={refresh} />
+          )}
         </div>
       ) : null}
 
-      {/* --- Panel territorial de la comuna seleccionada --- */}
-      {inspectedCommune ? (
-        <div className="pointer-events-none absolute bottom-24 left-2.5 z-20 sm:bottom-4">
-          <CommunePanel commune={inspectedCommune} onClose={() => inspectCommune(null)} />
-        </div>
-      ) : null}
+      <Sheet open={Boolean(inspectedCommune)} onClose={() => inspectCommune(null)} title="Detalle de comuna" transparentOverlay>
+        {inspectedCommune ? <div className="flex justify-center p-3"><CommunePanel commune={inspectedCommune} onClose={() => inspectCommune(null)} /></div> : null}
+      </Sheet>
 
       {/* --- Que se esta mirando --- */}
       {scopeActivo || currentSelection?.type === 'vehicle' || highlightedRouteId || scopedCommuneCode ? (
@@ -488,7 +498,9 @@ export function OperationalMap() {
             ? 'Ficha del vehiculo'
             : currentSelection?.type === 'client'
               ? 'Ficha del cliente'
-              : 'Orden de trabajo'
+              : currentSelection?.type === 'geofence' ? 'Detalle de geocerca'
+                : currentSelection?.type === 'route' ? 'Detalle de ruta'
+                  : currentSelection?.type === 'alert' ? 'Detalle de alerta' : 'Orden de trabajo'
         }
         transparentOverlay
       >
@@ -502,6 +514,8 @@ export function OperationalMap() {
               workOrderId={currentSelection.id}
               snapshot={snapshot ?? null}
             />
+          ) : currentSelection ? (
+            <MapEntityPanel selection={currentSelection} snapshot={snapshot ?? null} />
           ) : null}
         </ErrorBoundary>
       </Sheet>

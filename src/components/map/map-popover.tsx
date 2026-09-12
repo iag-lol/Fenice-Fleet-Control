@@ -45,6 +45,13 @@ export function MapPopover({
     };
   }, [open, isDesktop]);
 
+  useEffect(() => {
+    if (!open) return;
+    const closeOnEscape = (event: KeyboardEvent) => { if (event.key === 'Escape') onClose(); };
+    document.addEventListener('keydown', closeOnEscape);
+    return () => document.removeEventListener('keydown', closeOnEscape);
+  }, [open, onClose]);
+
   if (!open) return null;
 
   if (isDesktop) {
@@ -57,7 +64,7 @@ export function MapPopover({
           onClick={onClose}
         />
         <div
-          className="absolute right-0 top-full z-20 mt-2 max-w-[calc(100vw-1.5rem)] animate-slide-up rounded-lg border border-line-strong bg-surface-900 p-2 shadow-panel"
+          className="absolute right-0 top-full z-20 mt-2 max-h-[calc(100dvh-10rem)] overflow-y-auto max-w-[calc(100vw-1.5rem)] animate-slide-up rounded-lg border border-line-strong bg-surface-900 p-2 shadow-panel"
           style={{ width }}
         >
           {children}
@@ -102,6 +109,6 @@ export function MapPopover({
         </div>
       </div>
     </div>,
-    document.body,
+    document.fullscreenElement ?? document.body,
   );
 }

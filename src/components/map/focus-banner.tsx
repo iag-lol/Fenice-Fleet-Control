@@ -56,7 +56,7 @@ export function FocusBanner({
   return (
     <div className="pointer-events-auto flex max-w-[calc(100vw-1.25rem)] flex-wrap items-center gap-2 rounded-lg border border-brand-500/45 bg-surface-900/96 px-2.5 py-2 shadow-float backdrop-blur">
       <span className="text-2xs font-semibold uppercase tracking-wider text-ink-faint">
-        Viendo solo
+        {isolate ? 'Viendo solo' : 'Seleccionado'}
       </span>
 
       {focos.map((foco) => (

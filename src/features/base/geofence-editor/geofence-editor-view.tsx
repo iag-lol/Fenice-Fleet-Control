@@ -13,7 +13,7 @@ import {
   Undo2,
   X,
 } from 'lucide-react';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { PageHeader } from '@/components/common/page-header';
 import { FleetMap } from '@/components/map/fleet-map';
@@ -32,6 +32,8 @@ import {
   type GeofenceFormValues,
 } from '@/features/base/geofence-editor/geofence-form';
 import { useGeofenceDrawing } from '@/features/base/geofence-editor/use-geofence-drawing';
+import { boundsForPoints, geofencePoints } from '@/lib/map-navigation';
+import { boundsToLngLatBounds } from '@/components/map/map-layers';
 import { formatDistance, formatSmartDateTime, normalizeSearch } from '@/lib/format';
 import { cn } from '@/lib/cn';
 import type { Geofence, GeofenceGeometry, GeofenceKind } from '@/types/core';
@@ -179,6 +181,22 @@ export function GeofenceEditorView() {
         : geofence.geometry.vertices[0]!;
     map?.flyTo({ center: [center.lng, center.lat], zoom: 14.5, duration: 700 });
   }
+
+  const openedFromTower = useRef(false);
+  useEffect(() => {
+    if (!map || !data || openedFromTower.current) return;
+    openedFromTower.current = true;
+    const id = new URLSearchParams(window.location.search).get('geocerca');
+    if (!id) return;
+    const geofence = data.geofences.find((g) => g.id === id);
+    if (!geofence) { setError('La geocerca solicitada ya no está disponible.'); return; }
+    setEditing(geofence);
+    setValues(buildInitialValues(geofence));
+    setComposing(true);
+    drawing.loadGeometry(geofence.geometry);
+    const bounds = boundsForPoints(geofencePoints(geofence));
+    if (bounds) map.fitBounds(boundsToLngLatBounds(bounds), { padding: 60, maxZoom: 16 });
+  }, [map, data, drawing]);
 
   /** Cambia el radio conservando el centro dibujado. */
   const setRadius = (radiusMeters: number): void => {

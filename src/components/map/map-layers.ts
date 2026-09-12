@@ -5,6 +5,7 @@ import type {
 } from 'maplibre-gl';
 
 import { circleToPolygon } from '@/lib/geo';
+import { closedRing } from '@/lib/map-navigation';
 import type { Geofence, HeatmapPoint, LatLng } from '@/types/core';
 import type {
   AlertMapPoint,
@@ -593,7 +594,7 @@ export function updateGeofences(map: MapLibreMap, geofences: Geofence[]): void {
   setData(map, SOURCE.geofences, {
     type: 'FeatureCollection',
     features: geofences
-      .filter((g) => g.active)
+      .filter((g) => g.active && (g.geometry.shape === 'circle' || closedRing(g.geometry.vertices).length > 0))
       .map((geofence) => {
         // Los circulos se aproximan a poligono: MapLibre no tiene primitiva de
         // circulo geografico y `circle-radius` esta en pixeles, no en metros.
@@ -606,7 +607,7 @@ export function updateGeofences(map: MapLibreMap, geofences: Geofence[]): void {
           type: 'Feature' as const,
           geometry: {
             type: 'Polygon' as const,
-            coordinates: [vertices.map((v) => [v.lng, v.lat])],
+            coordinates: [closedRing(vertices)],
           },
           properties: {
             geofenceId: geofence.id,

@@ -13,6 +13,15 @@ export async function GET(): Promise<Response> {
 
   const response = await handleApi<LivePositionsPayload>(async () => {
     const provider = getGpsProvider();
+
+    // Sus metodos resuelven listas vacias en vez de fallar (ver
+    // UnavailableGpsProvider): sin este chequeo, este fallback de polling
+    // devolveria 200 con posiciones vacias para siempre y el cliente nunca
+    // se enteraria de que el proveedor no esta conectado.
+    if (provider.info.id === 'unavailable') {
+      throw new Error('El proveedor de telemetria GPS no esta conectado.');
+    }
+
     const [positions, vehicles] = await Promise.all([
       provider.getAllCurrentPositions(),
       loadFleetSnapshots(),

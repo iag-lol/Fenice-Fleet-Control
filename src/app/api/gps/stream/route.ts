@@ -53,6 +53,22 @@ export async function GET(request: Request): Promise<Response> {
       };
 
       const publish = async (): Promise<void> => {
+        // El proveedor "unavailable" nunca lanza: sus metodos resuelven listas
+        // vacias a proposito (ver UnavailableGpsProvider), para no tumbar
+        // pantallas que no dependen de el. Por eso el motivo se revisa aqui
+        // explicitamente, en vez de esperar a que el try/catch de abajo lo
+        // detecte: sin esto, el operador ve "0 flota" para siempre y el
+        // indicador del header se queda en "Conectando", sin decir nunca que
+        // faltan credenciales.
+        if (provider.info.id === 'unavailable') {
+          send('gps-error', {
+            message: 'El proveedor de telemetria GPS no esta conectado.',
+            detail: 'Revisa las credenciales configuradas en el servidor.',
+            at: new Date().toISOString(),
+          });
+          return;
+        }
+
         try {
           const [positions, vehicles] = await Promise.all([
             provider.getAllCurrentPositions(),

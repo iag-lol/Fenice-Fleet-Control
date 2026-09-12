@@ -3,7 +3,7 @@
 import * as maplibregl from 'maplibre-gl';
 import type { Map as MapLibreMap, MapMouseEvent, RasterTileSource } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { registerMapIcons } from '@/components/map/map-icons';
 import {
@@ -27,7 +27,7 @@ import {
   type VehicleFeatureInput,
 } from '@/components/map/map-layers';
 import { resolveMapStyle } from '@/components/map/map-style';
-import { OPERATION_BOUNDS, OPERATION_CENTER } from '@/data/communes';
+import { OPERATION_CENTER } from '@/data/communes';
 import { isUsableCoordinate } from '@/lib/geo';
 import { useMapStore, type MapLayerId } from '@/stores/map-store';
 import type { Geofence, HeatmapPoint, LatLng, Position } from '@/types/core';
@@ -139,6 +139,8 @@ export function FleetMap({
   const animatedRef = useRef<Map<string, AnimatedVehicle>>(new Map());
   const frameRef = useRef<number | null>(null);
   const trailRef = useRef<LatLng[]>([]);
+  const clusterAplicado = useRef(true);
+  const inspectedCommuneCode = useMapStore((s) => s.inspectedCommuneCode);
   const [ready, setReady] = useState(false);
   const [styleError, setStyleError] = useState<string | null>(null);
 
@@ -193,6 +195,8 @@ export function FleetMap({
 
     const onLoad = (): void => {
       try {
+        setStyleError(null);
+        clusterAplicado.current = true;
         registerMapIcons(map);
         registerLayers(map);
         setReady(true);
@@ -202,6 +206,8 @@ export function FleetMap({
     };
 
     map.on('load', onLoad);
+    const resizeObserver = new ResizeObserver(() => map.resize());
+    resizeObserver.observe(containerRef.current);
 
     /**
      * El gesto del operador manda sobre el seguimiento automatico.
@@ -232,6 +238,7 @@ export function FleetMap({
 
     return () => {
       if (frameRef.current !== null) cancelAnimationFrame(frameRef.current);
+      resizeObserver.disconnect();
       map.remove();
       mapRef.current = null;
       setReady(false);
@@ -252,131 +259,69 @@ export function FleetMap({
     const map = mapRef.current;
     if (!map || !ready) return;
 
-    const onVehicleClick = (event: MapMouseEvent & { features?: maplibregl.MapGeoJSONFeature[] }): void => {
-      const vehicleId = event.features?.[0]?.properties?.['vehicleId'];
-      if (typeof vehicleId === 'string') {
-        select({ type: 'vehicle', id: vehicleId });
-        onSelectVehicle?.(vehicleId);
+    // Resolve a single topmost operational entity. Independent delegated
+    // listeners also selected the commune underneath every truck or client.
+    const priority = [LAYER.vehicles, LAYER.clientPoints, LAYER.clientClusters,
+      LAYER.workOrders, LAYER.routeStops, LAYER.alerts, LAYER.geofenceFill,
+      LAYER.routePlanned, LAYER.routeExecuted, LAYER.communesFill];
+    const hitAt = (event: MapMouseEvent) => {
+      const features = map.queryRenderedFeatures(event.point, { layers: priority.filter((id) => Boolean(map.getLayer(id))) });
+      return priority.flatMap((id) => features.filter((f) => f.layer.id === id))[0];
+    };
+    const onClick = (event: MapMouseEvent): void => {
+      const feature = hitAt(event);
+      if (!feature) return;
+      const props = feature.properties;
+      const layer = feature.layer.id;
+      if (layer === LAYER.clientClusters) {
+        const source = map.getSource(SOURCE.clients) as maplibregl.GeoJSONSource;
+        void source.getClusterExpansionZoom(Number(props['cluster_id'])).then((zoom) => {
+          if (mapRef.current !== map || feature.geometry.type !== 'Point') return;
+          useMapStore.setState({ followingVehicleId: null });
+          map.easeTo({ center: feature.geometry.coordinates as [number, number], zoom: Math.min(zoom + 0.2, 17), duration: 500 });
+        }).catch(() => { /* The source may have changed while expanding a cluster. */ });
+        return;
+      }
+      if (layer === LAYER.communesFill) {
+        if (typeof props['code'] === 'string') onSelectCommune?.(props['code']);
+        return;
+      }
+      if (typeof props['vehicleId'] === 'string') {
+        select({ type: 'vehicle', id: props['vehicleId'] }); onSelectVehicle?.(props['vehicleId']);
+      } else if (typeof props['clientId'] === 'string') {
+        select({ type: 'client', id: props['clientId'] }); onSelectClient?.(props['clientId']);
+      } else if (typeof props['workOrderId'] === 'string') {
+        select({ type: 'workOrder', id: props['workOrderId'] }); onSelectWorkOrder?.(props['workOrderId']);
+      } else if (typeof props['alertId'] === 'string') {
+        select({ type: 'alert', id: props['alertId'] });
+      } else if (typeof props['geofenceId'] === 'string') {
+        select({ type: 'geofence', id: props['geofenceId'] });
+      } else if (typeof props['routeId'] === 'string') {
+        select({ type: 'route', id: props['routeId'] });
       }
     };
-
-    const onClientClick = (event: MapMouseEvent & { features?: maplibregl.MapGeoJSONFeature[] }): void => {
-      const clientId = event.features?.[0]?.properties?.['clientId'];
-      if (typeof clientId === 'string') {
-        select({ type: 'client', id: clientId });
-        onSelectClient?.(clientId);
-      }
-    };
-
-    const onWorkOrderClick = (event: MapMouseEvent & { features?: maplibregl.MapGeoJSONFeature[] }): void => {
-      const workOrderId = event.features?.[0]?.properties?.['workOrderId'];
-      if (typeof workOrderId === 'string') {
-        select({ type: 'workOrder', id: workOrderId });
-        onSelectWorkOrder?.(workOrderId);
-      }
-    };
-
-    const onStopClick = (event: MapMouseEvent & { features?: maplibregl.MapGeoJSONFeature[] }): void => {
-      const workOrderId = event.features?.[0]?.properties?.['workOrderId'];
-      if (typeof workOrderId === 'string') onSelectWorkOrder?.(workOrderId);
-    };
-
-    // Al tocar un grupo, acercar hasta expandirlo: es la accion que el
-    // operador espera y evita tener que adivinar el nivel de zoom.
-    const onClusterClick = (event: MapMouseEvent & { features?: maplibregl.MapGeoJSONFeature[] }): void => {
-      const feature = event.features?.[0];
-      const clusterId = feature?.properties?.['cluster_id'];
-      if (clusterId === undefined) return;
-
-      const source = map.getSource(SOURCE.clients) as maplibregl.GeoJSONSource;
-      void source.getClusterExpansionZoom(Number(clusterId)).then((zoom) => {
-        const geometry = feature?.geometry;
-        if (geometry?.type !== 'Point') return;
-        map.easeTo({
-          center: geometry.coordinates as [number, number],
-          zoom: Math.min(zoom + 0.2, 17),
-          duration: 500,
-        });
-      });
-    };
-
-    // --- Comunas: resaltado bajo el cursor y apertura del panel -------------
-    let hoveredCommune: number | string | null = null;
-
-    const clearCommuneHover = (): void => {
-      if (hoveredCommune === null) return;
-      map.setFeatureState({ source: SOURCE.communes, id: hoveredCommune }, { hover: false });
+    let hoveredCommune: string | number | null = null;
+    const clearHover = () => {
+      if (hoveredCommune !== null && map.getSource(SOURCE.communes)) map.setFeatureState({ source: SOURCE.communes, id: hoveredCommune }, { hover: false });
       hoveredCommune = null;
     };
-
-    const onCommuneMove = (
-      event: MapMouseEvent & { features?: maplibregl.MapGeoJSONFeature[] },
-    ): void => {
-      const feature = event.features?.[0];
-      if (feature?.id === undefined) return;
-      if (hoveredCommune === feature.id) return;
-
-      clearCommuneHover();
-      hoveredCommune = feature.id;
-      map.setFeatureState({ source: SOURCE.communes, id: feature.id }, { hover: true });
-      map.getCanvas().style.cursor = 'pointer';
+    const onMove = (event: MapMouseEvent) => {
+      const feature = hitAt(event);
+      map.getCanvas().style.cursor = feature ? 'pointer' : '';
+      const next = feature?.layer.id === LAYER.communesFill ? feature.id ?? null : null;
+      if (next === hoveredCommune) return;
+      clearHover();
+      hoveredCommune = next;
+      if (next !== null) map.setFeatureState({ source: SOURCE.communes, id: next }, { hover: true });
     };
-
-    const onCommuneLeave = (): void => {
-      clearCommuneHover();
-      map.getCanvas().style.cursor = '';
-    };
-
-    const onCommuneClick = (
-      event: MapMouseEvent & { features?: maplibregl.MapGeoJSONFeature[] },
-    ): void => {
-      const code = event.features?.[0]?.properties?.['code'];
-      if (typeof code === 'string') onSelectCommune?.(code);
-    };
-
-    map.on('mousemove', LAYER.communesFill, onCommuneMove);
-    map.on('mouseleave', LAYER.communesFill, onCommuneLeave);
-    map.on('click', LAYER.communesFill, onCommuneClick);
-
-    const pointerOn = (): void => {
-      map.getCanvas().style.cursor = 'pointer';
-    };
-    const pointerOff = (): void => {
-      map.getCanvas().style.cursor = '';
-    };
-
-    const interactive = [
-      LAYER.vehicles,
-      LAYER.clientPoints,
-      LAYER.clientClusters,
-      LAYER.workOrders,
-      LAYER.routeStops,
-    ];
-
-    map.on('click', LAYER.vehicles, onVehicleClick);
-    map.on('click', LAYER.clientPoints, onClientClick);
-    map.on('click', LAYER.clientClusters, onClusterClick);
-    map.on('click', LAYER.workOrders, onWorkOrderClick);
-    map.on('click', LAYER.routeStops, onStopClick);
-
-    for (const layer of interactive) {
-      map.on('mouseenter', layer, pointerOn);
-      map.on('mouseleave', layer, pointerOff);
-    }
-
+    const onLeave = () => { clearHover(); map.getCanvas().style.cursor = ''; };
+    map.on('click', onClick);
+    map.on('mousemove', onMove);
+    map.getCanvas().addEventListener('mouseleave', onLeave);
     return () => {
-      map.off('mousemove', LAYER.communesFill, onCommuneMove);
-      map.off('mouseleave', LAYER.communesFill, onCommuneLeave);
-      map.off('click', LAYER.communesFill, onCommuneClick);
-      map.off('click', LAYER.vehicles, onVehicleClick);
-      map.off('click', LAYER.clientPoints, onClientClick);
-      map.off('click', LAYER.clientClusters, onClusterClick);
-      map.off('click', LAYER.workOrders, onWorkOrderClick);
-      map.off('click', LAYER.routeStops, onStopClick);
-      for (const layer of interactive) {
-        map.off('mouseenter', layer, pointerOn);
-        map.off('mouseleave', layer, pointerOff);
-      }
+      map.off('click', onClick);
+      map.off('mousemove', onMove);
+      map.getCanvas().removeEventListener('mouseleave', onLeave);
     };
   }, [ready, select, onSelectVehicle, onSelectClient, onSelectWorkOrder, onSelectCommune]);
 
@@ -525,7 +470,6 @@ export function FleetMap({
 
   // Limpiar la estela al dejar de seguir.
   useEffect(() => {
-    if (following) return;
     trailRef.current = [];
     const map = mapRef.current;
     if (map && ready) updateFollowTrail(map, []);
@@ -566,7 +510,8 @@ export function FleetMap({
     const map = mapRef.current;
     if (!map || !ready) return;
     updateCommunes(map, communes);
-  }, [ready, communes]);
+    communes.filter((c) => c.boundary.length >= 3).forEach((c, index) => map.setFeatureState({ source: SOURCE.communes, id: index + 1 }, { selected: c.code === inspectedCommuneCode }));
+  }, [ready, communes, inspectedCommuneCode]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -702,7 +647,6 @@ export function FleetMap({
    *
    * Se salta el primer render: la fuente inicial ya se creo agrupada.
    */
-  const clusterAplicado = useRef(true);
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !ready || clusterAplicado.current === clusterClients) return;
@@ -712,16 +656,25 @@ export function FleetMap({
       removeClientLayers(map);
       registerClientLayers(map, clusterClients);
       updateClients(map, clients, selection?.type === 'client' ? selection.id : null);
+      const clientLayers = [LAYER.clientClusters, LAYER.clientClusterCount, LAYER.clientPoints, LAYER.clientLabels];
+      setLayerVisibility(map, clientLayers, effectiveLayers.clientes);
+      // Recreated client layers must stay below orders and vehicles.
+      for (const id of clientLayers) map.moveLayer(id, LAYER.workOrders);
     } catch (error) {
       setStyleError(error instanceof Error ? error.message : String(error));
     }
-  }, [ready, clusterClients, clients, selection]);
+  }, [ready, clusterClients, clients, selection, effectiveLayers.clientes]);
 
   // --- Encuadre solicitado -------------------------------------------------
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !ready || !focus) return;
 
+    if (focus.bounds) {
+      const padding = Math.min(64, map.getContainer().clientWidth / 5, map.getContainer().clientHeight / 5);
+      map.fitBounds(boundsToLngLatBounds(focus.bounds), { padding, maxZoom: 16, duration: 700 });
+      return;
+    }
     map.flyTo({
       center: [focus.center.lng, focus.center.lat],
       zoom: focus.zoom ?? 15,
@@ -729,19 +682,6 @@ export function FleetMap({
       essential: true,
     });
   }, [ready, focus]);
-
-  const fitOperation = useCallback(() => {
-    const map = mapRef.current;
-    if (!map) return;
-    map.fitBounds(boundsToLngLatBounds(OPERATION_BOUNDS), { padding: 48, duration: 700 });
-  }, []);
-
-  // Expuesto por atributo de datos para que el contenedor pueda invocarlo.
-  useEffect(() => {
-    const node = containerRef.current;
-    if (!node) return;
-    (node as HTMLDivElement & { __fitOperation?: () => void }).__fitOperation = fitOperation;
-  }, [fitOperation]);
 
   return (
     <div className={className}>
