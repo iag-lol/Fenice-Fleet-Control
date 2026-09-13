@@ -36,8 +36,8 @@ export class HttpGpsProvider implements GpsProvider {
     };
   }
 
-  private async fetchJson<T>(path: string): Promise<T> {
-    const response = await fetch(path, { cache: 'no-store' });
+  private async fetchJson<T>(path: string, signal?: AbortSignal): Promise<T> {
+    const response = await fetch(path, { cache: 'no-store', signal });
 
     if (!response.ok) {
       const body = (await response.json().catch(() => null)) as { error?: string } | null;
@@ -92,6 +92,8 @@ export class HttpGpsProvider implements GpsProvider {
    */
   subscribeToPositions(handlers: PositionSubscriptionHandlers): Unsubscribe {
     let closed = false;
+    let polling = false;
+    const abort = new AbortController();
     let source: EventSource | null = null;
     let pollTimer: ReturnType<typeof setInterval> | null = null;
 
@@ -100,11 +102,15 @@ export class HttpGpsProvider implements GpsProvider {
       handlers.onTransportChange?.('polling');
 
       const poll = async (): Promise<void> => {
+        if (closed || polling) return;
+        polling = true;
         try {
-          const payload = await this.fetchJson<LivePositionsPayload>('/api/gps/positions');
-          handlers.onPositions(payload.positions);
+          const payload = await this.fetchJson<LivePositionsPayload>('/api/gps/positions', abort.signal);
+          if (!closed) handlers.onPositions(payload.positions);
         } catch (error) {
-          handlers.onError?.(error instanceof Error ? error : new Error(String(error)));
+          if (!closed) handlers.onError?.(error instanceof Error ? error : new Error(String(error)));
+        } finally {
+          polling = false;
         }
       };
 
@@ -173,6 +179,7 @@ export class HttpGpsProvider implements GpsProvider {
 
     return () => {
       closed = true;
+      abort.abort();
       window.removeEventListener('pagehide', closeBeforeUnload);
       window.removeEventListener('beforeunload', closeBeforeUnload);
       source?.close();

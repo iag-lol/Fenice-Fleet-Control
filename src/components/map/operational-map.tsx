@@ -2,7 +2,8 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { Building2, Filter, Maximize2, Minimize2, Navigation, Target, Truck } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import dynamic from 'next/dynamic';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import {
   isScoped,
@@ -13,12 +14,9 @@ import {
 } from '@/lib/engines/map-scope';
 import { FocusBanner } from '@/components/map/focus-banner';
 import { ClientFiltersPanel, applyClientFilters } from '@/components/map/client-filters-panel';
-import { CommunePanel } from '@/components/map/commune-panel';
-import { ClientPanel } from '@/components/map/client-panel';
 import { FleetMap, type FleetMapVehicle } from '@/components/map/fleet-map';
 import { LayerControl } from '@/components/map/layer-control';
 import { ViewModeControl } from '@/components/map/view-mode-control';
-import { VehiclePanel } from '@/components/map/vehicle-panel';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ErrorBoundary } from '@/components/ui/error-boundary';
@@ -30,14 +28,32 @@ import {
 } from '@/components/ui/query-state';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useLiveFleet } from '@/hooks/use-live-fleet';
-import { OPERATION_BOUNDS } from '@/data/communes';
+import { OPERATION_BOUNDS } from '@/config/map-viewport';
 import { cn } from '@/lib/cn';
 import { useMapStore } from '@/stores/map-store';
 import { mapQuery, communesQuery, systemModeQuery } from '@/hooks/use-control-data';
 import { operationPoints } from '@/lib/map-navigation';
-import { MapEntityPanel } from '@/components/map/map-entity-panel';
-import { WorkOrderPanel } from '@/components/map/work-order-panel';
 import type { TerritoryAnalysis } from '@/types/views';
+
+const CommunePanel = dynamic(() => import('@/components/map/commune-panel').then((m) => m.CommunePanel), {
+  loading: () => <Skeleton className="h-48 w-full" />,
+});
+
+const ClientPanel = dynamic(() => import('@/components/map/client-panel').then((m) => m.ClientPanel), {
+  loading: () => <Skeleton className="h-48 w-full" />,
+});
+
+const VehiclePanel = dynamic(() => import('@/components/map/vehicle-panel').then((m) => m.VehiclePanel), {
+  loading: () => <Skeleton className="h-48 w-full" />,
+});
+
+const MapEntityPanel = dynamic(() => import('@/components/map/map-entity-panel').then((m) => m.MapEntityPanel), {
+  loading: () => <Skeleton className="h-48 w-full" />,
+});
+
+const WorkOrderPanel = dynamic(() => import('@/components/map/work-order-panel').then((m) => m.WorkOrderPanel), {
+  loading: () => <Skeleton className="h-48 w-full" />,
+});
 
 /**
  * Centro operacional.
@@ -46,7 +62,7 @@ import type { TerritoryAnalysis } from '@/types/views';
  * panel, es la aplicacion. Los controles flotan encima y las fichas se abren
  * como panel lateral en escritorio y hoja inferior en movil.
  */
-export function OperationalMap() {
+export const OperationalMap = memo(function OperationalMap() {
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [detailOpen, setDetailOpen] = useState(false);
   const [fullscreen, setFullscreen] = useState(false);
@@ -110,7 +126,7 @@ export function OperationalMap() {
         boundary: c.boundary,
         clients: c.summary?.clients ?? 0,
       })),
-    [communesData],
+    [communesData?.communes],
   );
 
   const inspectedCommune = useMemo(
@@ -118,14 +134,14 @@ export function OperationalMap() {
     [communesData, inspectedCommuneCode],
   );
 
-  const allClients = useMemo(() => snapshot?.clients ?? [], [snapshot]);
+  const allClients = useMemo(() => snapshot?.clients ?? [], [snapshot?.clients]);
   const visibleClients = useMemo(
     () => applyClientFilters(allClients, filters),
     [allClients, filters],
   );
 
   const vehicles: FleetMapVehicle[] = useMemo(() => {
-    if (!snapshot) return [];
+    if (!snapshot?.vehicles) return [];
     return snapshot.vehicles.map((v) => ({
       vehicleId: v.vehicle.id,
       plate: v.vehicle.plate,
@@ -134,7 +150,7 @@ export function OperationalMap() {
       // La posicion viva del stream tiene prioridad sobre la de la instantanea.
       position: positions.get(v.vehicle.id) ?? v.position,
     }));
-  }, [snapshot, positions]);
+  }, [snapshot?.vehicles, positions]);
 
   /**
    * Enfoque activo.
@@ -160,20 +176,20 @@ export function OperationalMap() {
   const scopeActivo = isScoped(scope);
 
   const routesEnfocadas = useMemo(
-    () => (snapshot ? scopeRoutes(snapshot.routes, scope) : []),
-    [snapshot, scope],
+    () => (snapshot?.routes ? scopeRoutes(snapshot.routes, scope) : []),
+    [snapshot?.routes, scope],
   );
   const vehiculosEnfocados = useMemo(
     () => scopeVehicles(vehicles, scope, snapshot?.routes ?? []),
-    [vehicles, scope, snapshot],
+    [vehicles, scope, snapshot?.routes],
   );
   const clientesEnfocados = useMemo(
     () => scopePoints(visibleClients, scope, snapshot?.routes ?? []),
-    [visibleClients, scope, snapshot],
+    [visibleClients, scope, snapshot?.routes],
   );
   const pedidosEnfocados = useMemo(
     () => scopePoints(snapshot?.pendingWorkOrders ?? [], scope, snapshot?.routes ?? []),
-    [snapshot, scope],
+    [snapshot?.pendingWorkOrders, snapshot?.routes, scope],
   );
 
   const heatmapPoints = useMemo(() => {
@@ -579,4 +595,4 @@ export function OperationalMap() {
       </Sheet>
     </div>
   );
-}
+});

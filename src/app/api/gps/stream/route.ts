@@ -1,6 +1,6 @@
 import { guardApi } from '@/lib/api';
 import { getServerEnv } from '@/config/env';
-import { loadFleetSnapshots } from '@/services/aggregation/fleet-aggregator';
+import { loadFleetTelemetry } from '@/services/aggregation/fleet-aggregator';
 import { fleetSimulator } from '@/services/gps/mock/simulator';
 import { getGpsProvider } from '@/services/registry';
 import { getOperationalSettings } from '@/services/settings/settings-store';
@@ -42,6 +42,7 @@ export async function GET(request: Request): Promise<Response> {
   const stream = new ReadableStream<Uint8Array>({
     start(controller) {
       let closed = false;
+      let publishing = false;
 
       const send = (event: string, data: unknown): void => {
         if (closed) return;
@@ -53,11 +54,10 @@ export async function GET(request: Request): Promise<Response> {
       };
 
       const publish = async (): Promise<void> => {
+        if (closed || publishing) return;
+        publishing = true;
         try {
-          const [positions, vehicles] = await Promise.all([
-            provider.getAllCurrentPositions(),
-            loadFleetSnapshots(),
-          ]);
+          const { positions, vehicles } = await loadFleetTelemetry();
 
           // El proveedor "unavailable" nunca lanza: sus metodos resuelven
           // listas vacias a proposito (ver UnavailableGpsProvider), para no
@@ -92,6 +92,8 @@ export async function GET(request: Request): Promise<Response> {
             detail: error instanceof Error ? error.message : String(error),
             at: new Date().toISOString(),
           });
+        } finally {
+          publishing = false;
         }
       };
 

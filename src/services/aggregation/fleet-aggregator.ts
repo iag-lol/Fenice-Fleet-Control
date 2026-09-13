@@ -193,17 +193,22 @@ export function buildVehicleSnapshot(
   };
 }
 
-export async function loadFleetSnapshots(): Promise<VehicleSnapshot[]> {
+/** Una sola lectura GPS alimenta posiciones y estados del mismo reporte. */
+export async function loadFleetTelemetry(): Promise<{ positions: Position[]; vehicles: VehicleSnapshot[] }> {
   const operations = getOperationsProvider();
   const [context, drivers] = await Promise.all([loadFleetContext(), operations.getDrivers()]);
-  const driverIndex = new Map(drivers.map((d) => [d.id as string, { id: d.id as string, fullName: d.fullName }]));
+  const driverIndex = new Map(drivers.map((d) => [d.id as string, d]));
   const now = new Date();
 
-  return context.vehicles.map((vehicle) => {
+  const vehicles = context.vehicles.map((vehicle) => {
     const snapshot = buildVehicleSnapshot(vehicle, context, driverIndex, now);
-    const full = drivers.find((d) => d.id === vehicle.driverId) ?? null;
-    return { ...snapshot, driver: full };
+    return { ...snapshot, driver: vehicle.driverId ? (driverIndex.get(vehicle.driverId) ?? null) : null };
   });
+  return { positions: [...context.positions.values()], vehicles };
+}
+
+export async function loadFleetSnapshots(): Promise<VehicleSnapshot[]> {
+  return (await loadFleetTelemetry()).vehicles;
 }
 
 /** Resumen de rutas activas para el dashboard. */

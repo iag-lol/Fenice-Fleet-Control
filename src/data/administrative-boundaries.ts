@@ -154,7 +154,7 @@ export function getCommuneForPoint(lat: number, lng: number): Commune | null {
  * ocurre la operacion. Se ancla al Gran Santiago, que es donde esta la flota
  * y la mayor parte de la cartera.
  */
-export const OPERATION_CENTER: LatLng = { lat: -33.47, lng: -70.68 };
+export { OPERATION_CENTER } from '@/config/map-viewport';
 
 /** Centroide geometrico de la region, para analisis territorial. */
 export const REGION_CENTROID: LatLng = polygonCentroid(COMMUNES.map((c) => c.center));

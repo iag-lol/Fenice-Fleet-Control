@@ -1,5 +1,5 @@
 import { guardApi, handleApi, NO_STORE_HEADERS } from '@/lib/api';
-import { loadFleetSnapshots } from '@/services/aggregation/fleet-aggregator';
+import { loadFleetTelemetry } from '@/services/aggregation/fleet-aggregator';
 import { getGpsProvider } from '@/services/registry';
 import { fleetSimulator } from '@/services/gps/mock/simulator';
 import type { LivePositionsPayload } from '@/types/views';
@@ -14,10 +14,7 @@ export async function GET(): Promise<Response> {
   const response = await handleApi<LivePositionsPayload>(async () => {
     const provider = getGpsProvider();
 
-    const [positions, vehicles] = await Promise.all([
-      provider.getAllCurrentPositions(),
-      loadFleetSnapshots(),
-    ]);
+    const { positions, vehicles } = await loadFleetTelemetry();
 
     // Sus metodos resuelven listas vacias en vez de fallar (ver
     // UnavailableGpsProvider): sin este chequeo, este fallback de polling

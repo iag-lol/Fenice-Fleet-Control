@@ -41,7 +41,7 @@ import type {
 import type { CommuneWithSummary } from '@/components/map/commune-panel';
 import { geofencePoints } from '@/lib/map-navigation';
 import { isUsableCoordinate } from '@/lib/geo';
-import { GEOFENCE_KIND_LABEL } from '@/features/base/geofence-editor/geofence-form';
+import { GEOFENCE_KIND_LABEL } from '@/config/geofence-labels';
 import type { MapSnapshot } from '@/types/views';
 
 /**

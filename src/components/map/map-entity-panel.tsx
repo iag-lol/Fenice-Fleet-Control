@@ -11,7 +11,7 @@ import { containsPoint } from '@/lib/engines/geofence-engine';
 import { isUsableCoordinate } from '@/lib/geo';
 import { formatSmartDateTime } from '@/lib/format';
 import { geofencePoints } from '@/lib/map-navigation';
-import { GEOFENCE_KIND_LABEL } from '@/features/base/geofence-editor/geofence-form';
+import { GEOFENCE_KIND_LABEL } from '@/config/geofence-labels';
 import { useMapStore, type MapSelection } from '@/stores/map-store';
 import type { Alert, AlertState } from '@/types/core';
 import type { MapSnapshot } from '@/types/views';

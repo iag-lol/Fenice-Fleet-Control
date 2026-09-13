@@ -4,7 +4,6 @@ import { getCommuneForPoint } from '@/data/communes';
 import { isUsableCoordinate } from '@/lib/geo';
 import { loadClientContext } from '@/services/aggregation/client-aggregator';
 import { loadFleetContext } from '@/services/aggregation/fleet-aggregator';
-import { getOperationsProvider } from '@/services/registry';
 
 /**
  * Resumen operacional por comuna.
@@ -41,13 +40,11 @@ function isSameDay(a: Date, b: Date): boolean {
 export async function loadCommuneOperationalSummary(): Promise<
   Record<string, CommuneOperationalSummary>
 > {
-  const operations = getOperationsProvider();
   const now = new Date();
 
-  const [clientContext, fleetContext, alerts] = await Promise.all([
+  const [clientContext, fleetContext] = await Promise.all([
     loadClientContext(),
     loadFleetContext(),
-    operations.getAlerts({ states: ['nueva', 'revisada'] }),
   ]);
 
   const summary: Record<string, CommuneOperationalSummary> = {};
@@ -111,7 +108,7 @@ export async function loadCommuneOperationalSummary(): Promise<
   }
 
   // --- Alertas georreferenciadas ---------------------------------------------
-  for (const alert of alerts) {
+  for (const alert of fleetContext.alerts) {
     if (!isUsableCoordinate(alert.position)) continue;
     const commune = getCommuneForPoint(alert.position.lat, alert.position.lng);
     if (!commune) continue;

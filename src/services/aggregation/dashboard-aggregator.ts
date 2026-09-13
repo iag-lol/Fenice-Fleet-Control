@@ -183,12 +183,10 @@ export async function loadMapSnapshot(): Promise<MapSnapshot> {
   const operations = getOperationsProvider();
   const now = new Date();
 
-  const [context, drivers, clientContext, geofences, alerts] = await Promise.all([
+  const [context, drivers, clientContext] = await Promise.all([
     loadFleetContext(),
     operations.getDrivers(),
     loadClientContext(),
-    operations.getGeofences(),
-    operations.getAlerts({ states: ['nueva', 'revisada'] }),
   ]);
 
   const driverIndex = new Map(
@@ -202,7 +200,7 @@ export async function loadMapSnapshot(): Promise<MapSnapshot> {
 
   const plateByVehicle = new Map(context.vehicles.map((v) => [v.id as string, v.plate]));
 
-  const alertPoints: AlertMapPoint[] = alerts
+  const alertPoints: AlertMapPoint[] = context.alerts
     .filter((a) => isUsableCoordinate(a.position))
     .map((a) => ({
       alertId: a.id,
@@ -238,7 +236,7 @@ export async function loadMapSnapshot(): Promise<MapSnapshot> {
     routes: context.routes.map((route) =>
       toRouteGeometry(route, route.vehicleId ? (plateByVehicle.get(route.vehicleId) ?? null) : null),
     ),
-    geofences,
+    geofences: context.geofences,
     alerts: alertPoints,
     pendingWorkOrders,
     // La geometria comunal NO viaja aqui: pesa cientos de kilobytes y su capa

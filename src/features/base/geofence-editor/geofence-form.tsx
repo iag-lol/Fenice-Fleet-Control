@@ -1,6 +1,8 @@
 'use client';
 
 import { useState } from 'react';
+import { GEOFENCE_KIND_LABEL } from '@/config/geofence-labels';
+export { GEOFENCE_KIND_LABEL } from '@/config/geofence-labels';
 
 import { Button } from '@/components/ui/button';
 import { NumberField, Input, Select, Toggle } from '@/components/ui/input';
@@ -23,17 +25,7 @@ import {
  * un lugar tan visible como el nombre.
  */
 
-export const GEOFENCE_KIND_LABEL: Record<GeofenceKind, string> = {
-  cliente: 'Cliente',
-  centro_operacional: 'Centro operacional',
-  carga: 'Zona de carga',
-  descarga: 'Zona de descarga',
-  zona_autorizada: 'Zona autorizada',
-  zona_restringida: 'Zona restringida',
-  comuna: 'Comuna',
-  ruta: 'Ruta',
-  personalizada: 'Personalizada',
-};
+
 
 const TRIGGERS: { id: GeofenceTrigger; label: string; hint: string }[] = [
   { id: 'entrada', label: 'Entrada', hint: 'El vehiculo cruza hacia el interior.' },

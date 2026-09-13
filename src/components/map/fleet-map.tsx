@@ -27,7 +27,8 @@ import {
   type VehicleFeatureInput,
 } from '@/components/map/map-layers';
 import { resolveMapStyle } from '@/components/map/map-style';
-import { OPERATION_CENTER } from '@/data/communes';
+import { OPERATION_CENTER } from '@/config/map-viewport';
+import { startMapAnimationLoop } from '@/lib/map-animation-loop';
 import { isUsableCoordinate } from '@/lib/geo';
 import { geofencePoints } from '@/lib/map-navigation';
 import { useMapStore, type MapLayerId } from '@/stores/map-store';
@@ -184,8 +185,8 @@ export function FleetMap({
   const mapRef = useRef<MapLibreMap | null>(null);
   const cameraRef = useRef<{ center: [number, number]; zoom: number } | null>(null);
   const animatedRef = useRef<Map<string, AnimatedVehicle>>(new Map());
-  const frameRef = useRef<number | null>(null);
   const trailRef = useRef<LatLng[]>([]);
+  const stopAnimationRef = useRef<(() => void) | null>(null);
   const clusterAplicado = useRef(true);
   const inspectedCommuneCode = useMapStore((s) => s.inspectedCommuneCode);
   const [ready, setReady] = useState(false);
@@ -286,7 +287,7 @@ export function FleetMap({
     });
 
     return () => {
-      if (frameRef.current !== null) cancelAnimationFrame(frameRef.current);
+      stopAnimationRef.current?.();
       resizeObserver.disconnect();
       const center = map.getCenter();
       cameraRef.current = { center: [center.lng, center.lat], zoom: map.getZoom() };
@@ -497,14 +498,12 @@ export function FleetMap({
     const map = mapRef.current;
     if (!map) return;
 
-    let running = true;
+    let followedCenter: { lat: number; lng: number } | null = null;
 
-    const step = (): void => {
-      if (!running) return;
+    const stop = startMapAnimationLoop((now) => {
       const animated = animatedRef.current;
       const features: VehicleFeatureInput[] = [];
       let needsFrame = false;
-      const now = performance.now();
 
       for (const [vehicleId, state] of animated) {
         // Progreso en el tiempo, no en la distancia: el vehiculo se desliza
@@ -544,7 +543,8 @@ export function FleetMap({
       // Camara adherida al vehiculo seguido.
       if (following) {
         const state = animatedRef.current.get(following);
-        if (state) {
+        if (state && (!followedCenter || followedCenter.lat !== state.current.lat || followedCenter.lng !== state.current.lng)) {
+          followedCenter = { lat: state.current.lat, lng: state.current.lng };
           map.easeTo({
             center: [state.current.lng, state.current.lat],
             duration: 220,
@@ -564,24 +564,14 @@ export function FleetMap({
         }
       }
 
-      frameRef.current = needsFrame || following ? requestAnimationFrame(step) : null;
-    };
-
-    frameRef.current = requestAnimationFrame(step);
-
-    // Redibujar cuando lleguen posiciones nuevas aunque la animacion se
-    // hubiera detenido por haber alcanzado el objetivo.
-    const restart = setInterval(() => {
-      if (frameRef.current === null) frameRef.current = requestAnimationFrame(step);
-    }, 500);
-
+      return needsFrame;
+    });
+    stopAnimationRef.current = stop;
     return () => {
-      running = false;
-      clearInterval(restart);
-      if (frameRef.current !== null) cancelAnimationFrame(frameRef.current);
-      frameRef.current = null;
+      stop();
+      if (stopAnimationRef.current === stop) stopAnimationRef.current = null;
     };
-  }, [ready, following, selectedVehicleId]);
+  }, [ready, following, selectedVehicleId, vehicles]);
 
   // Limpiar la estela al dejar de seguir.
   useEffect(() => {
@@ -625,6 +615,11 @@ export function FleetMap({
     const map = mapRef.current;
     if (!map || !ready) return;
     updateCommunes(map, communes);
+  }, [ready, communes]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !ready) return;
     communes
       .filter((c) => c.boundary.length >= 3)
       .forEach((c) =>

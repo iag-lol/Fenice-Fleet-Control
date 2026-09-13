@@ -1,7 +1,6 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
-import type { SystemModeInfo } from '@/services/registry';
 import { PanelRightClose, PanelRightOpen } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
@@ -12,7 +11,7 @@ import { useIsDesktop, useIsTabletRange } from '@/hooks/use-media-query';
 import { useLiveFleet } from '@/hooks/use-live-fleet';
 import { cn } from '@/lib/cn';
 import { useMapStore } from '@/stores/map-store';
-import { useControlData } from '@/hooks/use-control-data';
+import { systemModeQuery, useControlData } from '@/hooks/use-control-data';
 
 /**
  * Torre de control: la unica pantalla de mapa del sistema.
@@ -106,15 +105,7 @@ export function ControlTowerView() {
   }, []);
 
   const { map, alerts, communes } = useControlData();
-  const { data: mode } = useQuery({
-    queryKey: ['system', 'mode'],
-    staleTime: 60_000,
-    queryFn: async (): Promise<SystemModeInfo> => {
-      const response = await fetch('/api/system/mode');
-      if (!response.ok) throw new Error('Estado de fuentes no disponible');
-      return response.json() as Promise<SystemModeInfo>;
-    },
-  });
+  const { data: mode } = useQuery(systemModeQuery);
   const snapshot = map.data;
   const refreshAll = () => {
     void map.refetch();
