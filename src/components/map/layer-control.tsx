@@ -11,7 +11,7 @@ import {
   Shield,
   Truck,
 } from 'lucide-react';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 
 import { MapPopover } from '@/components/map/map-popover';
 
@@ -50,6 +50,7 @@ export function LayerControl({ inline }: { inline?: boolean }) {
 
   const activeCount = Object.values(layers).filter(Boolean).length;
   const [open, setOpen] = useState(inline ?? false);
+  const anchorRef = useRef<HTMLButtonElement>(null);
 
   const body = (
     <div className="space-y-2">
@@ -152,6 +153,7 @@ export function LayerControl({ inline }: { inline?: boolean }) {
   return (
     <div className="relative">
       <button
+        ref={anchorRef}
         type="button"
         onClick={() => setOpen((value) => !value)}
         aria-expanded={open}
@@ -168,7 +170,13 @@ export function LayerControl({ inline }: { inline?: boolean }) {
         </Badge>
       </button>
 
-      <MapPopover open={open} onClose={() => setOpen(false)} title="Capas del mapa" width={280}>
+      <MapPopover
+        open={open}
+        onClose={() => setOpen(false)}
+        title="Capas del mapa"
+        width={280}
+        anchorRef={anchorRef}
+      >
         {body}
       </MapPopover>
     </div>

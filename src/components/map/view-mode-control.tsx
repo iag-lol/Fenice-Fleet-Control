@@ -2,7 +2,7 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { Layers2, Lock, Moon, Satellite, TrafficCone } from 'lucide-react';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 
 import { MapPopover } from '@/components/map/map-popover';
 
@@ -34,6 +34,7 @@ const MODE_ICON: Record<MapViewMode, typeof Layers2> = {
  */
 export function ViewModeControl() {
   const [open, setOpen] = useState(false);
+  const anchorRef = useRef<HTMLButtonElement>(null);
   const viewMode = useMapStore((s) => s.viewMode);
   const setViewMode = useMapStore((s) => s.setViewMode);
   const trafficEnabled = useMapStore((s) => s.trafficEnabled);
@@ -60,6 +61,7 @@ export function ViewModeControl() {
   return (
     <div className="relative">
       <button
+        ref={anchorRef}
         type="button"
         onClick={() => setOpen((value) => !value)}
         aria-expanded={open}
@@ -70,7 +72,13 @@ export function ViewModeControl() {
         <span className="hidden sm:inline">{MAP_VIEW_LABEL[viewMode]}</span>
       </button>
 
-      <MapPopover open={open} onClose={() => setOpen(false)} title="Vista del mapa" width={268}>
+      <MapPopover
+        open={open}
+        onClose={() => setOpen(false)}
+        title="Vista del mapa"
+        width={268}
+        anchorRef={anchorRef}
+      >
             <p className="field-label hidden px-1 md:block">Vista del mapa</p>
 
             <ul className="space-y-0.5">

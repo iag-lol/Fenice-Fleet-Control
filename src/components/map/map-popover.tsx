@@ -1,10 +1,12 @@
 'use client';
 
 import { X } from 'lucide-react';
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode, type RefObject } from 'react';
 import { createPortal } from 'react-dom';
 
 import { useIsDesktop } from '@/hooks/use-media-query';
+
+const VIEWPORT_MARGIN = 12;
 
 /**
  * Contenedor de los desplegables del mapa.
@@ -24,15 +26,21 @@ export function MapPopover({
   children,
   /** Ancho del desplegable en escritorio. */
   width = 280,
+  /** Boton que ancla el desplegable en escritorio. */
+  anchorRef,
 }: {
   open: boolean;
   onClose: () => void;
   title: string;
   children: ReactNode;
   width?: number;
+  anchorRef: RefObject<HTMLElement | null>;
 }) {
   const isDesktop = useIsDesktop();
   const [montado, setMontado] = useState(false);
+  const [position, setPosition] = useState<{ top: number; left: number; maxHeight: number } | null>(
+    null,
+  );
 
   useEffect(() => setMontado(true), []);
 
@@ -52,9 +60,44 @@ export function MapPopover({
     return () => document.removeEventListener('keydown', closeOnEscape);
   }, [open, onClose]);
 
+  /**
+   * Posicion en escritorio/tablet, calculada en vez de anclada por CSS.
+   *
+   * El boton vive dentro del contenedor del mapa, que recorta su contenido
+   * (`overflow-hidden`) para que el mapa nunca se desborde. Un desplegable
+   * `absolute` anclado a la derecha del boton, al abrirse hacia la izquierda,
+   * quedaba recortado por ese borde justo donde empieza el sidebar o el panel
+   * operativo en una tablet (poco ancho disponible): parecia abrirse "detras"
+   * de ellos. `fixed` con la posicion calculada aqui ignora ese recorte (los
+   * elementos `fixed` no lo heredan de un ancestro sin transform/filter) y se
+   * ajusta para no salirse nunca de la pantalla.
+   */
+  useEffect(() => {
+    if (!open || !isDesktop) return;
+
+    const reposition = (): void => {
+      const anchor = anchorRef.current;
+      if (!anchor) return;
+      const rect = anchor.getBoundingClientRect();
+      const left = Math.min(
+        Math.max(rect.right - width, VIEWPORT_MARGIN),
+        window.innerWidth - width - VIEWPORT_MARGIN,
+      );
+      const top = Math.min(rect.bottom + 8, window.innerHeight - VIEWPORT_MARGIN);
+      const maxHeight = window.innerHeight - top - VIEWPORT_MARGIN;
+      setPosition({ top, left, maxHeight });
+    };
+
+    reposition();
+    window.addEventListener('resize', reposition);
+    return () => window.removeEventListener('resize', reposition);
+  }, [open, isDesktop, width, anchorRef]);
+
   if (!open) return null;
 
   if (isDesktop) {
+    if (!position) return null;
+
     return (
       <>
         <button
@@ -64,8 +107,14 @@ export function MapPopover({
           onClick={onClose}
         />
         <div
-          className="absolute right-0 top-full z-20 mt-2 max-h-[calc(100dvh-10rem)] overflow-y-auto max-w-[calc(100vw-1.5rem)] animate-slide-up rounded-lg border border-line-strong bg-surface-900 p-2 shadow-panel"
-          style={{ width }}
+          className="fixed z-20 overflow-y-auto animate-slide-up rounded-lg border border-line-strong bg-surface-900 p-2 shadow-panel"
+          style={{
+            width,
+            maxWidth: `calc(100vw - ${VIEWPORT_MARGIN * 2}px)`,
+            top: position.top,
+            left: position.left,
+            maxHeight: position.maxHeight,
+          }}
         >
           {children}
         </div>

@@ -8,7 +8,7 @@ import { useEffect, useState } from 'react';
 import { BrandLockup } from '@/components/shell/brand';
 import { getVisibleNavGroups, isActivePath } from '@/components/shell/navigation';
 import { PlanBadge } from '@/components/product/plan-badge';
-import { useMediaQuery } from '@/hooks/use-media-query';
+import { useIsTabletRange } from '@/hooks/use-media-query';
 import { cn } from '@/lib/cn';
 
 /**
@@ -18,16 +18,14 @@ import { cn } from '@/lib/cn';
  * cuenta, y el operador que ya conoce la navegacion no necesita las etiquetas.
  * La preferencia se recuerda entre sesiones.
  *
- * Sin preferencia guardada, el ancho se adapta solo en tablet (768-1023px):
- * el sidebar completo (236px) le restaba casi un tercio del ancho al mapa o
- * a las tablas en esa franja. Un usuario que expande o colapsa a mano fija su
- * eleccion para siempre, en cualquier ancho.
+ * Sin preferencia guardada, el ancho se adapta solo en tablet (ver
+ * `useIsTabletRange`): el sidebar completo (236px) le restaba casi un tercio
+ * del ancho al mapa o a las tablas en esa franja. Un usuario que expande o
+ * colapsa a mano fija su eleccion para siempre, en cualquier ancho.
  */
-const TABLET_RANGE_QUERY = '(min-width: 768px) and (max-width: 1023px)';
-
 export function Sidebar() {
   const pathname = usePathname();
-  const isTabletRange = useMediaQuery(TABLET_RANGE_QUERY);
+  const isTabletRange = useIsTabletRange();
   const [collapsed, setCollapsed] = useState(false);
   const [hasStoredPreference, setHasStoredPreference] = useState(false);
   const [hydrated, setHydrated] = useState(false);

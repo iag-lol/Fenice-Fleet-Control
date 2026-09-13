@@ -392,9 +392,25 @@ export function OperationalMap() {
           </button>
         </div>
       ) : null}
-      {/* --- Aviso de degradacion GPS --- */}
+      {/*
+        --- Aviso de degradacion GPS ---
+
+        `top-28` (no `xl:top-16` hasta que la barra de controles vuelve a ser
+        una sola fila): por debajo de `xl` el resumen de flota y los botones
+        se apilan en dos filas que llegan hasta ahi, y con un offset menor
+        este aviso se dibujaba encima de "Filtros/Capas/Vista" y les robaba
+        el clic sin que se notara visualmente por que dejaban de responder.
+
+        `z-[5]` (menor que el `z-10` de la barra de controles): con el mismo
+        z-index, el orden del DOM decidia el empate a favor de este aviso (va
+        despues en el marcado) y tapaba tanto la barra como lo que esta
+        despliega (el desplegable de Capas/Vista), aunque ese desplegable
+        tuviera su propio z-index mayor: ese z-index solo cuenta dentro del
+        contexto de apilamiento de la barra, no frente a un hermano con el
+        mismo nivel que ella.
+      */}
       {gpsError ? (
-        <div className="pointer-events-auto absolute inset-x-2.5 top-16 z-10 sm:inset-x-auto sm:left-1/2 sm:w-[440px] sm:-translate-x-1/2">
+        <div className="pointer-events-auto absolute inset-x-2.5 top-28 z-[5] sm:inset-x-auto sm:left-1/2 sm:w-[440px] sm:-translate-x-1/2 xl:top-16">
           {mode?.gps.provider === 'unavailable' ? (
             <PendingIntegrationNotice
               what={

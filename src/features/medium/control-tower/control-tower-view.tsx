@@ -8,7 +8,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { OperationalMap } from '@/components/map/operational-map';
 import { hasFeature } from '@/product/feature-access';
 import { OperationsPanel } from '@/features/medium/control-tower/operations-panel';
-import { useIsDesktop } from '@/hooks/use-media-query';
+import { useIsDesktop, useIsTabletRange } from '@/hooks/use-media-query';
 import { useLiveFleet } from '@/hooks/use-live-fleet';
 import { cn } from '@/lib/cn';
 import { useMapStore } from '@/stores/map-store';
@@ -40,16 +40,22 @@ const MIN_PANEL = 280;
 const MAX_PANEL = 560;
 const DEFAULT_PANEL = 360;
 const STORAGE_KEY = 'fenice.control.panelWidth';
+const PANEL_OPEN_STORAGE_KEY = 'fenice.control.panelOpen';
 
 export function ControlTowerView() {
   // El panel operativo acompaña al mapa en todos los planes.
   const hasOperationsPanel = hasFeature('control-tower');
   const isDesktop = useIsDesktop();
+  const isTabletRange = useIsTabletRange();
   const { positions } = useLiveFleet();
   const select = useMapStore((s) => s.select);
 
   const [panelWidth, setPanelWidth] = useState(DEFAULT_PANEL);
+  // Igual que el sidebar: abierto por defecto, salvo en tablet, donde ya
+  // compite por ancho con el sidebar y el mapa. Sin este ajuste, ambos se
+  // abrian a la vez y no dejaban espacio real para el mapa ni sus controles.
   const [panelOpen, setPanelOpen] = useState(true);
+  const [hasStoredPanelPreference, setHasStoredPanelPreference] = useState(false);
   const [sheetStep, setSheetStep] = useState<SheetStep>(0);
   const [hydrated, setHydrated] = useState(false);
   const draggingRef = useRef(false);
@@ -68,7 +74,35 @@ export function ControlTowerView() {
     } catch {
       // Sin almacenamiento: se usa el ancho por defecto.
     }
+
+    try {
+      const storedOpen = window.localStorage.getItem(PANEL_OPEN_STORAGE_KEY);
+      if (storedOpen !== null) {
+        setPanelOpen(storedOpen === '1');
+        setHasStoredPanelPreference(true);
+      }
+    } catch {
+      // Sin almacenamiento: se usa el valor por defecto.
+    }
+
     setHydrated(true);
+  }, []);
+
+  useEffect(() => {
+    if (!hasStoredPanelPreference) setPanelOpen(!isTabletRange);
+  }, [isTabletRange, hasStoredPanelPreference]);
+
+  const togglePanel = useCallback(() => {
+    setPanelOpen((current) => {
+      const next = !current;
+      setHasStoredPanelPreference(true);
+      try {
+        window.localStorage.setItem(PANEL_OPEN_STORAGE_KEY, next ? '1' : '0');
+      } catch {
+        // Sin persistencia: el cambio sigue aplicando en esta sesion.
+      }
+      return next;
+    });
   }, []);
 
   const { map, alerts, communes } = useControlData();
@@ -167,7 +201,7 @@ export function ControlTowerView() {
         {isDesktop && hasOperationsPanel ? (
           <button
             type="button"
-            onClick={() => setPanelOpen((value) => !value)}
+            onClick={togglePanel}
             title={panelOpen ? 'Ocultar panel operacional' : 'Mostrar panel operacional'}
             aria-label={panelOpen ? 'Ocultar panel operacional' : 'Mostrar panel operacional'}
             className="absolute right-2.5 top-1/2 z-20 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-md border border-line-strong bg-surface-900/95 text-ink-muted shadow-float backdrop-blur transition-colors hover:text-ink"
