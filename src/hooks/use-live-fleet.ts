@@ -94,7 +94,10 @@ function resolveTransport(): Promise<void> {
 }
 
 function receivePositions(incoming: Position[]): void {
-  if (incoming.length === 0) return;
+  if (incoming.length === 0) {
+    if (snapshot.error !== 'No hay posiciones GPS recibidas.') emit({ ...snapshot, error: 'No hay posiciones GPS recibidas.' });
+    return;
+  }
   const positions = new Map(snapshot.positions);
   for (const position of incoming) {
     const previous = positions.get(position.vehicleId);
@@ -102,7 +105,13 @@ function receivePositions(incoming: Position[]): void {
       positions.set(position.vehicleId, position);
     }
   }
-  emit({ ...snapshot, positions, error: null, lastUpdateAt: new Date().toISOString() });
+  const now = Date.now();
+  const hasFreshFix = incoming.some((p) => p.valid && Number.isFinite(Date.parse(p.timestamp)) &&
+    now - Date.parse(p.timestamp) <= 180_000 && Date.parse(p.timestamp) - now <= 60_000);
+  emit({ ...snapshot, positions,
+    error: hasFreshFix ? null : 'La fuente responde, pero no entrega posiciones GPS recientes.',
+    lastUpdateAt: hasFreshFix ? new Date(now).toISOString() : snapshot.lastUpdateAt,
+  });
 }
 
 function startStream(): void {
@@ -122,10 +131,10 @@ function startStream(): void {
   unsubscribeProvider = provider.subscribeToPositions({
     onPositions: receivePositions,
     onError: (error) => {
-      emit({ ...snapshot, error: error.message });
+      if (snapshot.error !== error.message) emit({ ...snapshot, error: error.message });
     },
     onTransportChange: (transport) => {
-      emit({ ...snapshot, transport });
+      if (snapshot.transport !== transport) emit({ ...snapshot, transport });
     },
   });
 }

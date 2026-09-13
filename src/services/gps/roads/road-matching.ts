@@ -46,8 +46,7 @@ let enriching: Promise<Position[]> | null = null;
 export async function addRoadMatches(positions: Position[]): Promise<Position[]> {
   const url = getServerEnv().OSRM_BASE_URL;
   if (!url) return positions;
-  // Las peticiones concurrentes no comparten respuestas de otra muestra.
-  
+  // Serializa lotes concurrentes para no reordenar muestras del mismo vehiculo.
   const work = async (): Promise<Position[]> => {
     const results = [...positions];
     let cursor = 0;

@@ -2,6 +2,7 @@ import 'server-only';
 import { createHash } from 'node:crypto';
 import { appendFile, mkdir, readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
+import { addRoadMatches } from '@/services/gps/roads/road-matching';
 import { normalizeGpsHistory } from '@/lib/gps-history';
 import type { Position } from '@/types/core';
 import type { GpsProvider, PositionHistoryQuery } from '@/services/gps/gps-provider';
@@ -22,7 +23,7 @@ export class PositionArchive {
       const groups = new Map<string, Position[]>();
       for (const position of normalizeGpsHistory(positions)) {
         const day = new Date(position.timestamp).toISOString().slice(0, 10);
-        const { roadMatch: _visualOnly, ...original } = position;
+        const original = position;
         const fingerprint = JSON.stringify(original);
         if (this.latest.get(position.vehicleId) === fingerprint) continue;
         const file = this.filename(position.vehicleId, day);
@@ -77,19 +78,31 @@ export function withPositionArchive(provider: GpsProvider, archive: PositionArch
     getVehicles: () => provider.getVehicles(),
     getDeviceStatus: (id) => provider.getDeviceStatus(id),
     getVehicleEvents: (query) => provider.getVehicleEvents(query),
-    getAllCurrentPositions: async () => record(await provider.getAllCurrentPositions()),
+    getAllCurrentPositions: async () => record(await addRoadMatches(await provider.getAllCurrentPositions())),
     getVehiclePosition: async (id) => {
       const position = await provider.getVehiclePosition(id);
-      if (position) await record([position]);
+      if (position) return (await record(await addRoadMatches([position])))[0] ?? position;
       return position;
     },
     async getPositionHistory(query) {
       const [remote, local] = await Promise.allSettled([provider.getPositionHistory(query), archive.read(query)]);
       if (remote.status === 'rejected' && (local.status === 'rejected' || !local.value.length)) throw remote.reason;
       const source = remote.status === 'fulfilled' ? remote.value : [];
-      await record(source);
+      const localPositions = local.status === 'fulfilled' ? local.value : [];
+      const localByKey = new Map(localPositions.map((p) => [`${p.vehicleId}:${p.timestamp}`, p]));
+      // Solo respalda muestras que aun no estan archivadas; consultar varias
+      // veces la misma jornada no debe multiplicar el archivo indefinidamente.
+      await record(source.filter((p) => {
+        const saved = localByKey.get(`${p.vehicleId}:${p.timestamp}`);
+        return !saved || saved.lat !== p.lat || saved.lng !== p.lng;
+      }));
       // La fuente tiene prioridad al corregir una muestra ya archivada.
-      return normalizeGpsHistory([...(local.status === 'fulfilled' ? local.value : []), ...source], query.limit);
+      const matchedByKey = new Map(localPositions.filter((p) => p.roadMatch)
+        .map((p) => [`${p.vehicleId}:${p.timestamp}`, p]));
+      return normalizeGpsHistory([...localPositions, ...source.map((p) => {
+        const archived = matchedByKey.get(`${p.vehicleId}:${p.timestamp}`);
+        return archived?.lat === p.lat && archived.lng === p.lng ? { ...p, roadMatch: archived.roadMatch } : p;
+      })], query.limit);
     },
     subscribeToPositions: (handlers) => provider.subscribeToPositions({ ...handlers,
       onPositions: (positions) => { void record(positions).then(handlers.onPositions); },

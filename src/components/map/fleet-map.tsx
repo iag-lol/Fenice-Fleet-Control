@@ -422,9 +422,9 @@ export function FleetMap({
 
   // --- Animacion de vehiculos ----------------------------------------------
   /**
-   * Los equipos reportan cada 15-30 s. Pintar cada posicion directamente
-   * produciria saltos. Se interpola hacia el objetivo en cada frame para que
-   * el movimiento se lea como desplazamiento continuo.
+   * Entre mediciones solo se anima cuando el servidor encontro un recorrido
+   * vial confiable. Sin ese dato se salta al punto recibido; una linea recta
+   * suave haria parecer que el camion atraviesa edificios.
    */
   useEffect(() => {
     const animated = animatedRef.current;
@@ -450,13 +450,17 @@ export function FleetMap({
       const existing = animated.get(vehicle.vehicleId);
 
       if (!existing) {
+        const road = vehicle.position.roadMatch;
+        const lastRoadPoint = road?.path.at(-1);
+        const initialTarget = road && road.confidence >= 0.8 && road.path.length >= 2 &&
+          isUsableCoordinate(lastRoadPoint) ? pointOnRoad(road.path, 1) : target;
         animated.set(vehicle.vehicleId, {
           sample: vehicle.position,
           path: null,
           animateUntil: now + Math.min(30_000, Math.max(0, 30_000 - (Date.now() - Date.parse(vehicle.position.timestamp)))),
-          current: { ...target },
-          target,
-          segmentStart: { ...target },
+          current: { ...initialTarget },
+          target: initialTarget,
+          segmentStart: { ...initialTarget },
           segmentStartedAt: now,
           segmentDurationMs: 0,
           status: vehicle.status,

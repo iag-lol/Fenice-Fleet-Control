@@ -1,6 +1,5 @@
 import 'server-only';
 
-import { addRoadMatches } from '@/services/gps/roads/road-matching';
 import { getOperationalSettings } from '@/services/settings/settings-store';
 import { getCommuneName } from '@/data/communes';
 import { deriveVehicleStatus, evaluateConnectionState } from '@/lib/engines/gps-health';
@@ -198,8 +197,7 @@ export function buildVehicleSnapshot(
 export async function loadFleetTelemetry(): Promise<{ positions: Position[]; vehicles: VehicleSnapshot[] }> {
   const operations = getOperationsProvider();
   const [context, drivers] = await Promise.all([loadFleetContext(), operations.getDrivers()]);
-  const positions = await addRoadMatches([...context.positions.values()]);
-  context.positions = new Map(positions.map((p) => [p.vehicleId, p]));
+  const positions = [...context.positions.values()];
   const driverIndex = new Map(drivers.map((d) => [d.id as string, d]));
   const now = new Date();
 
