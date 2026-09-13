@@ -447,7 +447,11 @@ export function registerLayers(map: MapLibreMap): void {
         ['concat', 'vehicle-arrow-', ['get', 'status'], '-', ['to-string', ['coalesce', ['get', 'animationFrame'], 0]]],
         ['concat', 'vehicle-dot-', ['get', 'status']],
       ],
-      'icon-size': ['interpolate', ['linear'], ['zoom'], 9, 0.75, 14, 1.05, 17, 1.25],
+      // El icono se redibujo mas grande y detallado (56px de origen, antes
+      // 44px) sin bajar estos multiplicadores a la par: se veia enorme y
+      // poco profesional a nivel de calle. Se acotan para que el camion siga
+      // siendo un marcador discreto, no un dibujo que tapa el mapa.
+      'icon-size': ['interpolate', ['linear'], ['zoom'], 9, 0.4, 14, 0.55, 17, 0.7],
       // Siempre se orienta segun el ultimo rumbo real reportado por el GPS,
       // en movimiento o detenido: un camion detenido apuntando al norte sin
       // relacion con hacia donde miraba realmente confunde mas de lo que
