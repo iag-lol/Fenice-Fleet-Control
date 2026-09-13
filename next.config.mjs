@@ -64,6 +64,7 @@ const SECURITY_HEADERS = [
 const nextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
+  outputFileTracingExcludes: { '*': ['./.fenice/**/*'] },
   eslint: { dirs: ['src'] },
   transpilePackages: ['maplibre-gl'],
   async headers() {

@@ -444,13 +444,15 @@ export function registerLayers(map: MapLibreMap): void {
       'icon-image': [
         'case',
         ['get', 'moving'],
-        ['concat', 'vehicle-arrow-', ['get', 'status']],
+        ['concat', 'vehicle-arrow-', ['get', 'status'], '-', ['to-string', ['coalesce', ['get', 'animationFrame'], 0]]],
         ['concat', 'vehicle-dot-', ['get', 'status']],
       ],
-      'icon-size': ['interpolate', ['linear'], ['zoom'], 9, 0.85, 14, 1.15],
-      // Solo se orienta el vehiculo en movimiento: rotar uno detenido segun su
-      // ultimo rumbo transmite una direccion que ya no significa nada.
-      'icon-rotate': ['case', ['get', 'moving'], ['get', 'heading'], 0],
+      'icon-size': ['interpolate', ['linear'], ['zoom'], 9, 0.75, 14, 1.05, 17, 1.25],
+      // Siempre se orienta segun el ultimo rumbo real reportado por el GPS,
+      // en movimiento o detenido: un camion detenido apuntando al norte sin
+      // relacion con hacia donde miraba realmente confunde mas de lo que
+      // aclara. El rumbo llega ya suavizado desde la animacion del marcador.
+      'icon-rotate': ['get', 'heading'],
       'icon-rotation-alignment': 'map',
       'icon-allow-overlap': true,
       'icon-ignore-placement': true,
@@ -487,6 +489,7 @@ export function registerLayers(map: MapLibreMap): void {
 // ---------------------------------------------------------------------------
 
 export interface VehicleFeatureInput {
+  animationFrame?: number;
   vehicleId: string;
   plate: string;
   fleetCode: string;
@@ -512,6 +515,7 @@ export function updateVehicles(map: MapLibreMap, vehicles: VehicleFeatureInput[]
         heading: Number.isFinite(v.heading) ? v.heading : 0,
         status: v.status,
         moving: v.moving,
+        animationFrame: v.animationFrame ?? 0,
         selected: v.selected,
       },
     })),
@@ -584,7 +588,7 @@ export function updateRoutes(
   const executed: FeatureCollection = {
     type: 'FeatureCollection',
     features: routes
-      .map((r) => ({ route: r, points: r.executedPath.filter(isUsableCoordinate) }))
+      .flatMap((r) => (r.executedSegments ?? [r.executedPath]).map((segment) => ({ route: r, points: segment.filter(isUsableCoordinate) })))
       .filter(({ points }) => points.length >= 2)
       .map(({ route: r, points }) => ({
         type: 'Feature',

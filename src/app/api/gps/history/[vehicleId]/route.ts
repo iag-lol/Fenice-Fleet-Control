@@ -1,5 +1,6 @@
 import { apiError, guardApi, handleApi } from '@/lib/api';
 import { getGpsProvider } from '@/services/registry';
+import { normalizeGpsHistory } from '@/lib/gps-history';
 import { asVehicleId } from '@/types/core';
 
 export const dynamic = 'force-dynamic';
@@ -21,18 +22,23 @@ export async function GET(
   }
 
   const to = url.searchParams.get('hasta') ?? new Date().toISOString();
-  const from =
-    url.searchParams.get('desde') ??
-    new Date(new Date(to).getTime() - hours * 3_600_000).toISOString();
-
-  return handleApi(
-    () =>
-      getGpsProvider().getPositionHistory({
-        vehicleId: asVehicleId(vehicleId),
-        from,
-        to,
-        limit: Number(url.searchParams.get('limite') ?? '800'),
-      }),
-    'el historial GPS del vehiculo',
-  );
+  const toMs = Date.parse(to);
+  const from = url.searchParams.get('desde') ?? (Number.isFinite(toMs)
+    ? new Date(toMs - hours * 3_600_000).toISOString() : '');
+  const fromMs = Date.parse(from);
+  const limit = Number(url.searchParams.get('limite') ?? '5000');
+  if (!Number.isFinite(toMs) || !Number.isFinite(fromMs) || fromMs >= toMs || toMs - fromMs > 72 * 3_600_000) {
+    return apiError('Selecciona fechas validas en orden, con un rango maximo de 72 horas.', 400);
+  }
+  if (!Number.isInteger(limit) || limit < 2 || limit > 20_000) {
+    return apiError('El limite de muestras debe estar entre 2 y 20000.', 400);
+  }
+  return handleApi(async () => {
+    const positions = await getGpsProvider().getPositionHistory({
+      vehicleId: asVehicleId(vehicleId), from: new Date(fromMs).toISOString(),
+      to: new Date(toMs).toISOString(), limit,
+    });
+    return normalizeGpsHistory(positions.filter((p) => p.vehicleId === vehicleId &&
+      Date.parse(p.timestamp) >= fromMs && Date.parse(p.timestamp) <= toMs), limit);
+  }, 'el historial GPS del vehiculo');
 }

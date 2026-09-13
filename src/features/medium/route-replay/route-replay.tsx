@@ -207,6 +207,7 @@ export function RouteReplay({
                 // sentido de reproducirlo.
                 ...toRouteGeometryClient(route, vehicle.plate),
                 executedPath: frame.traveledPath,
+                executedSegments: frame.traveledSegments,
               },
             ]}
             clients={[]}
@@ -229,6 +230,7 @@ export function RouteReplay({
             {formatDistance(frame.traveledMeters)}{' '}
             <span className="text-ink-faint">de {formatDistance(timeline.totalMeters)}</span>
           </span>
+          {frame.signalGap ? <span className="text-status-warning">Sin muestras en este intervalo</span> : null}
           {frame.stopped ? (
             <span className="inline-flex items-center gap-1 rounded-full bg-status-warning/12 px-2 py-0.5 text-2xs font-semibold text-status-warning">
               <Square className="h-3 w-3" /> Detenido

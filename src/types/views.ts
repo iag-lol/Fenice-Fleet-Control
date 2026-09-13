@@ -141,6 +141,7 @@ export interface RouteGeometry {
   status: Route['status'];
   plannedPath: LatLng[];
   executedPath: LatLng[];
+  executedSegments?: LatLng[][];
   stops: {
     sequence: number;
     workOrderId: string;

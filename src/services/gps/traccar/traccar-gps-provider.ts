@@ -1,5 +1,6 @@
 import 'server-only';
 
+import { normalizeGpsHistory } from '@/lib/gps-history';
 import { getServerEnv } from '@/config/env';
 import { listVehicles } from '@/services/fleet/vehicle-store';
 import { GpsProviderError } from '@/services/gps/gps-provider';
@@ -147,12 +148,7 @@ export class TraccarGpsProvider implements GpsProvider {
       .map((position) => mapTraccarPosition(position, link))
       .filter((p): p is Position => p !== null);
 
-    if (!query.limit || mapped.length <= query.limit) return mapped;
-
-    const step = mapped.length / query.limit;
-    const sampled: Position[] = [];
-    for (let i = 0; i < query.limit; i += 1) sampled.push(mapped[Math.floor(i * step)]!);
-    return sampled;
+    return normalizeGpsHistory(mapped, query.limit);
   }
 
   async getVehicleEvents(query: VehicleEventsQuery): Promise<GpsEvent[]> {

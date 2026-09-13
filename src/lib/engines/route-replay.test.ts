@@ -1,11 +1,17 @@
 import { describe, expect, it } from 'vitest';
 
-import { buildReplayTimeline, findStops, frameAt } from './route-replay';
-import type { DeviceId, Position, VehicleId } from '@/types/core';
+import { buildReplayTimeline, findIgnitionEvents, findStops, frameAt } from './route-replay';
+import type { DeviceId, IgnitionState, Position, VehicleId } from '@/types/core';
 
 const BASE = Date.parse('2026-08-27T12:00:00.000Z');
 
-function pos(minutes: number, lat: number, lng: number, speed: number): Position {
+function pos(
+  minutes: number,
+  lat: number,
+  lng: number,
+  speed: number,
+  ignition: IgnitionState = speed > 0 ? 'on' : 'off',
+): Position {
   return {
     vehicleId: 'veh-1' as VehicleId,
     deviceId: 'dev-1' as DeviceId,
@@ -14,7 +20,7 @@ function pos(minutes: number, lat: number, lng: number, speed: number): Position
     lng,
     speed,
     heading: 90,
-    ignition: speed > 0 ? 'on' : 'off',
+    ignition,
     valid: true,
   };
 }
@@ -50,18 +56,14 @@ describe('reproduccion de ruta', () => {
     expect(timeline!.durationMs).toBe(10 * 60_000);
   });
 
-  it('interpola la posicion entre dos muestras en vez de saltar', () => {
+  it('no interpola un corte de señal ni dibuja una diagonal entre muestras lejanas', () => {
     const timeline = buildReplayTimeline([
-      pos(0, -33.45, -70.66, 20),
-      pos(10, -33.45, -70.64, 60),
+      pos(0, -33.45, -70.66, 20), pos(10, -33.45, -70.64, 60),
     ])!;
-
     const mitad = frameAt(timeline, BASE + 5 * 60_000);
-
-    // A mitad de camino, no en el extremo.
-    expect(mitad.position.lng).toBeGreaterThan(-70.66);
-    expect(mitad.position.lng).toBeLessThan(-70.64);
-    expect(mitad.speed).toBeCloseTo(40, 0);
+    expect(mitad.position.lng).toBe(-70.66);
+    expect(mitad.signalGap).toBe(true);
+    expect(mitad.traveledSegments).toEqual([]);
   });
 
   it('el eje es el tiempo, no el numero de muestra', () => {
@@ -148,5 +150,32 @@ describe('reproduccion de ruta', () => {
     const stops = findStops(timeline, 180);
     expect(stops).toHaveLength(1);
     expect(stops[0]?.durationSeconds).toBe(25 * 60);
+  });
+
+  it('detecta encendido y apagado como transiciones, no como estado repetido', () => {
+    const timeline = buildReplayTimeline([
+      pos(0, -33.45, -70.66, 0, 'off'),
+      pos(5, -33.45, -70.66, 0, 'on'), // encendido
+      pos(6, -33.45, -70.66, 0, 'on'), // sigue encendido: no es un evento nuevo
+      pos(20, -33.44, -70.65, 40, 'on'),
+      pos(30, -33.44, -70.64, 0, 'off'), // apagado
+    ])!;
+
+    const eventos = findIgnitionEvents(timeline);
+    expect(eventos).toHaveLength(2);
+    expect(eventos[0]).toMatchObject({ type: 'ignition_on', at: new Date(BASE + 5 * 60_000).toISOString() });
+    expect(eventos[1]).toMatchObject({ type: 'ignition_off', at: new Date(BASE + 30 * 60_000).toISOString() });
+  });
+
+  it('ignora las muestras sin dato de ignicion al buscar transiciones', () => {
+    const timeline = buildReplayTimeline([
+      pos(0, -33.45, -70.66, 0, 'off'),
+      pos(5, -33.45, -70.66, 0, 'unknown'),
+      pos(10, -33.45, -70.66, 40, 'on'), // primera confirmacion real: cuenta
+    ])!;
+
+    const eventos = findIgnitionEvents(timeline);
+    expect(eventos).toHaveLength(1);
+    expect(eventos[0]?.type).toBe('ignition_on');
   });
 });

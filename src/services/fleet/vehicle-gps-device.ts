@@ -141,7 +141,10 @@ export async function testTraccarConnection(input: {
   }
 
   const positions = await resolved.client.getPositions(device.id).catch(() => []);
-  const hasPosition = positions.length > 0;
+  const latest = positions.filter((p) => p.valid).sort((a, b) => Date.parse(b.fixTime) - Date.parse(a.fixTime))[0];
+  const lastPositionAt = latest?.fixTime ?? null;
+  const age = lastPositionAt ? Date.now() - Date.parse(lastPositionAt) : Infinity;
+  const hasPosition = Number.isFinite(age) && age >= -60_000 && age <= 180_000;
 
   return {
     ok: true,
@@ -150,9 +153,10 @@ export async function testTraccarConnection(input: {
     hasPosition,
     message: hasPosition
       ? 'Servidor conectado, dispositivo encontrado y transmitiendo posicion.'
+      : lastPositionAt ? 'Dispositivo encontrado, pero la ultima posicion tiene mas de tres minutos. Revisa señal, permisos y ahorro de bateria.'
       : 'Servidor conectado y dispositivo encontrado, pero todavia no reporta ninguna posicion.',
     externalDeviceId: String(device.id),
-    lastPositionAt: device.lastUpdate,
+    lastPositionAt,
     failedStep: hasPosition ? undefined : 'position',
   };
 }

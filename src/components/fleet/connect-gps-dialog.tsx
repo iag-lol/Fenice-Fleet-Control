@@ -210,6 +210,7 @@ function ConnectionTestSummary({ result }: { result: TraccarConnectionTest }) {
           <span className={row.ok ? 'text-ink' : 'text-ink-faint'}>{row.label}</span>
         </div>
       ))}
+      <p className="text-xs text-ink-muted">Para conservar recorridos durante cortes de red, activa el almacenamiento sin conexión del equipo. En Traccar Client permite ubicación en segundo plano y revisa que el ahorro de batería no detenga el servicio.</p>
       <p className={`pt-1 text-xs ${result.ok ? 'text-status-active' : 'text-status-warning'}`}>
         {result.message}
       </p>

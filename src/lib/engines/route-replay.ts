@@ -1,4 +1,6 @@
-import { haversineMeters, interpolate } from '@/lib/geo';
+import { normalizeGpsHistory } from '@/lib/gps-history';
+import { pointOnRoad, roadPathForTransition } from '@/lib/gps-motion';
+import { haversineMeters } from '@/lib/geo';
 import type { LatLng, Position } from '@/types/core';
 
 /**
@@ -15,6 +17,9 @@ import type { LatLng, Position } from '@/types/core';
  */
 
 export interface ReplayFrame {
+  signalGap: boolean;
+  roadMatched: boolean;
+  traveledSegments: LatLng[][];
   /** Instante representado. */
   timestamp: string;
   position: LatLng;
@@ -44,6 +49,11 @@ export interface ReplayTimeline {
 /** Velocidad por debajo de la cual se considera detenido. */
 const STOPPED_SPEED_KMH = 3;
 
+function isContinuous(a: Position, b: Position): boolean {
+  const seconds = (Date.parse(b.timestamp) - Date.parse(a.timestamp)) / 1000;
+  return seconds > 0 && seconds <= 60 && haversineMeters(a, b) / seconds <= 55;
+}
+
 /**
  * Prepara la linea de tiempo.
  *
@@ -54,10 +64,7 @@ const STOPPED_SPEED_KMH = 3;
 export function buildReplayTimeline(positions: Position[]): ReplayTimeline | null {
   // Las muestras marcadas invalidas por el equipo se descartan: arrastran
   // saltos de kilometros que deformarian la distancia y la reproduccion.
-  const samples = positions
-    .filter((p) => p.valid && Number.isFinite(p.lat) && Number.isFinite(p.lng))
-    .slice()
-    .sort((a, b) => Date.parse(a.timestamp) - Date.parse(b.timestamp));
+  const samples = normalizeGpsHistory(positions);
 
   if (samples.length < 2) return null;
 
@@ -67,10 +74,10 @@ export function buildReplayTimeline(positions: Position[]): ReplayTimeline | nul
   for (let i = 1; i < samples.length; i += 1) {
     const previous = samples[i - 1]!;
     const current = samples[i]!;
-    total += haversineMeters(
+    total += isContinuous(previous, current) ? haversineMeters(
       { lat: previous.lat, lng: previous.lng },
       { lat: current.lat, lng: current.lng },
-    );
+    ) : 0;
     cumulativeMeters.push(total);
   }
 
@@ -121,22 +128,33 @@ export function frameAt(timeline: ReplayTimeline, atMs: number): ReplayFrame {
   const span = nextMs - currentMs;
   const t = span > 0 ? (clamped - currentMs) / span : 0;
 
-  const position =
-    next && t > 0
-      ? interpolate({ lat: current.lat, lng: current.lng }, { lat: next.lat, lng: next.lng }, t)
-      : { lat: current.lat, lng: current.lng };
-
-  const speed = next && t > 0 ? current.speed + (next.speed - current.speed) * t : current.speed;
-
+  const signalGap = next !== null && span > 60_000;
+  const road = next ? roadPathForTransition(current, next) : null;
+  // Sin evidencia vial se conserva la ultima muestra, sin dibujar un vuelo
+  // recto por edificios. Los cortes de transmision quedan visibles.
+  const position = road && t > 0 ? pointOnRoad(road, t) : { lat: current.lat, lng: current.lng };
+  const speed = current.speed;
   const traveledPath = samples.slice(0, index + 1).map((p) => ({ lat: p.lat, lng: p.lng }));
-  if (next && t > 0) traveledPath.push(position);
-
-  const segmentMeters =
-    next && t > 0
-      ? haversineMeters({ lat: current.lat, lng: current.lng }, position)
-      : 0;
+  if (road && t > 0) traveledPath.push(position);
+  const traveledSegments: LatLng[][] = [];
+  let segment: LatLng[] = [];
+  for (let i = 0; i <= index; i++) {
+    const sample = samples[i]!;
+    const previous = samples[i - 1];
+    if (previous && !isContinuous(previous, sample)) {
+      if (segment.length >= 2) traveledSegments.push(segment);
+      segment = [];
+    }
+    segment.push({ lat: sample.lat, lng: sample.lng });
+  }
+  if (road && t > 0) segment.push(position);
+  if (segment.length >= 2) traveledSegments.push(segment);
+  const segmentMeters = road && t > 0 ? haversineMeters(current, position) : 0;
 
   return {
+    signalGap,
+    roadMatched: road !== null,
+    traveledSegments,
     timestamp: new Date(clamped).toISOString(),
     position,
     speed,
@@ -153,6 +171,12 @@ export interface ReplayStop {
   startedAt: string;
   endedAt: string;
   durationSeconds: number;
+  position: LatLng;
+}
+
+export interface ReplayIgnitionEvent {
+  type: 'ignition_on' | 'ignition_off';
+  at: string;
   position: LatLng;
 }
 
@@ -195,4 +219,32 @@ export function findStops(timeline: ReplayTimeline, minSeconds = 180): ReplaySto
   }
 
   return stops;
+}
+
+/**
+ * Cambios de encendido/apagado durante la jornada.
+ *
+ * Solo cuentan transiciones confirmadas entre 'on' y 'off': una muestra sin
+ * ese dato ('unknown', equipo que no lo reporta) no se toma como cambio hacia
+ * ningun lado, para no inventarle un encendido o apagado al equipo que nunca
+ * lo confirmo.
+ */
+export function findIgnitionEvents(timeline: ReplayTimeline): ReplayIgnitionEvent[] {
+  const events: ReplayIgnitionEvent[] = [];
+  let last: 'on' | 'off' | null = null;
+
+  for (const sample of timeline.samples) {
+    if (sample.ignition !== 'on' && sample.ignition !== 'off') continue;
+
+    if (last !== null && sample.ignition !== last) {
+      events.push({
+        type: sample.ignition === 'on' ? 'ignition_on' : 'ignition_off',
+        at: sample.timestamp,
+        position: { lat: sample.lat, lng: sample.lng },
+      });
+    }
+    last = sample.ignition;
+  }
+
+  return events;
 }

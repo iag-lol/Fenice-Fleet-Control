@@ -1,10 +1,13 @@
 import 'server-only';
 
+import { normalizeGpsHistory } from '@/lib/gps-history';
+import { evaluateConnectionState } from '@/lib/engines/gps-health';
+import { getOperationalSettings } from '@/services/settings/settings-store';
 import { getServerEnv } from '@/config/env';
 import { listVehicles } from '@/services/fleet/vehicle-store';
 import type { GpsProvider, PositionSubscriptionHandlers, Unsubscribe } from '@/services/gps/gps-provider';
 import { buildTraccarAuthHeader, TraccarClient } from '@/services/gps/traccar/traccar-client';
-import { buildDeviceIndex, mapTraccarPosition, type DeviceVehicleLink } from '@/services/gps/traccar/traccar-mapper';
+import { buildDeviceIndex, mapTraccarPosition, type DeviceVehicleLink, type TraccarPosition } from '@/services/gps/traccar/traccar-mapper';
 import type { DeviceStatus, Position, Vehicle, VehicleId } from '@/types/core';
 
 /**
@@ -90,7 +93,7 @@ async function fetchLinkedPositions(): Promise<Position[]> {
     const groups = await resolveLinkedGroups();
     if (groups.length === 0) return [];
 
-    const perGroup = await Promise.all(
+    const perGroup = await Promise.allSettled(
       groups.map(async (group) => {
         const index = buildDeviceIndex(group.links);
         try {
@@ -98,20 +101,24 @@ async function fetchLinkedPositions(): Promise<Position[]> {
           return raw
             .map((p) => {
               const link = index.get(p.deviceId);
-              return link ? mapTraccarPosition(p, link) : null;
+              const position = link ? mapTraccarPosition(p, link) : null;
+              return position ? { ...position, simulated: false } : null;
             })
-            .filter((p): p is Position => p !== null);
+            .filter((p) => p !== null);
         } catch (error) {
           console.error(
             `[traccar-device-links] no fue posible obtener posiciones de ${group.serverUrl}:`,
             error instanceof Error ? error.message : String(error),
           );
-          return [];
+          throw error;
         }
       }),
     );
 
-    return perGroup.flat();
+    const successful = perGroup.flatMap((result) => result.status === 'fulfilled' ? result.value : []);
+    const failure = perGroup.find((result) => result.status === 'rejected');
+    if (!successful.length && failure?.status === 'rejected') throw failure.reason;
+    return successful;
   })();
 
   try {
@@ -144,14 +151,33 @@ export function withTraccarDeviceLinks(base: GpsProvider): GpsProvider {
     },
 
     async getAllCurrentPositions(): Promise<Position[]> {
-      const [basePositions, linkedPositions] = await Promise.all([
-        base.getAllCurrentPositions().catch(() => []),
-        fetchLinkedPositions().catch(() => []),
+      const [basePositions, linkedPositions] = await Promise.allSettled([
+        base.getAllCurrentPositions(), fetchLinkedPositions(),
       ]);
-      return mergeByVehicle(basePositions, linkedPositions);
+      const merged = mergeByVehicle(
+        basePositions.status === 'fulfilled' ? basePositions.value : [],
+        linkedPositions.status === 'fulfilled' ? linkedPositions.value : [],
+      );
+      if (!merged.length) {
+        if (basePositions.status === 'rejected') throw basePositions.reason;
+        if (linkedPositions.status === 'rejected') throw linkedPositions.reason;
+      }
+      return merged;
     },
 
-    getPositionHistory: (query) => base.getPositionHistory(query),
+    async getPositionHistory(query) {
+      const groups = await resolveLinkedGroups();
+      const group = groups.find((g) => g.links.some((link) => link.vehicleId === query.vehicleId));
+      const link = group?.links.find((l) => l.vehicleId === query.vehicleId);
+      if (!group || !link) return base.getPositionHistory(query);
+      // El historial vive en el MISMO servidor que recibe este dispositivo,
+      // tambien cuando el proveedor general es 3DTracking o esta sin configurar.
+      const raw = await group.client.request<TraccarPosition[]>('/positions', {
+        deviceId: String(link.traccarDeviceId), from: query.from, to: query.to,
+      });
+      return normalizeGpsHistory(raw.map((p) => mapTraccarPosition(p, link))
+        .filter((p): p is Position => p !== null).map((p) => ({ ...p, simulated: false })), query.limit);
+    },
     getVehicleEvents: (query) => base.getVehicleEvents(query),
 
     async getDeviceStatus(vehicleId): Promise<DeviceStatus[]> {
@@ -170,7 +196,7 @@ export function withTraccarDeviceLinks(base: GpsProvider): GpsProvider {
             deviceId: link.internalDeviceId as DeviceStatus['deviceId'],
             vehicleId: link.vehicleId,
             imei: link.imei,
-            connection: position ? 'online' : 'unknown',
+            connection: evaluateConnectionState(position?.timestamp ?? null, getOperationalSettings().gps, now).state,
             lastPositionAt: position?.timestamp ?? null,
             secondsSinceLastPosition: position
               ? Math.max(0, Math.round((now.getTime() - new Date(position.timestamp).getTime()) / 1000))

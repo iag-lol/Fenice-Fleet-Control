@@ -26,6 +26,7 @@ import {
   WorkOrderStatusBadge,
 } from '@/components/common/status';
 import { Timeline } from '@/components/common/timeline';
+import { VehicleHistory } from '@/components/fleet/vehicle-history';
 import { ConnectGpsDialog } from '@/components/fleet/connect-gps-dialog';
 import { FleetMap } from '@/components/map/fleet-map';
 import { Button, LinkButton } from '@/components/ui/button';
@@ -428,6 +429,8 @@ export function VehicleDetailView({ vehicleId }: { vehicleId: string }) {
           </Card>
         </div>
       </div>
+
+      <div className="mt-6"><VehicleHistory vehicle={vehicle} /></div>
 
       <ConnectGpsDialog
         open={gpsDialogOpen}

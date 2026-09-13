@@ -17,3 +17,6 @@ out/
 
 # Grafo de conocimiento de Graphify: artefacto regenerable (graphify .)
 graphify-out/
+
+# Archivo privado de telemetria (nunca publicar ni versionar)
+.fenice/

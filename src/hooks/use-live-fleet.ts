@@ -63,13 +63,12 @@ function emit(next: LiveFleetSnapshot): void {
  * paralelo. Por eso esperar aqui no deja el mapa en blanco.
  */
 let transportResolved = false;
+let transportResolution: Promise<void> | null = null;
 
-async function resolveTransport(): Promise<void> {
-  if (transportResolved) return;
-  transportResolved = true;
+async function readTransport(): Promise<void> {
 
   try {
-    const response = await fetch('/api/system/mode', { cache: 'no-store' });
+    const response = await fetch('/api/system/mode', { cache: 'no-store', signal: AbortSignal.timeout(8000) });
     if (!response.ok) return;
 
     const mode = (await response.json()) as {
@@ -90,6 +89,22 @@ async function resolveTransport(): Promise<void> {
   }
 }
 
+function resolveTransport(): Promise<void> {
+  return transportResolution ??= readTransport().finally(() => { transportResolved = true; });
+}
+
+function receivePositions(incoming: Position[]): void {
+  if (incoming.length === 0) return;
+  const positions = new Map(snapshot.positions);
+  for (const position of incoming) {
+    const previous = positions.get(position.vehicleId);
+    if (!previous || Date.parse(position.timestamp) >= Date.parse(previous.timestamp)) {
+      positions.set(position.vehicleId, position);
+    }
+  }
+  emit({ ...snapshot, positions, error: null, lastUpdateAt: new Date().toISOString() });
+}
+
 function startStream(): void {
   if (unsubscribeProvider) return;
 
@@ -105,19 +120,7 @@ function startStream(): void {
   }
 
   unsubscribeProvider = provider.subscribeToPositions({
-    onPositions: (incoming) => {
-      if (incoming.length === 0) return;
-
-      const positions = new Map(snapshot.positions);
-      for (const position of incoming) positions.set(position.vehicleId, position);
-
-      emit({
-        positions,
-        transport: snapshot.transport,
-        error: null,
-        lastUpdateAt: new Date().toISOString(),
-      });
-    },
+    onPositions: receivePositions,
     onError: (error) => {
       emit({ ...snapshot, error: error.message });
     },
@@ -186,7 +189,9 @@ export function useLiveFleet(): LiveFleetState {
     queryFn: async (): Promise<LivePositionsPayload> => {
       const response = await fetch('/api/gps/positions', { cache: 'no-store' });
       if (!response.ok) throw new Error('No fue posible obtener el estado de la flota.');
-      return (await response.json()) as LivePositionsPayload;
+      const result = (await response.json()) as LivePositionsPayload;
+      receivePositions(result.positions);
+      return result;
     },
   });
 

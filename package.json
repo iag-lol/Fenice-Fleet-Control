@@ -21,7 +21,8 @@
     "demo:reset": "node scripts/demo-reset.mjs",
     "demo:purge": "node scripts/demo-purge.mjs",
     "import:comunas": "node scripts/import-communes.mjs && node scripts/build-map-viewport.mjs",
-    "create:admin": "node scripts/create-admin-user.mjs"
+    "create:admin": "node scripts/create-admin-user.mjs",
+    "gps:record": "node --conditions=react-server --import tsx scripts/record-gps.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.115.0",

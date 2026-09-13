@@ -28,6 +28,7 @@ import {
 } from '@/components/map/map-layers';
 import { resolveMapStyle } from '@/components/map/map-style';
 import { OPERATION_CENTER } from '@/config/map-viewport';
+import { pointOnRoad, roadPathForTransition } from '@/lib/gps-motion';
 import { startMapAnimationLoop } from '@/lib/map-animation-loop';
 import { isUsableCoordinate } from '@/lib/geo';
 import { geofencePoints } from '@/lib/map-navigation';
@@ -120,6 +121,9 @@ export interface FleetMapProps {
 }
 
 interface AnimatedVehicle {
+  sample: Position;
+  path: LatLng[] | null;
+  animateUntil: number;
   current: { lat: number; lng: number; heading: number };
   target: { lat: number; lng: number; heading: number };
   /** Punto de partida del tramo en curso: permite interpolar linealmente en vez de a saltos. */
@@ -154,12 +158,6 @@ const DEFAULT_SEGMENT_MS = 3_000;
 /** Progreso 0-1 con suavizado en ambos extremos: arranca y frena, no se mueve a velocidad constante y en seco. */
 function easeInOutQuad(t: number): number {
   return t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
-}
-
-/** Interpolacion angular por el camino corto: evita giros de 350 grados. */
-function lerpAngle(from: number, to: number, t: number): number {
-  const delta = ((((to - from) % 360) + 540) % 360) - 180;
-  return (from + delta * t + 360) % 360;
 }
 
 export function FleetMap({
@@ -438,7 +436,7 @@ export function FleetMap({
       // en el Golfo de Guinea. Dibujarlo pondria camiones chilenos en mitad
       // del Atlantico, asi que se omite del mapa. El vehiculo sigue en los
       // listados con su estado de conexion, que es donde eso si se explica.
-      if (!vehicle.position || !isUsableCoordinate(vehicle.position)) continue;
+      if (!vehicle.position || !vehicle.position.valid || !isUsableCoordinate(vehicle.position)) continue;
       seen.add(vehicle.vehicleId);
 
       const target = {
@@ -453,6 +451,9 @@ export function FleetMap({
 
       if (!existing) {
         animated.set(vehicle.vehicleId, {
+          sample: vehicle.position,
+          path: null,
+          animateUntil: now + Math.min(30_000, Math.max(0, 30_000 - (Date.now() - Date.parse(vehicle.position.timestamp)))),
           current: { ...target },
           target,
           segmentStart: { ...target },
@@ -463,22 +464,29 @@ export function FleetMap({
           plate: vehicle.plate,
           fleetCode: vehicle.fleetCode,
         });
-      } else if (existing.target.lat !== target.lat || existing.target.lng !== target.lng) {
+      } else if (existing.sample.lat !== target.lat || existing.sample.lng !== target.lng) {
         // Posicion realmente nueva: el intervalo desde el ultimo cambio de
         // target es la mejor estimacion de cuanto tardara el proximo reporte.
+        const path = roadPathForTransition(existing.sample, vehicle.position);
+        existing.path = path;
+        existing.sample = vehicle.position;
+        existing.animateUntil = now + Math.min(30_000, Math.max(0, 30_000 - (Date.now() - Date.parse(vehicle.position.timestamp))));
         const observedInterval = now - existing.segmentStartedAt;
         existing.segmentStart = { ...existing.current };
         existing.segmentDurationMs = Math.min(
           MAX_SEGMENT_MS,
           Math.max(MIN_SEGMENT_MS, observedInterval || DEFAULT_SEGMENT_MS),
         );
+        if (!path) existing.segmentDurationMs = 0;
         existing.segmentStartedAt = now;
-        existing.target = target;
+        existing.target = path ? pointOnRoad(path, 1) : target;
         existing.status = vehicle.status;
         existing.moving = moving;
         existing.plate = vehicle.plate;
         existing.fleetCode = vehicle.fleetCode;
       } else {
+        existing.sample = vehicle.position;
+        existing.animateUntil = now + Math.min(30_000, Math.max(0, 30_000 - (Date.now() - Date.parse(vehicle.position.timestamp))));
         // Mismo punto que ya se tenia (ej. republicacion sin cambios): solo
         // refresca metadatos, sin reiniciar el tramo de animacion en curso.
         existing.status = vehicle.status;
@@ -513,17 +521,14 @@ export function FleetMap({
         const elapsed = now - state.segmentStartedAt;
         const t = state.segmentDurationMs > 0 ? Math.min(1, elapsed / state.segmentDurationMs) : 1;
 
-        if (t < 1) {
-          const eased = easeInOutQuad(t);
-          state.current.lat = state.segmentStart.lat + (state.target.lat - state.segmentStart.lat) * eased;
-          state.current.lng = state.segmentStart.lng + (state.target.lng - state.segmentStart.lng) * eased;
-          state.current.heading = lerpAngle(state.segmentStart.heading, state.target.heading, eased);
+        if (t < 1 && state.path) {
+          state.current = pointOnRoad(state.path, easeInOutQuad(t));
           needsFrame = true;
         } else {
-          state.current.lat = state.target.lat;
-          state.current.lng = state.target.lng;
-          state.current.heading = state.target.heading;
+          state.current = { ...state.target };
         }
+        const animateTruck = state.moving && now < state.animateUntil;
+        if (animateTruck) needsFrame = true;
 
         features.push({
           vehicleId,
@@ -534,6 +539,7 @@ export function FleetMap({
           heading: state.current.heading,
           status: state.status,
           moving: state.moving,
+          animationFrame: animateTruck ? Math.floor(now / 180) % 4 : 0,
           selected: vehicleId === selectedVehicleId,
         });
       }

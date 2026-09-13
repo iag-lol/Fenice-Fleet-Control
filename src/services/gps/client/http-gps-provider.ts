@@ -92,99 +92,123 @@ export class HttpGpsProvider implements GpsProvider {
    */
   subscribeToPositions(handlers: PositionSubscriptionHandlers): Unsubscribe {
     let closed = false;
-    let polling = false;
-    const abort = new AbortController();
+    let suspended = false;
     let source: EventSource | null = null;
     let pollTimer: ReturnType<typeof setInterval> | null = null;
+    let watchdog: ReturnType<typeof setInterval> | null = null;
+    let pending: AbortController | null = null;
+    let lastStreamAt = Date.now();
+    const canStream = typeof EventSource !== 'undefined' && this.info.preferredTransport !== 'polling';
 
-    const startPolling = (): void => {
-      if (closed || pollTimer) return;
-      handlers.onTransportChange?.('polling');
-
-      const poll = async (): Promise<void> => {
-        if (closed || polling) return;
-        polling = true;
-        try {
-          const payload = await this.fetchJson<LivePositionsPayload>('/api/gps/positions', abort.signal);
-          if (!closed) handlers.onPositions(payload.positions);
-        } catch (error) {
-          if (!closed) handlers.onError?.(error instanceof Error ? error : new Error(String(error)));
-        } finally {
-          polling = false;
+    const poll = async (): Promise<void> => {
+      if (closed || suspended || pending) return;
+      const controller = new AbortController();
+      pending = controller;
+      try {
+        const signal = AbortSignal.any([controller.signal, AbortSignal.timeout(20_000)]);
+        const payload = await this.fetchJson<LivePositionsPayload>('/api/gps/positions', signal);
+        if (!closed && !suspended && !controller.signal.aborted) handlers.onPositions(payload.positions);
+      } catch (error) {
+        if (!closed && !suspended && !controller.signal.aborted) {
+          handlers.onError?.(error instanceof Error ? error : new Error(String(error)));
         }
-      };
-
+      } finally {
+        if (pending === controller) pending = null;
+      }
+    };
+    const stopPolling = (): void => {
+      if (pollTimer) clearInterval(pollTimer);
+      pollTimer = null;
+    };
+    const startPolling = (): void => {
+      if (closed || suspended || pollTimer) return;
+      handlers.onTransportChange?.('polling');
       void poll();
       pollTimer = setInterval(() => void poll(), this.pollingIntervalMs);
     };
-
-    /**
-     * Cierre explicito antes de que la pagina se descargue.
-     *
-     * Al navegar, el contexto de JavaScript se destruye sin ejecutar la
-     * limpieza de React, y una respuesta en streaming puede quedar retenida en
-     * el pool de sockets del navegador. Tras seis navegaciones se agota el
-     * limite de conexiones por origen de HTTP/1.1 y la aplicacion deja de
-     * cargar paginas. Cerrar en `pagehide` libera el socket a tiempo.
-     */
-    const closeBeforeUnload = (): void => {
-      source?.close();
-      source = null;
-    };
-
-    // Se respeta el transporte que anuncia el servidor. Cuando dice
-    // `polling` es porque el stream no es viable en ese despliegue: intentarlo
-    // igualmente produciria una reconexion perpetua y ninguna ventaja.
-    if (typeof EventSource === 'undefined' || this.info.preferredTransport === 'polling') {
-      startPolling();
-    } else {
+    const openStream = (): void => {
+      if (!canStream || closed || suspended || source) return;
       try {
-        source = new EventSource('/api/gps/stream');
-        window.addEventListener('pagehide', closeBeforeUnload);
-        window.addEventListener('beforeunload', closeBeforeUnload);
-
-        source.addEventListener('open', () => handlers.onTransportChange?.('sse'));
-
-        source.addEventListener('positions', (event) => {
+        const current = new EventSource('/api/gps/stream');
+        source = current;
+        current.addEventListener('positions', (event) => {
+          if (closed || suspended || source !== current) return;
           try {
             const payload = JSON.parse((event as MessageEvent).data) as LivePositionsPayload;
+            if (!Array.isArray(payload.positions)) throw new Error('Reporte GPS invalido.');
+            lastStreamAt = Date.now();
+            stopPolling();
+            // Una respuesta de respaldo pendiente no puede pisar el stream recuperado.
+            pending?.abort();
+            handlers.onTransportChange?.('sse');
             handlers.onPositions(payload.positions);
           } catch (error) {
             handlers.onError?.(error instanceof Error ? error : new Error(String(error)));
-          }
-        });
-
-        source.addEventListener('gps-error', (event) => {
-          try {
-            const payload = JSON.parse((event as MessageEvent).data) as { message: string };
-            handlers.onError?.(new GpsProviderError(payload.message));
-          } catch {
-            handlers.onError?.(new GpsProviderError('Conexion GPS temporalmente no disponible.'));
-          }
-        });
-
-        source.addEventListener('error', () => {
-          // El navegador reintenta SSE por su cuenta; si la conexion queda
-          // cerrada de forma definitiva, se pasa a polling.
-          if (source?.readyState === EventSource.CLOSED && !closed) {
-            source.close();
-            source = null;
             startPolling();
           }
         });
-      } catch {
-        startPolling();
-      }
-    }
+        current.addEventListener('gps-error', (event) => {
+          if (closed || suspended) return;
+          let message = 'Conexion GPS temporalmente no disponible.';
+          try { message = JSON.parse((event as MessageEvent).data).message ?? message; } catch { /* respuesta incompleta */ }
+          handlers.onError?.(new GpsProviderError(message));
+          startPolling();
+        });
+        current.addEventListener('error', () => {
+          if (closed || suspended) return;
+          // CONNECTING tambien necesita respaldo: EventSource puede reintentar indefinidamente.
+          startPolling();
+          if (current.readyState === EventSource.CLOSED) {
+            current.close();
+            if (source === current) source = null;
+          }
+        });
+      } catch { startPolling(); }
+    };
+    const resume = (): void => {
+      if (closed) return;
+      suspended = false;
+      lastStreamAt = Date.now();
+      openStream();
+      // Recupera el ultimo dato al volver de offline o de la cache de navegacion.
+      startPolling();
+    };
+    const pause = (): void => {
+      suspended = true;
+      source?.close();
+      source = null;
+      stopPolling();
+      pending?.abort();
+      pending = null;
+      handlers.onTransportChange?.('disconnected');
+    };
+    const onVisible = (): void => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible') resume();
+    };
+
+    window.addEventListener?.('online', resume);
+    window.addEventListener?.('offline', pause);
+    window.addEventListener?.('pagehide', pause);
+    window.addEventListener?.('pageshow', resume);
+    if (typeof document !== 'undefined') document.addEventListener('visibilitychange', onVisible);
+    if (canStream) {
+      openStream();
+      watchdog = setInterval(() => {
+        if (closed || suspended) return;
+        if (Date.now() - lastStreamAt > Math.max(30_000, this.pollingIntervalMs * 2)) startPolling();
+        if (!source) openStream();
+      }, 5_000);
+    } else startPolling();
 
     return () => {
       closed = true;
-      abort.abort();
-      window.removeEventListener('pagehide', closeBeforeUnload);
-      window.removeEventListener('beforeunload', closeBeforeUnload);
-      source?.close();
-      if (pollTimer) clearInterval(pollTimer);
-      handlers.onTransportChange?.('disconnected');
+      pause();
+      if (watchdog) clearInterval(watchdog);
+      window.removeEventListener('online', resume);
+      window.removeEventListener('offline', pause);
+      window.removeEventListener('pagehide', pause);
+      window.removeEventListener('pageshow', resume);
+      if (typeof document !== 'undefined') document.removeEventListener('visibilitychange', onVisible);
     };
   }
 

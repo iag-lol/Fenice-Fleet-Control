@@ -69,6 +69,9 @@ export type IgnitionState = 'on' | 'off' | 'unknown';
  * Los campos opcionales reflejan que no todo dispositivo los reporta.
  */
 export interface Position {
+  simulated?: boolean;
+  /** Ajuste visual inferido. lat/lng y timestamp siguen siendo la medicion original. */
+  roadMatch?: { fromTimestamp: IsoDateTime; confidence: number; path: LatLng[] };
   vehicleId: VehicleId;
   deviceId: DeviceId;
   /** Momento en que el dispositivo registro la posicion. */

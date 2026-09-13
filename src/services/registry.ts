@@ -1,5 +1,7 @@
 import 'server-only';
 
+import { resolve } from 'node:path';
+import { PositionArchive, withPositionArchive } from '@/services/gps/history/position-archive';
 import { getServerEnv } from '@/config/env';
 import type { GpsProvider } from '@/services/gps/gps-provider';
 import { MockGpsProvider } from '@/services/gps/mock/mock-gps-provider';
@@ -85,9 +87,11 @@ export function getGpsProvider(): GpsProvider {
     // sin migrar (ni redeployar) toda la flota. La deteccion de geocercas
     // se aplica encima de todo eso, para que alcance por igual a la flota
     // del proveedor global y a los vinculos manuales.
-    globalForProviders.__feniceGpsProvider = withGeofenceDetection(
-      withTraccarDeviceLinks(createGpsProvider()),
-    );
+    const provider = withGeofenceDetection(withTraccarDeviceLinks(createGpsProvider()));
+    const env = getServerEnv();
+    const namespace = `${env.GPS_PROVIDER}:${env.TRACCAR_BASE_URL ?? ''}:${env.TRIDTRACKING_USERNAME ?? ''}`;
+    globalForProviders.__feniceGpsProvider = withPositionArchive(provider,
+      new PositionArchive(resolve(process.env.GPS_HISTORY_DIR?.trim() || '.fenice/gps-history'), namespace));
   }
   return globalForProviders.__feniceGpsProvider;
 }

@@ -59,3 +59,55 @@ describe('GPS polling under slow network conditions', () => {
     stop();
   });
 });
+
+class TestEventSource extends EventTarget {
+  static CLOSED = 2;
+  static instances: TestEventSource[] = [];
+  readyState = 0;
+  close = vi.fn(() => { this.readyState = 2; });
+  constructor(_url: string) { super(); TestEventSource.instances.push(this); }
+  positions() { this.dispatchEvent(new MessageEvent('positions', { data: JSON.stringify({ positions: [] }) })); }
+}
+
+describe('SSE recovery', () => {
+  beforeEach(() => {
+    vi.useFakeTimers(); TestEventSource.instances = [];
+    vi.stubGlobal('window', new EventTarget());
+    vi.stubGlobal('EventSource', TestEventSource);
+    vi.stubGlobal('fetch', vi.fn(async () => Response.json({ positions: [] })));
+  });
+  afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); });
+  it('uses polling while SSE is CONNECTING and returns to SSE after valid data', async () => {
+    const transport = vi.fn();
+    const stop = new HttpGpsProvider().subscribeToPositions({ onPositions: vi.fn(), onTransportChange: transport });
+    const stream = TestEventSource.instances[0]!;
+    stream.dispatchEvent(new Event('error'));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(transport).toHaveBeenLastCalledWith('polling');
+    stream.positions();
+    await vi.advanceTimersByTimeAsync(15_000);
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(transport).toHaveBeenLastCalledWith('sse');
+    stop(); expect(stream.close).toHaveBeenCalled();
+  });
+  it('detects a silent stream and reconnects after offline or page cache restoration', async () => {
+    const stop = new HttpGpsProvider().subscribeToPositions({ onPositions: vi.fn() });
+    await vi.advanceTimersByTimeAsync(35_000);
+    expect(fetch).toHaveBeenCalledTimes(1);
+    window.dispatchEvent(new Event('offline'));
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(fetch).toHaveBeenCalledTimes(1);
+    window.dispatchEvent(new Event('online'));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(TestEventSource.instances).toHaveLength(2);
+    expect(fetch).toHaveBeenCalledTimes(2);
+    window.dispatchEvent(new Event('pagehide'));
+    window.dispatchEvent(new Event('pageshow'));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(TestEventSource.instances).toHaveLength(3);
+    stop();
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(fetch).toHaveBeenCalledTimes(3);
+  });
+});
