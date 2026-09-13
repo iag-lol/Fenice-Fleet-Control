@@ -151,15 +151,19 @@ interface MapState {
 }
 
 export const useMapStore = create<MapState>((set, get) => ({
+  // Al entrar, solo flota y geocercas: son las capas que orientan de un
+  // vistazo ("donde esta cada camion" y "que perimetros hay"). El resto se
+  // enciende bajo demanda (o solo al seleccionar esa entidad, ver `select`
+  // mas abajo) para no saturar el mapa en la primera mirada.
   layers: {
     camiones: true,
-    clientes: true,
-    rutas: true,
+    clientes: false,
+    rutas: false,
     geocercas: true,
     calor: false,
-    pedidos: true,
-    alertas: true,
-    comunas: true,
+    pedidos: false,
+    alertas: false,
+    comunas: false,
   },
   toggleLayer: (layer) =>
     set((state) => ({ layers: { ...state.layers, [layer]: !state.layers[layer] } })),

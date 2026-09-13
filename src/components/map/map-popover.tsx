@@ -68,9 +68,14 @@ export function MapPopover({
    * `absolute` anclado a la derecha del boton, al abrirse hacia la izquierda,
    * quedaba recortado por ese borde justo donde empieza el sidebar o el panel
    * operativo en una tablet (poco ancho disponible): parecia abrirse "detras"
-   * de ellos. `fixed` con la posicion calculada aqui ignora ese recorte (los
-   * elementos `fixed` no lo heredan de un ancestro sin transform/filter) y se
-   * ajusta para no salirse nunca de la pantalla.
+   * de ellos.
+   *
+   * `fixed` por si solo no basta: Safari/WebKit (iPad) SI recorta un
+   * descendiente `fixed` cuando un ancestro tiene `overflow:hidden`, al
+   * reves de lo que exige la especificacion (que Chrome/Firefox si siguen).
+   * Por eso ademas se saca del arbol del mapa con un portal, igual que ya
+   * hace la hoja movil un poco mas abajo: fuera de ese arbol no hay ancestro
+   * que pueda recortarlo, en ningun motor.
    */
   useEffect(() => {
     if (!open || !isDesktop) return;
@@ -96,9 +101,9 @@ export function MapPopover({
   if (!open) return null;
 
   if (isDesktop) {
-    if (!position) return null;
+    if (!position || !montado) return null;
 
-    return (
+    return createPortal(
       <>
         <button
           type="button"
@@ -118,7 +123,8 @@ export function MapPopover({
         >
           {children}
         </div>
-      </>
+      </>,
+      document.fullscreenElement ?? document.body,
     );
   }
 

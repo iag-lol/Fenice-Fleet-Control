@@ -4,9 +4,12 @@ import { useMapStore } from '@/stores/map-store';
 beforeEach(() => useMapStore.setState(useMapStore.getInitialState(), true));
 
 describe('control tower navigation', () => {
-  it('shows the requested operational layers and does not isolate on selection', () => {
+  it('starts with only fleet and geofences visible, and does not isolate on selection', () => {
     const state = useMapStore.getState();
-    for (const layer of ['camiones', 'clientes', 'geocercas', 'comunas', 'pedidos', 'alertas', 'rutas'] as const) expect(state.layers[layer]).toBe(true);
+    for (const layer of ['camiones', 'geocercas'] as const) expect(state.layers[layer]).toBe(true);
+    for (const layer of ['clientes', 'comunas', 'pedidos', 'alertas', 'rutas', 'calor'] as const) {
+      expect(state.layers[layer]).toBe(false);
+    }
     state.select({ type: 'vehicle', id: 'truck' });
     expect(useMapStore.getState().isolate).toBe(false);
   });
