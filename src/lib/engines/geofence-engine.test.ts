@@ -333,6 +333,19 @@ describe('resolveGeofenceAlertDecision', () => {
     expect(decision?.severity).toBe(geofence.rules.severity);
   });
 
+  it('el titulo identifica el vehiculo por su patente, no con un generico "Vehiculo"', () => {
+    const geofence = { ...circle, rules: { ...DEFAULT_GEOFENCE_RULES, triggers: ['entrada' as const] } };
+    const decision = resolveGeofenceAlertDecision(geofence, 'enter', vehicleA, now, 'AB-1234');
+    expect(decision?.title).toContain('AB-1234');
+    expect(decision?.title).not.toMatch(/^Vehiculo /);
+  });
+
+  it('sin patente resuelta (equipo aun no vinculado), lo dice en vez de omitirlo', () => {
+    const geofence = { ...circle, rules: { ...DEFAULT_GEOFENCE_RULES, triggers: ['entrada' as const] } };
+    const decision = resolveGeofenceAlertDecision(geofence, 'enter', vehicleA, now);
+    expect(decision?.title).toContain('Vehiculo sin patente');
+  });
+
   it('"entrada" en los triggers no dispara alerta en una salida', () => {
     const geofence = { ...circle, rules: { ...DEFAULT_GEOFENCE_RULES, triggers: ['entrada' as const] } };
     expect(resolveGeofenceAlertDecision(geofence, 'exit', vehicleA, now)).toBeNull();

@@ -294,6 +294,8 @@ export function resolveGeofenceAlertDecision(
   type: 'enter' | 'exit',
   vehicleId: VehicleId,
   at: Date,
+  /** Patente para el titulo. Sin ella (equipo aun no vinculado a un vehiculo) se dice "Vehiculo". */
+  vehiclePlate: string | null = null,
 ): GeofenceAlertDecision | null {
   const rules = geofence.rules;
   const authorized = rules.allowedVehicleIds.length === 0 || rules.allowedVehicleIds.includes(vehicleId);
@@ -308,12 +310,16 @@ export function resolveGeofenceAlertDecision(
 
   if (!unauthorizedEntry && !outOfWindow && !plainTrigger) return null;
 
+  // Una alerta que no dice que vehiculo la disparo obliga a adivinar cual de
+  // toda la flota esta pasando por ese lugar: se identifica siempre por
+  // patente, nunca por un generico "Vehiculo".
+  const quien = vehiclePlate ?? 'Vehiculo sin patente';
   const accion = type === 'enter' ? 'entro a' : 'salio de';
   const title = unauthorizedEntry
-    ? `Vehiculo no autorizado entro a "${geofence.name}"`
+    ? `${quien} (no autorizado) entro a "${geofence.name}"`
     : outOfWindow
-      ? `${type === 'enter' ? 'Entrada' : 'Salida'} fuera de horario en "${geofence.name}"`
-      : `Vehiculo ${accion} "${geofence.name}"`;
+      ? `${type === 'enter' ? 'Entrada' : 'Salida'} fuera de horario: ${quien} en "${geofence.name}"`
+      : `${quien} ${accion} "${geofence.name}"`;
 
   return {
     alertType: type === 'enter' ? 'geocerca_entrada' : 'geocerca_salida',

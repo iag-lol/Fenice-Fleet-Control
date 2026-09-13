@@ -3,6 +3,7 @@ import 'server-only';
 import { containsPoint, distanceToCenter, resolveGeofenceAlertDecision } from '@/lib/engines/geofence-engine';
 import { createAlert } from '@/services/fleet/alert-store';
 import { recordGeofenceEvent } from '@/services/fleet/geofence-event-store';
+import { listVehicles } from '@/services/fleet/vehicle-store';
 import { listGeofences } from '@/services/geofences/geofence-store';
 import type { GpsProvider, PositionSubscriptionHandlers, Unsubscribe } from '@/services/gps/gps-provider';
 import type { Geofence, LatLng, Position, VehicleId } from '@/types/core';
@@ -33,7 +34,11 @@ function insideKey(vehicleId: VehicleId, geofenceId: string): string {
   return `${vehicleId}::${geofenceId}`;
 }
 
-async function evaluateOne(position: Position, geofence: Geofence): Promise<void> {
+async function evaluateOne(
+  position: Position,
+  geofence: Geofence,
+  vehiclePlate: string | null,
+): Promise<void> {
   if (!geofence.active) return;
   // Geocercas ligadas a un vehiculo especifico solo aplican a ese vehiculo.
   if (geofence.vehicleId && geofence.vehicleId !== position.vehicleId) return;
@@ -64,6 +69,7 @@ async function evaluateOne(position: Position, geofence: Geofence): Promise<void
     type,
     position.vehicleId,
     new Date(position.timestamp),
+    vehiclePlate,
   );
   if (!decision) return;
 
@@ -73,9 +79,12 @@ async function evaluateOne(position: Position, geofence: Geofence): Promise<void
     category: 'geocerca',
     severity: decision.severity,
     title: decision.title,
-    description: `${geofence.name} · a ${distanceMeters} m del centro.`,
+    description: vehiclePlate
+      ? `${vehiclePlate} · ${geofence.name} · a ${distanceMeters} m del centro.`
+      : `${geofence.name} · a ${distanceMeters} m del centro.`,
     timestamp: position.timestamp,
     vehicleId: position.vehicleId,
+    vehiclePlate,
     position: point,
   });
 }
@@ -89,13 +98,18 @@ function processPositions(positions: Position[]): void {
 
   void (async () => {
     try {
-      const geofences = await listGeofences();
+      const [geofences, vehicles] = await Promise.all([listGeofences(), listVehicles()]);
       const active = geofences.filter((g) => g.active);
       if (active.length === 0) return;
 
+      // Resuelta una sola vez por lote: sin la patente, la alerta obliga a
+      // adivinar cual camion de toda la flota disparo el aviso.
+      const plateByVehicle = new Map(vehicles.map((v) => [v.id as VehicleId, v.plate]));
+
       for (const position of positions) {
+        const vehiclePlate = plateByVehicle.get(position.vehicleId) ?? null;
         for (const geofence of active) {
-          await evaluateOne(position, geofence);
+          await evaluateOne(position, geofence, vehiclePlate);
         }
       }
     } catch (error) {
