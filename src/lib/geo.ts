@@ -164,6 +164,41 @@ export function projectOnPolyline(point: LatLng, path: LatLng[]): PolylineProjec
 }
 
 /**
+ * Punto sobre una polilinea a una distancia acumulada (`targetMeters`) desde
+ * su inicio. Es la operacion inversa de `projectOnPolyline` (punto -> mayor
+ * proximidad; esta: distancia -> punto), y se usa junto a `sliceCorridor`
+ * para partir un corredor en "lo ya recorrido" y "lo que falta".
+ */
+export function pointAlongPolyline(path: LatLng[], targetMeters: number): PolylineProjection | null {
+  if (path.length === 0) return null;
+
+  const first = path[0]!;
+  if (path.length === 1 || targetMeters <= 0) {
+    return { distanceMeters: 0, segmentIndex: 0, closest: first, alongMeters: 0 };
+  }
+
+  let cumulative = 0;
+  for (let i = 0; i < path.length - 1; i += 1) {
+    const a = path[i]!;
+    const b = path[i + 1]!;
+    const segmentLength = haversineMeters(a, b);
+
+    if (cumulative + segmentLength >= targetMeters) {
+      const t = segmentLength === 0 ? 0 : (targetMeters - cumulative) / segmentLength;
+      return { distanceMeters: 0, segmentIndex: i, closest: interpolate(a, b, t), alongMeters: targetMeters };
+    }
+    cumulative += segmentLength;
+  }
+
+  return {
+    distanceMeters: 0,
+    segmentIndex: path.length - 2,
+    closest: path[path.length - 1]!,
+    alongMeters: cumulative,
+  };
+}
+
+/**
  * Recorta un tramo de un corredor entre dos proyecciones sobre el MISMO
  * `path` (obtenidas con `projectOnPolyline`).
  *

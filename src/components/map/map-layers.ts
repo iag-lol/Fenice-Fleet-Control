@@ -1,6 +1,6 @@
 import type { GeoJSONSource, LngLatBoundsLike, Map as MapLibreMap } from 'maplibre-gl';
 
-import { circleToPolygon, isUsableCoordinate } from '@/lib/geo';
+import { circleToPolygon, isUsableCoordinate, pointAlongPolyline, polylineLengthMeters, sliceCorridor } from '@/lib/geo';
 import { closedRing } from '@/lib/map-navigation';
 import type { Geofence, HeatmapPoint, LatLng } from '@/types/core';
 import type {
@@ -282,19 +282,34 @@ export function registerLayers(map: MapLibreMap): void {
     source: SOURCE.routesPlanned,
     layout: { 'line-cap': 'round', 'line-join': 'round' },
     paint: {
-      // La ruta resaltada se distingue por color y grosor, no solo por opacidad.
-      'line-color': ['case', ['get', 'highlighted'], '#0d90ae', '#94a3b8'],
+      // Azul oscuro para que el corredor conserve contraste sobre calles,
+      // parques y zonas industriales claras. La ruta activa gana ademas
+      // grosor y opacidad, sin depender solo de un cambio de tono.
+      //
+      // El tramo ya recorrido (segun la posicion actual del vehiculo) se
+      // difumina sin importar si la ruta esta resaltada: ya quedo atras.
+      'line-color': [
+        'case',
+        ['get', 'covered'],
+        '#8b98a5',
+        ['case', ['get', 'highlighted'], '#173f67', '#476987'],
+      ],
       'line-width': [
         'interpolate',
         ['linear'],
         ['zoom'],
         9,
-        1.5,
+        2.25,
         14,
-        ['case', ['get', 'highlighted'], 4, 2.5],
+        ['case', ['get', 'covered'], 1.5, ['case', ['get', 'highlighted'], 5, 3.25]],
       ],
-      'line-opacity': ['case', ['get', 'highlighted'], 0.95, 0.65],
-      'line-dasharray': [3, 2],
+      'line-opacity': [
+        'case',
+        ['get', 'covered'],
+        0.22,
+        ['case', ['get', 'highlighted'], 0.98, 0.82],
+      ],
+      'line-dasharray': [2.5, 1.4],
     },
   });
 
@@ -305,9 +320,17 @@ export function registerLayers(map: MapLibreMap): void {
     source: SOURCE.routesExecuted,
     layout: { 'line-cap': 'round', 'line-join': 'round' },
     paint: {
-      'line-color': '#0e7490',
-      'line-width': ['interpolate', ['linear'], ['zoom'], 9, 2, 14, 3.4],
-      'line-opacity': ['case', ['get', 'highlighted'], 0.95, 0.7],
+      'line-color': ['case', ['get', 'highlighted'], '#0b2f4f', '#1d4e73'],
+      'line-width': [
+        'interpolate',
+        ['linear'],
+        ['zoom'],
+        9,
+        3,
+        14,
+        ['case', ['get', 'highlighted'], 5.5, 4.2],
+      ],
+      'line-opacity': ['case', ['get', 'highlighted'], 0.98, 0.86],
     },
   });
 
@@ -402,7 +425,7 @@ export function registerLayers(map: MapLibreMap): void {
     type: 'line',
     source: SOURCE.followTrail,
     layout: { 'line-cap': 'round', 'line-join': 'round' },
-    paint: { 'line-color': '#0e7490', 'line-width': 3.5, 'line-opacity': 0.8 },
+    paint: { 'line-color': '#0b2f4f', 'line-width': 4.5, 'line-opacity': 0.92 },
   });
 
   // --- Eventos del trayecto del dia (vehiculo seleccionado) ----------------
@@ -622,6 +645,42 @@ export function updateHeatmap(map: MapLibreMap, points: HeatmapPoint[]): void {
   });
 }
 
+/**
+ * Parte el corredor planificado en lo YA RECORRIDO (segun la posicion actual
+ * del vehiculo) y lo que falta, para dibujarlos con estilos distintos: lo
+ * recorrido se difumina, lo que falta se mantiene visible.
+ *
+ * `progressMeters` es la proyeccion mas cercana del vehiculo sobre el
+ * corredor: un desvio breve tambien difumina el tramo que va quedando atras,
+ * a proposito (ver `RouteGeometry.plannedProgressMeters`).
+ */
+function splitPlannedPath(
+  points: LatLng[],
+  progressMeters: number | null | undefined,
+): { coordinates: LatLng[]; covered: boolean }[] {
+  if (progressMeters === null || progressMeters === undefined || progressMeters <= 0) {
+    return [{ coordinates: points, covered: false }];
+  }
+
+  const totalMeters = polylineLengthMeters(points);
+  if (progressMeters >= totalMeters) {
+    return [{ coordinates: points, covered: true }];
+  }
+
+  const start = { distanceMeters: 0, segmentIndex: 0, closest: points[0]!, alongMeters: 0 };
+  const end = { distanceMeters: 0, segmentIndex: points.length - 2, closest: points.at(-1)!, alongMeters: totalMeters };
+  const cursor = pointAlongPolyline(points, progressMeters);
+  if (!cursor) return [{ coordinates: points, covered: false }];
+
+  const covered = sliceCorridor(points, start, cursor);
+  const remaining = sliceCorridor(points, cursor, end);
+
+  const result: { coordinates: LatLng[]; covered: boolean }[] = [];
+  if (covered.length >= 2) result.push({ coordinates: covered, covered: true });
+  if (remaining.length >= 2) result.push({ coordinates: remaining, covered: false });
+  return result;
+}
+
 export function updateRoutes(
   map: MapLibreMap,
   routes: RouteGeometry[],
@@ -632,18 +691,21 @@ export function updateRoutes(
     features: routes
       .map((r) => ({ route: r, points: r.plannedPath.filter(isUsableCoordinate) }))
       .filter(({ points }) => points.length >= 2)
-      .map(({ route: r, points }) => ({
-        type: 'Feature',
-        geometry: {
-          type: 'LineString',
-          coordinates: points.map((p) => [p.lng, p.lat]),
-        },
-        properties: {
-          routeId: r.routeId,
-          code: r.code,
-          highlighted: highlightedRouteId === r.routeId,
-        },
-      })),
+      .flatMap(({ route: r, points }) =>
+        splitPlannedPath(points, r.plannedProgressMeters).map(({ coordinates, covered }) => ({
+          type: 'Feature' as const,
+          geometry: {
+            type: 'LineString' as const,
+            coordinates: coordinates.map((p) => [p.lng, p.lat]),
+          },
+          properties: {
+            routeId: r.routeId,
+            code: r.code,
+            highlighted: highlightedRouteId === r.routeId,
+            covered,
+          },
+        })),
+      ),
   };
 
   const executed: FeatureCollection = {

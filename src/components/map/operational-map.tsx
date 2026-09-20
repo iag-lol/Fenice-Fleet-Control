@@ -28,6 +28,7 @@ import {
   type ScopeInput,
 } from '@/lib/engines/map-scope';
 import { containsPoint } from '@/lib/engines/geofence-engine';
+import { projectOnPolyline } from '@/lib/geo';
 import { FocusBanner } from '@/components/map/focus-banner';
 import { ClientFiltersPanel, applyClientFilters } from '@/components/map/client-filters-panel';
 import { FleetMap, type FleetMapVehicle } from '@/components/map/fleet-map';
@@ -285,6 +286,29 @@ export const OperationalMap = memo(function OperationalMap({
     [routesEnfocadas, selectedTrajectory],
   );
 
+  /**
+   * Cuanto del corredor planificado ya quedo atras, para difuminarlo en el
+   * mapa. Se proyecta la posicion EN VIVO del vehiculo sobre su propio
+   * corredor: no importa si se aparto un poco, igual se difumina el tramo
+   * que ya paso, tal como pide la operacion ("que se vaya difuminando la
+   * ruta a medida que el vehiculo pasa por ella o cerca de ella").
+   */
+  const routesConProgreso = useMemo(
+    () =>
+      routesConTrayecto.map((route) => {
+        if (!route.vehicleId || route.plannedPath.length < 2) return route;
+        const position =
+          positions.get(route.vehicleId) ??
+          vehicles.find((v) => v.vehicleId === route.vehicleId)?.position ??
+          null;
+        if (!position) return route;
+
+        const projection = projectOnPolyline({ lat: position.lat, lng: position.lng }, route.plannedPath);
+        return projection ? { ...route, plannedProgressMeters: projection.alongMeters } : route;
+      }),
+    [routesConTrayecto, positions, vehicles],
+  );
+
   const trajectoryEventPoints = useMemo(
     () =>
       (selectedTrajectory?.events ?? []).map((event) => ({
@@ -499,7 +523,7 @@ export const OperationalMap = memo(function OperationalMap({
             autoFit
             vehicles={layers.camiones ? vehiculosEnfocados : []}
             clients={clientesEnfocados}
-            routes={routesConTrayecto}
+            routes={routesConProgreso}
             geofences={snapshot.geofences}
             alerts={snapshot.alerts}
             workOrders={pedidosEnfocados}

@@ -11,6 +11,7 @@ import {
   isUsableCoordinate,
   pointInPolygon,
   polygonCentroid,
+  pointAlongPolyline,
   polylineLengthMeters,
   projectOnPolyline,
   sliceCorridor,
@@ -123,6 +124,42 @@ describe('projectOnPolyline', () => {
     const result = projectOnPolyline(SANTIAGO, [VALPARAISO]);
     expect(result?.alongMeters).toBe(0);
     expect(result?.closest).toEqual(VALPARAISO);
+  });
+});
+
+describe('pointAlongPolyline', () => {
+  const path = [
+    { lat: -33.45, lng: -70.7 },
+    { lat: -33.45, lng: -70.65 },
+    { lat: -33.45, lng: -70.6 },
+  ];
+  const total = polylineLengthMeters(path);
+
+  it('devuelve el inicio a distancia cero', () => {
+    const result = pointAlongPolyline(path, 0);
+    expect(result?.closest).toEqual(path[0]);
+    expect(result?.alongMeters).toBe(0);
+  });
+
+  it('interpola un punto a mitad de camino', () => {
+    const result = pointAlongPolyline(path, total / 2);
+    expect(result?.closest.lat).toBeCloseTo(-33.45, 5);
+    expect(result?.alongMeters).toBeCloseTo(total / 2, 0);
+  });
+
+  it('se detiene en el ultimo punto si se pide mas alla del total', () => {
+    const result = pointAlongPolyline(path, total + 10_000);
+    expect(result?.closest).toEqual(path.at(-1));
+  });
+
+  it('es consistente con projectOnPolyline (ida y vuelta)', () => {
+    const target = pointAlongPolyline(path, total * 0.3)!;
+    const back = projectOnPolyline(target.closest, path)!;
+    expect(back.alongMeters).toBeCloseTo(total * 0.3, 0);
+  });
+
+  it('devuelve null con una polilinea vacia', () => {
+    expect(pointAlongPolyline([], 100)).toBeNull();
   });
 });
 

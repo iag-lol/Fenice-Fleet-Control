@@ -142,6 +142,16 @@ export interface RouteGeometry {
   plannedPath: LatLng[];
   executedPath: LatLng[];
   executedSegments?: LatLng[][];
+  /**
+   * Cuanto del corredor planificado (`plannedPath`) ya quedo atras, medido en
+   * metros desde su inicio segun la posicion ACTUAL del vehiculo. `null`
+   * cuando no hay posicion en vivo con que calcularlo (se dibuja completo).
+   *
+   * No implica que el vehiculo haya seguido el corredor al pie de la letra:
+   * es su proyeccion mas cercana sobre el, asi que un desvio breve tambien
+   * "difumina" el tramo que queda atras.
+   */
+  plannedProgressMeters?: number | null;
   stops: {
     sequence: number;
     workOrderId: string;

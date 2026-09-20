@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import type { Map as MapLibreMap } from 'maplibre-gl';
 
-import { SOURCE, updateAlerts, updateCommunes, updateGeofences } from '@/components/map/map-layers';
+import { SOURCE, updateAlerts, updateCommunes, updateGeofences, updateRoutes } from '@/components/map/map-layers';
+import { polylineLengthMeters } from '@/lib/geo';
 import type { Geofence } from '@/types/core';
-import type { AlertMapPoint } from '@/types/views';
+import type { AlertMapPoint, RouteGeometry } from '@/types/views';
 
 function sourceRecorder() {
   const data = new Map<string, GeoJSON.FeatureCollection>();
@@ -68,5 +69,67 @@ describe('capas territoriales del mapa', () => {
     const features = data.get(SOURCE.alerts)?.features ?? [];
     expect(features).toHaveLength(1);
     expect(features[0]?.properties).toMatchObject({ alertId: 'a1', selected: true });
+  });
+});
+
+describe('updateRoutes: difuminado del tramo ya recorrido', () => {
+  const path = [
+    { lat: -33.45, lng: -70.7 },
+    { lat: -33.45, lng: -70.65 },
+    { lat: -33.45, lng: -70.6 },
+  ];
+  const totalMeters = polylineLengthMeters(path);
+
+  function route(overrides: Partial<RouteGeometry> = {}): RouteGeometry {
+    return {
+      routeId: 'r1',
+      code: 'R-001',
+      name: 'Ruta de prueba',
+      vehicleId: 'veh-1',
+      vehiclePlate: 'AA1111',
+      status: 'en_curso',
+      plannedPath: path,
+      executedPath: [],
+      stops: [],
+      ...overrides,
+    };
+  }
+
+  it('sin progreso conocido, dibuja el corredor completo sin difuminar nada', () => {
+    const { map, data } = sourceRecorder();
+    updateRoutes(map, [route({ plannedProgressMeters: null })], null);
+
+    const features = data.get(SOURCE.routesPlanned)?.features ?? [];
+    expect(features).toHaveLength(1);
+    expect(features[0]?.properties).toMatchObject({ covered: false });
+  });
+
+  it('con progreso a mitad de camino, parte el corredor en recorrido y restante', () => {
+    const { map, data } = sourceRecorder();
+    updateRoutes(map, [route({ plannedProgressMeters: totalMeters / 2 })], null);
+
+    const features = data.get(SOURCE.routesPlanned)?.features ?? [];
+    expect(features).toHaveLength(2);
+
+    const covered = features.find((f) => f.properties?.covered === true);
+    const remaining = features.find((f) => f.properties?.covered === false);
+    expect(covered).toBeDefined();
+    expect(remaining).toBeDefined();
+
+    // El punto de inicio queda en el tramo recorrido y el punto final en el
+    // restante: la particion respeta el sentido del corredor.
+    const coveredCoords = (covered!.geometry as GeoJSON.LineString).coordinates;
+    const remainingCoords = (remaining!.geometry as GeoJSON.LineString).coordinates;
+    expect(coveredCoords[0]).toEqual([path[0]!.lng, path[0]!.lat]);
+    expect(remainingCoords.at(-1)).toEqual([path.at(-1)!.lng, path.at(-1)!.lat]);
+  });
+
+  it('con progreso mas alla del final, el corredor completo queda marcado como recorrido', () => {
+    const { map, data } = sourceRecorder();
+    updateRoutes(map, [route({ plannedProgressMeters: totalMeters + 1_000 })], null);
+
+    const features = data.get(SOURCE.routesPlanned)?.features ?? [];
+    expect(features).toHaveLength(1);
+    expect(features[0]?.properties).toMatchObject({ covered: true });
   });
 });
