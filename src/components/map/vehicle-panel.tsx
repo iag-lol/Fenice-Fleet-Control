@@ -3,15 +3,14 @@
 import { useQuery } from '@tanstack/react-query';
 import {
   AlertTriangle,
-  Bell,
   Clock,
+  Copy,
   Crosshair,
   ExternalLink,
   Gauge,
   History,
-  Info,
-  ListChecks,
   MapPin,
+  MoreHorizontal,
   Navigation,
   Power,
   PowerOff,
@@ -19,7 +18,6 @@ import {
   Square,
   Truck,
   User,
-  X,
 } from 'lucide-react';
 import Link from 'next/link';
 import { useState } from 'react';
@@ -79,14 +77,7 @@ const TRAJECTORY_EVENT_TONE: Record<TrajectoryEventType, string> = {
  * operacion hace en ese momento: donde esta, que lleva, a quien va, cuanto
  * falta y como viene la ruta.
  */
-export function VehiclePanel({
-  vehicleId,
-  onClose,
-}: {
-  vehicleId: string;
-  /** Si se entrega, la ficha muestra su propia X: evita duplicar el cierre del Sheet que la contiene. */
-  onClose?: () => void;
-}) {
+export function VehiclePanel({ vehicleId }: { vehicleId: string }) {
   const { positions } = useLiveFleet();
   const focusOn = useMapStore((s) => s.focusOn);
   const followVehicle = useMapStore((s) => s.followVehicle);
@@ -94,6 +85,7 @@ export function VehiclePanel({
   const highlightRoute = useMapStore((s) => s.highlightRoute);
   const highlightedRouteId = useMapStore((s) => s.highlightedRouteId);
   const [tab, setTab] = useState<PanelTab>('informacion');
+  const [moreOpen, setMoreOpen] = useState(false);
 
   const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['vehicle', vehicleId],
@@ -143,91 +135,122 @@ export function VehiclePanel({
   const ordersCount = (currentWorkOrder ? 1 : 0) + (nextWorkOrder ? 1 : 0);
   const alertsCount = data.openAlerts.length;
 
-  const TABS: { id: PanelTab; label: string; icon: typeof Info; count?: number }[] = [
-    { id: 'informacion', label: 'Información', icon: Info },
-    { id: 'actividad', label: 'Actividad', icon: History },
-    { id: 'ordenes', label: 'Órdenes', icon: ListChecks, count: ordersCount },
-    { id: 'alertas', label: 'Alertas', icon: Bell, count: alertsCount },
+  const TABS: { id: PanelTab; label: string; count?: number }[] = [
+    { id: 'informacion', label: 'Información' },
+    { id: 'actividad', label: 'Actividad' },
+    { id: 'ordenes', label: 'Órdenes', count: ordersCount },
+    { id: 'alertas', label: 'Alertas', count: alertsCount },
   ];
 
   return (
     <div className="flex flex-col">
-      <div className="space-y-4 p-3.5 pb-3.5">
+      <div className="space-y-3 p-3 pb-3">
       {/* --- Encabezado --- */}
       <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-2">
-            <h3 className="text-base font-semibold tracking-tight text-ink">{vehicle.plate}</h3>
-            <span className="numeric rounded bg-surface-750 px-1.5 py-0.5 text-2xs text-brand-700">
-              {vehicle.fleetCode}
-            </span>
+        <div className="flex min-w-0 items-center gap-3">
+          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-line bg-gradient-to-b from-surface-800 to-surface-750 text-brand-700 shadow-card">
+            <Truck className="h-5 w-5" />
+          </span>
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <h3 className="text-base font-semibold tracking-tight text-ink">{vehicle.plate}</h3>
+              <span className="numeric rounded bg-brand-500/10 px-1.5 py-0.5 text-2xs text-brand-700">
+                {vehicle.fleetCode}
+              </span>
+            </div>
+            <p className="mt-0.5 truncate text-xs text-ink-faint">
+              {vehicle.brand} {vehicle.model} · {vehicle.year}
+            </p>
           </div>
-          <p className="mt-0.5 truncate text-xs text-ink-faint">
-            {vehicle.brand} {vehicle.model} · {vehicle.year}
-          </p>
         </div>
-        <div className="flex shrink-0 items-center gap-1.5">
-          <VehicleStatusBadge status={data.snapshot.status} size="md" />
-          {onClose ? (
-            <button
-              type="button"
-              onClick={onClose}
-              aria-label="Cerrar ficha del vehiculo"
-              className="tap -mr-1 flex items-center justify-center rounded text-ink-faint transition-colors hover:bg-surface-800 hover:text-ink sm:h-7 sm:w-7 sm:min-h-0 sm:min-w-0"
-            >
-              <X className="h-4 w-4" />
-            </button>
-          ) : null}
-        </div>
+        <VehicleStatusBadge status={data.snapshot.status} size="md" />
       </div>
 
       {/* --- Acciones --- */}
-      <div className="grid grid-cols-2 gap-1.5">
-        <Button
-          variant={isFollowing ? 'primary' : 'secondary'}
-          size="sm"
-          icon={<Navigation className="h-3.5 w-3.5" />}
-          onClick={() => followVehicle(isFollowing ? null : vehicleId)}
-          disabled={!position}
-        >
-          {isFollowing ? 'Dejar de seguir' : 'Seguir vehiculo'}
-        </Button>
+      <div className="space-y-1.5">
+        <div className="grid grid-cols-2 gap-1.5">
+          <Button
+            variant={isFollowing ? 'primary' : 'secondary'}
+            size="sm"
+            icon={<Navigation className="h-3.5 w-3.5" />}
+            onClick={() => followVehicle(isFollowing ? null : vehicleId)}
+            disabled={!position}
+          >
+            {isFollowing ? 'Dejar de seguir' : 'Seguir vehículo'}
+          </Button>
 
-        <Button
-          variant="secondary"
-          size="sm"
-          icon={<Crosshair className="h-3.5 w-3.5" />}
-          onClick={() => position && focusOn({ lat: position.lat, lng: position.lng }, 15.5)}
-          disabled={!position}
-        >
-          Centrar vehiculo
-        </Button>
+          <Button
+            variant="secondary"
+            size="sm"
+            icon={<Crosshair className="h-3.5 w-3.5" />}
+            onClick={() => position && focusOn({ lat: position.lat, lng: position.lng }, 15.5)}
+            disabled={!position}
+          >
+            Centrar en mapa
+          </Button>
+        </div>
 
-        <Button
-          variant="secondary"
-          size="sm"
-          icon={<RouteIcon className="h-3.5 w-3.5" />}
-          onClick={() => route && highlightRoute(highlightedRouteId === route.routeId ? null : route.routeId)}
-          disabled={!route}
-        >
-          {route && highlightedRouteId === route.routeId ? 'Quitar ruta' : 'Ver ruta'}
-        </Button>
+        <div className="grid grid-cols-[1fr_1fr_36px] gap-1.5">
+          <Button
+            variant="secondary"
+            size="sm"
+            icon={<RouteIcon className="h-3.5 w-3.5" />}
+            onClick={() => route && highlightRoute(highlightedRouteId === route.routeId ? null : route.routeId)}
+            disabled={!route}
+          >
+            {route && highlightedRouteId === route.routeId ? 'Quitar ruta' : 'Ver ruta'}
+          </Button>
 
-        <LinkButton
-          href={`/flota/${vehicleId}`}
-          variant="secondary"
-          size="sm"
-          icon={<History className="h-3.5 w-3.5" />}
-        >
-          Ver historial
-        </LinkButton>
+          <LinkButton
+            href={`/flota/${vehicleId}`}
+            variant="secondary"
+            size="sm"
+            icon={<History className="h-3.5 w-3.5" />}
+          >
+            Ver historial
+          </LinkButton>
+
+          <div className="relative">
+            <Button
+              variant="secondary"
+              size="icon-sm"
+              className="w-9 px-0"
+              aria-label="Más acciones"
+              aria-expanded={moreOpen}
+              onClick={() => setMoreOpen((open) => !open)}
+            >
+              <MoreHorizontal className="h-4 w-4" />
+            </Button>
+            {moreOpen ? (
+              <div className="absolute right-0 top-10 z-20 w-48 rounded-lg border border-line bg-surface-900 p-1.5 shadow-float">
+                <Link
+                  href={`/flota/${vehicleId}`}
+                  className="flex min-h-9 items-center rounded-md px-2.5 text-xs text-ink-muted hover:bg-surface-800 hover:text-ink"
+                >
+                  Abrir ficha completa
+                </Link>
+                <button
+                  type="button"
+                  disabled={!position}
+                  onClick={() => {
+                    if (!position) return;
+                    void navigator.clipboard.writeText(formatCoordinates(position.lat, position.lng));
+                    setMoreOpen(false);
+                  }}
+                  className="flex min-h-9 w-full items-center rounded-md px-2.5 text-left text-xs text-ink-muted hover:bg-surface-800 hover:text-ink disabled:opacity-45"
+                >
+                  Copiar coordenadas
+                </button>
+              </div>
+            ) : null}
+          </div>
+        </div>
       </div>
       </div>
 
       {/* --- Pestañas --- */}
       <div className="flex shrink-0 border-b border-line px-2" aria-label="Secciones del vehículo">
         {TABS.map((entry) => {
-          const Icon = entry.icon;
           const active = tab === entry.id;
           return (
             <button
@@ -236,11 +259,10 @@ export function VehiclePanel({
               onClick={() => setTab(entry.id)}
               aria-pressed={active}
               className={cn(
-                'flex min-h-11 flex-1 items-center justify-center gap-1.5 border-b-2 px-1 text-xs font-medium transition-colors',
+                'flex min-h-10 flex-1 items-center justify-center gap-1 border-b-2 px-1 text-2xs font-medium transition-colors',
                 active ? 'border-brand-600 text-brand-700' : 'border-transparent text-ink-faint hover:text-ink',
               )}
             >
-              <Icon className="h-3.5 w-3.5 shrink-0" />
               <span className="truncate">{entry.label}</span>
               {typeof entry.count === 'number' && entry.count > 0 ? (
                 <span
@@ -257,12 +279,21 @@ export function VehiclePanel({
         })}
       </div>
 
-      <div className="space-y-4 p-3.5 pb-4">
+      <div className="space-y-2.5 bg-surface-800/45 p-2.5 pb-4">
       {tab === 'informacion' ? (
       <>
-      {/* --- Telemetria --- */}
-      <Section title="Vehiculo">
+      {/* --- Estado en tiempo real --- */}
+      <Section
+        title="Estado en tiempo real"
+        className="rounded-lg border border-line bg-surface-900 p-3 shadow-card"
+        action={
+          <span className="numeric text-[10px] text-ink-faint">
+            Actualizado {formatTime(position?.timestamp ?? data.snapshot.device?.lastPositionAt ?? null)}
+          </span>
+        }
+      >
         <DetailList
+          className="gap-y-2.5"
           items={[
             {
               label: 'Velocidad',
@@ -275,15 +306,35 @@ export function VehiclePanel({
             },
             {
               label: 'Ignicion',
-              value:
-                position?.ignition === 'on'
-                  ? 'Encendida'
-                  : position?.ignition === 'off'
-                    ? 'Apagada'
-                    : 'Sin dato',
+              value: (
+                <span className="flex items-center gap-1.5">
+                  <Power className="h-3.5 w-3.5 text-ink-faint" />
+                  {position?.ignition === 'on'
+                    ? 'Encendida'
+                    : position?.ignition === 'off'
+                      ? 'Apagada'
+                      : 'Sin dato'}
+                </span>
+              ),
             },
-            { label: 'Rumbo', value: formatHeading(position?.heading) },
-            { label: 'Comuna aproximada', value: journey.communeName ?? 'Sin determinar' },
+            {
+              label: 'Rumbo',
+              value: (
+                <span className="numeric flex items-center gap-1.5">
+                  <Navigation className="h-3.5 w-3.5 text-ink-faint" />
+                  {formatHeading(position?.heading)}
+                </span>
+              ),
+            },
+            {
+              label: 'Comuna aproximada',
+              value: (
+                <span className="flex items-center gap-1.5">
+                  <MapPin className="h-3.5 w-3.5 text-ink-faint" />
+                  {journey.communeName ?? 'Sin determinar'}
+                </span>
+              ),
+            },
             {
               label: 'Ultima actualizacion',
               value: (
@@ -296,7 +347,6 @@ export function VehiclePanel({
                   ) : null}
                 </span>
               ),
-              full: true,
             },
             {
               label: 'Conductor',
@@ -308,12 +358,22 @@ export function VehiclePanel({
               ) : (
                 'Sin conductor asignado'
               ),
-              full: true,
             },
             {
               label: 'Coordenadas',
               value: position ? (
-                <span className="numeric text-xs">{formatCoordinates(position.lat, position.lng)}</span>
+                <span className="flex items-center gap-2">
+                  <span className="numeric text-xs">{formatCoordinates(position.lat, position.lng)}</span>
+                  <button
+                    type="button"
+                    onClick={() => void navigator.clipboard.writeText(formatCoordinates(position.lat, position.lng))}
+                    title="Copiar coordenadas"
+                    aria-label="Copiar coordenadas"
+                    className="flex h-6 w-6 items-center justify-center rounded text-ink-faint hover:bg-surface-800 hover:text-ink"
+                  >
+                    <Copy className="h-3.5 w-3.5" />
+                  </button>
+                </span>
               ) : (
                 'Sin posicion'
               ),
@@ -323,7 +383,58 @@ export function VehiclePanel({
         />
       </Section>
 
-      <div className="flex items-center gap-2 border-t border-line pt-3">
+      {/* --- Orden actual --- */}
+      <Section title="Orden actual" className="rounded-lg border border-line bg-surface-900 p-3 shadow-card">
+        {currentWorkOrder ? (
+          <div className="rounded-md bg-surface-800 p-2.5">
+            <div className="flex items-start justify-between gap-2">
+              <span className="min-w-0">
+                <Link
+                  prefetch={false}
+                  href={`/ordenes/${currentWorkOrder.id}`}
+                  className="numeric block truncate text-xs font-semibold text-brand-700 hover:underline"
+                >
+                  {currentWorkOrder.number}
+                </Link>
+                <span className="block truncate text-2xs text-ink-faint">
+                  {currentWorkOrder.clientName} · {currentWorkOrder.communeName}
+                </span>
+              </span>
+              <WorkOrderStatusBadge status={currentWorkOrder.status} />
+            </div>
+          </div>
+        ) : (
+          <p className="rounded-md bg-surface-800 px-3 py-2.5 text-xs text-ink-faint">
+            Este vehículo no tiene una orden de trabajo en ejecución en este momento.
+          </p>
+        )}
+      </Section>
+
+      {/* --- Recorrido de la jornada --- */}
+      <Section title="Recorrido de la jornada" className="rounded-lg border border-line bg-surface-900 p-3 shadow-card">
+        <DetailList
+          columns={2}
+          className="gap-y-2.5"
+          items={[
+            { label: 'Kilómetros recorridos', value: <span className="numeric">{formatKm(journey.distanceKm)}</span> },
+            { label: 'Inicio de ruta', value: <span className="numeric">{formatTime(journey.startedAt)}</span> },
+            { label: 'Tiempo en movimiento', value: <span className="numeric">{formatDuration(journey.movingSeconds)}</span> },
+            { label: 'Tiempo detenido', value: <span className="numeric">{formatDuration(journey.stoppedSeconds)}</span> },
+            { label: 'Entregas realizadas', value: <span className="numeric">{journey.deliveriesCompleted}</span> },
+            { label: 'Entregas pendientes', value: <span className="numeric">{journey.deliveriesPending}</span> },
+          ]}
+        />
+      </Section>
+
+      {/* --- Historial de la jornada --- */}
+      <Section title="Historial de la jornada" className="rounded-lg border border-line bg-surface-900 p-3 shadow-card">
+        <Timeline
+          entries={data.timeline.slice(0, 8)}
+          onFocus={(entry) => entry.position && focusOn(entry.position, 16)}
+        />
+      </Section>
+
+      <div className="flex items-center gap-2 px-1">
         <Truck className="h-3.5 w-3.5 text-ink-faint" />
         <p className="text-2xs text-ink-faint">
           Equipo {vehicle.device?.model ?? 'no instalado'}

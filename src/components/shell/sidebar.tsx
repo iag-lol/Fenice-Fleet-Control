@@ -4,7 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { HelpCircle, PanelLeftClose, PanelLeftOpen, Radio } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 import { BrandLockup } from '@/components/shell/brand';
 import { getVisibleNavGroups, isActivePath } from '@/components/shell/navigation';
@@ -89,10 +89,8 @@ function SidebarUserCard({ collapsed }: { collapsed: boolean }) {
  * del ancho al mapa o a las tablas en esa franja. Un usuario que expande o
  * colapsa a mano fija su eleccion para siempre, en cualquier ancho.
  *
- * En la torre de control queda colapsado siempre, sin excepcion ni boton
- * para expandirlo: es la pantalla que mas depende del ancho disponible
- * (mapa, panel operativo y sus propios controles flotantes), y ahi el
- * espacio del sidebar completo pesa mas que en cualquier otra.
+ * En la torre de control parte expandido para que los grupos de navegacion
+ * sean reconocibles, pero se puede colapsar desde el header o desde el pie.
  */
 export function Sidebar() {
   const pathname = usePathname();
@@ -101,7 +99,7 @@ export function Sidebar() {
   const [collapsedPreference, setCollapsedPreference] = useState(false);
   const [hasStoredPreference, setHasStoredPreference] = useState(false);
   const [hydrated, setHydrated] = useState(false);
-  const collapsed = isControlTower || collapsedPreference;
+  const collapsed = collapsedPreference;
 
   useEffect(() => {
     try {
@@ -120,7 +118,7 @@ export function Sidebar() {
     if (!hasStoredPreference) setCollapsedPreference(isTabletRange);
   }, [isTabletRange, hasStoredPreference]);
 
-  const toggle = (): void => {
+  const toggle = useCallback((): void => {
     setCollapsedPreference((current) => {
       const next = !current;
       setHasStoredPreference(true);
@@ -131,13 +129,19 @@ export function Sidebar() {
       }
       return next;
     });
-  };
+  }, []);
+
+  useEffect(() => {
+    const onHeaderToggle = (): void => toggle();
+    window.addEventListener('fenice:toggle-sidebar', onHeaderToggle);
+    return () => window.removeEventListener('fenice:toggle-sidebar', onHeaderToggle);
+  }, [toggle]);
 
   return (
     <aside
       className={cn(
         'hidden h-app shrink-0 flex-col border-r border-line bg-surface-900 transition-[width] duration-200 md:flex',
-        collapsed ? 'w-[68px]' : 'w-[236px]',
+        collapsed ? 'w-[68px]' : isControlTower ? 'w-[204px]' : 'w-[236px]',
         !hydrated && 'invisible',
       )}
     >
@@ -223,25 +227,22 @@ export function Sidebar() {
           {!collapsed ? <span className="truncate">¿Necesitas ayuda?</span> : null}
         </a>
 
-        {/* En la torre de control el colapso es fijo: no hay nada que alternar. */}
-        {isControlTower ? null : (
-          <button
-            type="button"
-            onClick={toggle}
-            aria-label={collapsed ? 'Expandir menu' : 'Colapsar menu'}
-            className={cn(
-              'flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-[13px] text-ink-faint transition-colors hover:bg-surface-800 hover:text-ink',
-              collapsed && 'justify-center px-0',
-            )}
-          >
-            {collapsed ? (
-              <PanelLeftOpen className="h-4 w-4 shrink-0" />
-            ) : (
-              <PanelLeftClose className="h-4 w-4 shrink-0" />
-            )}
-            {!collapsed ? <span>Colapsar</span> : null}
-          </button>
-        )}
+        <button
+          type="button"
+          onClick={toggle}
+          aria-label={collapsed ? 'Expandir menu' : 'Colapsar menu'}
+          className={cn(
+            'flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-[13px] text-ink-faint transition-colors hover:bg-surface-800 hover:text-ink',
+            collapsed && 'justify-center px-0',
+          )}
+        >
+          {collapsed ? (
+            <PanelLeftOpen className="h-4 w-4 shrink-0" />
+          ) : (
+            <PanelLeftClose className="h-4 w-4 shrink-0" />
+          )}
+          {!collapsed ? <span>Colapsar</span> : null}
+        </button>
 
         <a
           href="https://zyteron.cl"

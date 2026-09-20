@@ -118,10 +118,7 @@ export function PendingIntegrationNotice({
       <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand-500/15 text-brand-700">
         <Info className="h-4 w-4" />
       </span>
-      <p className="min-w-0 flex-1 text-xs text-ink-muted">
-        <span className="font-medium text-brand-700">Disponible al conectar fuente externa.</span>{' '}
-        {what}
-      </p>
+      <p className="min-w-0 flex-1 text-xs leading-relaxed text-ink-muted">{what}</p>
       {onDismiss ? (
         <button
           type="button"

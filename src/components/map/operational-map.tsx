@@ -386,19 +386,76 @@ export const OperationalMap = memo(function OperationalMap() {
     otEnCurso: snapshot?.vehicles.filter((v) => v.activeWorkOrderId !== null).length ?? 0,
   };
 
-  const kpiCards: { key: string; label: string; value: number; icon: typeof Truck; tone: string }[] = [
-    { key: 'en-ruta', label: 'En ruta', value: vehicleCounts.enRuta, icon: Truck, tone: 'text-brand-700' },
-    { key: 'detenidos', label: 'Detenidos', value: vehicleCounts.detenido, icon: MinusCircle, tone: 'text-status-warning' },
-    { key: 'observacion', label: 'En observación', value: vehicleCounts.enObservacion, icon: AlertTriangle, tone: 'text-status-dormant' },
-    { key: 'sin-senal', label: 'Sin señal', value: vehicleCounts.offline, icon: WifiOff, tone: 'text-ink-faint' },
+  const kpiCards: {
+    key: string;
+    label: string;
+    value: number;
+    denominator: number;
+    icon: typeof Truck;
+    tone: string;
+    iconSurface: string;
+    bar: string;
+  }[] = [
+    {
+      key: 'en-ruta',
+      label: 'En ruta',
+      value: vehicleCounts.enRuta,
+      denominator: vehicleCounts.total,
+      icon: Truck,
+      tone: 'text-brand-700',
+      iconSurface: 'bg-brand-500/15',
+      bar: 'bg-brand-400',
+    },
+    {
+      key: 'detenidos',
+      label: 'Detenidos',
+      value: vehicleCounts.detenido,
+      denominator: vehicleCounts.total,
+      icon: MinusCircle,
+      tone: 'text-status-active',
+      iconSurface: 'bg-status-active/12',
+      bar: 'bg-status-active',
+    },
+    {
+      key: 'observacion',
+      label: 'En observación',
+      value: vehicleCounts.enObservacion,
+      denominator: vehicleCounts.total,
+      icon: AlertTriangle,
+      tone: 'text-status-warning',
+      iconSurface: 'bg-status-warning/12',
+      bar: 'bg-status-warning',
+    },
+    {
+      key: 'sin-senal',
+      label: 'Sin señal',
+      value: vehicleCounts.offline,
+      denominator: vehicleCounts.total,
+      icon: WifiOff,
+      tone: 'text-status-dormant',
+      iconSurface: 'bg-status-dormant/10',
+      bar: 'bg-status-dormant',
+    },
     {
       key: 'clientes',
       label: 'Clientes visibles',
       value: layers.clientes ? clientesEnfocados.length : 0,
+      denominator: allClients.length,
       icon: Building2,
       tone: 'text-brand-700',
+      iconSurface: 'bg-blue-500/10',
+      bar: 'bg-blue-500',
     },
-    { key: 'ot-en-curso', label: 'OT en curso', value: vehicleCounts.otEnCurso, icon: ClipboardList, tone: 'text-brand-700' },
+    {
+      key: 'ot-en-curso',
+      label: 'OT en curso',
+      value: vehicleCounts.otEnCurso,
+      denominator: vehicleCounts.total,
+      icon: ClipboardList,
+      tone: 'text-brand-700',
+      iconSurface: 'bg-brand-500/10',
+      bar: 'bg-brand-600',
+    },
   ];
 
   return (
@@ -407,7 +464,7 @@ export const OperationalMap = memo(function OperationalMap() {
       className={cn('relative h-full w-full bg-surface-950', fullscreen && 'fixed inset-0 z-[70]')}
     >
       {isLoading || !snapshot ? (
-        <div className="absolute inset-0 p-4">
+        <div className="absolute inset-0 p-4 sm:top-[96px]">
           <Skeleton className="h-full w-full" />
           <p className="absolute inset-0 flex items-center justify-center text-xs text-ink-faint">
             Cargando centro operacional...
@@ -416,7 +473,7 @@ export const OperationalMap = memo(function OperationalMap() {
       ) : (
         <ErrorBoundary section="el mapa operacional">
           <FleetMap
-            className="absolute inset-0"
+            className="absolute inset-0 sm:top-[96px]"
             autoFit
             vehicles={layers.camiones ? vehiculosEnfocados : []}
             clients={clientesEnfocados}
@@ -436,34 +493,46 @@ export const OperationalMap = memo(function OperationalMap() {
         </ErrorBoundary>
       )}
 
-      {/*
-        --- Barra superior: resumen KPI y controles ---
-
-        Siempre en dos filas, en cualquier ancho: la fila de KPIs necesita el
-        ancho completo para sus seis tarjetas (si comparte fila con los
-        controles a la derecha, como se probo antes, le queda tan poco
-        espacio que se corta a la mitad y exige scroll horizontal sin ninguna
-        pista visual de que hay mas). Los banners de abajo (`top-*`) asumen
-        esta misma altura de dos filas en todos los anchos.
-      */}
-      <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex flex-col gap-2 p-2.5 sm:p-3">
-        <div className="pointer-events-auto flex max-w-full gap-1 overflow-x-auto rounded-md border border-line-strong bg-surface-900/95 p-1 shadow-float backdrop-blur sm:gap-1.5">
+      {/* --- KPI operacionales: datos reales de la instantanea del mapa. --- */}
+      <div className="pointer-events-none absolute inset-x-0 top-0 z-10 hidden h-[96px] bg-surface-950 p-2 sm:block">
+        <div className="grid h-full grid-cols-6 gap-2">
           {kpiCards.map((kpi) => {
             const Icon = kpi.icon;
+            const percentage =
+              kpi.denominator > 0 ? Math.min(100, Math.round((kpi.value / kpi.denominator) * 100)) : 0;
             return (
               <div
                 key={kpi.key}
-                className="flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded px-2 py-1 text-2xs"
+                className="pointer-events-auto flex min-w-0 flex-col justify-between rounded-lg border border-line bg-surface-900 px-3 py-2 shadow-card"
               >
-                <Icon className={cn('h-3.5 w-3.5', kpi.tone)} />
-                <span className="numeric font-medium text-ink">{kpi.value}</span>
-                <span className="text-ink-faint">{kpi.label}</span>
+                <div className="flex min-w-0 items-center gap-2.5">
+                  <span className={cn('flex h-8 w-8 shrink-0 items-center justify-center rounded-full', kpi.iconSurface)}>
+                    <Icon className={cn('h-4 w-4', kpi.tone)} />
+                  </span>
+                  <span className="min-w-0">
+                    <span className="numeric block text-lg font-semibold leading-none text-ink">{kpi.value}</span>
+                    <span className="block truncate text-2xs text-ink-faint">{kpi.label}</span>
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="h-1.5 min-w-0 flex-1 overflow-hidden rounded-full bg-surface-750">
+                    <span className={cn('block h-full rounded-full', kpi.bar)} style={{ width: `${percentage}%` }} />
+                  </span>
+                  <span className="numeric w-7 text-right text-[10px] text-ink-faint">{percentage}%</span>
+                </div>
               </div>
             );
           })}
         </div>
+      </div>
 
-        <div className="pointer-events-auto flex flex-wrap items-center gap-2">
+      {/* --- Controles sobre el mapa: vista a la izquierda, operacion a la derecha. --- */}
+      <div className="pointer-events-none absolute inset-x-2.5 top-2.5 z-10 flex items-start justify-between gap-2 sm:top-[106px] sm:inset-x-3">
+        <div className="pointer-events-auto shrink-0">
+          <MapViewQuickToggle />
+        </div>
+
+        <div className="pointer-events-auto flex min-w-0 items-center justify-end gap-2 overflow-x-auto no-scrollbar">
           <button
             type="button"
             onClick={() => setFiltersOpen(true)}
@@ -480,7 +549,6 @@ export const OperationalMap = memo(function OperationalMap() {
           </button>
 
           <LayerControl />
-          <MapViewQuickToggle />
           <ViewModeControl />
 
           <button
@@ -508,7 +576,7 @@ export const OperationalMap = memo(function OperationalMap() {
       {isError || (layers.comunas && communesError) ? (
         <div
           role="alert"
-          className="absolute left-3 right-3 top-28 z-20 rounded-md border border-status-warning/30 bg-surface-900 p-3 text-xs text-status-warning"
+          className="absolute left-3 right-3 top-28 z-20 rounded-md border border-status-warning/30 bg-surface-900 p-3 text-xs text-status-warning sm:top-[154px]"
         >
           {isError
             ? 'No se pudo actualizar la operación. Se conservan los últimos datos.'
@@ -525,32 +593,15 @@ export const OperationalMap = memo(function OperationalMap() {
           </button>
         </div>
       ) : null}
-      {/*
-        --- Aviso de degradacion GPS ---
-
-        `top-28`: la barra superior siempre ocupa dos filas (KPIs arriba,
-        controles debajo) en cualquier ancho, asi que un solo offset alcanza
-        para todos los tamanos de pantalla. Con uno menor este aviso se
-        dibujaba encima de "Filtros/Capas/Vista" y les robaba el clic sin que
-        se notara visualmente por que dejaban de responder.
-
-        `z-[5]` (menor que el `z-10` de la barra de controles): con el mismo
-        z-index, el orden del DOM decidia el empate a favor de este aviso (va
-        despues en el marcado) y tapaba tanto la barra como lo que esta
-        despliega (el desplegable de Capas/Vista), aunque ese desplegable
-        tuviera su propio z-index mayor: ese z-index solo cuenta dentro del
-        contexto de apilamiento de la barra, no frente a un hermano con el
-        mismo nivel que ella.
-      */}
+      {/* Aviso compacto y descartable, centrado bajo los controles. */}
       {gpsError && !gpsNoticeDismissed ? (
-        <div className="pointer-events-auto absolute inset-x-2.5 top-28 z-[5] sm:inset-x-auto sm:left-1/2 sm:w-[440px] sm:-translate-x-1/2">
+        <div className="pointer-events-auto absolute inset-x-2.5 top-28 z-[5] sm:inset-x-auto sm:left-1/2 sm:top-[156px] sm:w-[430px] sm:-translate-x-1/2">
           {mode?.gps.provider === 'unavailable' ? (
             <PendingIntegrationNotice
               onDismiss={() => setGpsNoticeDismissed(true)}
               what={
                 <>
-                  La flota no aparece en el mapa: el proveedor de telemetria GPS no esta conectado.
-                  Requiere credenciales en el servidor.{' '}
+                  La flota se actualiza en tiempo real. El proveedor de telemetria GPS no esta conectado.{' '}
                   <a href="/configuracion" className="font-medium underline">
                     Ver estado del sistema
                   </a>
@@ -702,35 +753,26 @@ export const OperationalMap = memo(function OperationalMap() {
 
       {/* --- Leyenda de estados de vehiculos --- */}
       {layers.camiones ? (
-        <div className="pointer-events-none absolute bottom-[132px] right-2.5 z-10 hidden flex-col gap-1 rounded-md border border-line bg-surface-900/90 px-2.5 py-2 text-2xs shadow-float backdrop-blur lg:flex lg:bottom-52 lg:right-14">
+        <div className="pointer-events-none absolute bottom-24 right-3 z-10 hidden min-w-44 flex-col gap-1 rounded-lg border border-line bg-surface-900/95 px-3 py-2.5 text-2xs shadow-float backdrop-blur lg:flex">
           <p className="mb-0.5 font-semibold uppercase tracking-wider text-ink-faint">
             Estados de vehículos
           </p>
           {(Object.keys(ACTIVITY_LABEL) as (keyof typeof ACTIVITY_LABEL)[]).map((status) => (
             <span key={status} className="flex items-center gap-1.5 text-ink-muted">
-              <span
-                className="h-2 w-2 rounded-full"
-                style={{ backgroundColor: ACTIVITY_COLOR[status] }}
-              />
-              {ACTIVITY_LABEL[status]}
+              <span className="flex min-w-0 flex-1 items-center gap-1.5">
+                <span
+                  className="h-2 w-2 shrink-0 rounded-full"
+                  style={{ backgroundColor: ACTIVITY_COLOR[status] }}
+                />
+                <span className="truncate">{ACTIVITY_LABEL[status]}</span>
+              </span>
+              <span className="numeric rounded-full bg-surface-750 px-1.5 text-[10px] text-ink-faint">
+                {vehicles.filter((vehicle) => vehicle.status === status).length}
+              </span>
             </span>
           ))}
         </div>
       ) : null}
-
-      {/* --- Leyenda --- */}
-      <div className="pointer-events-none absolute bottom-[70px] right-2.5 z-10 hidden flex-col gap-1 rounded-md border border-line bg-surface-900/90 px-2.5 py-2 text-2xs shadow-float backdrop-blur lg:flex lg:bottom-24 lg:right-14">
-        <p className="mb-0.5 font-semibold uppercase tracking-wider text-ink-faint">Clientes</p>
-        <span className="flex items-center gap-1.5 text-ink-muted">
-          <span className="h-2 w-2 rounded-full bg-status-active" /> Activo
-        </span>
-        <span className="flex items-center gap-1.5 text-ink-muted">
-          <span className="h-2 w-2 rounded-full bg-status-warning" /> En observacion
-        </span>
-        <span className="flex items-center gap-1.5 text-ink-muted">
-          <span className="h-2 w-2 rounded-full bg-status-dormant" /> Dormido
-        </span>
-      </div>
 
       {/* --- Filtros --- */}
       <Sheet
@@ -757,23 +799,13 @@ export const OperationalMap = memo(function OperationalMap() {
         </div>
       </Sheet>
 
-      {/* --- Ficha de detalle ---
-
-        Flotante SOLO para el vehiculo: es la ficha que mas se abre desde el
-        mapa, y a toda altura (el resto de las fichas de esta hoja) tapaba
-        capas que el operador seguia necesitando ver detras. Sin titulo
-        propio en el Sheet para ese caso: la ficha del vehiculo ya trae su
-        propio encabezado (patente, codigo, estado) y su propia X, asi que
-        duplicarlo solo restaba altura util a una tarjeta que ahora es chica
-        a proposito.
-      */}
+      {/* --- Ficha de detalle: lateral, compacta y sin bloquear el mapa. --- */}
       <Sheet
         open={detailOpen && currentSelection !== null}
         onClose={closeDetail}
-        floating={currentSelection?.type === 'vehicle'}
         title={
           currentSelection?.type === 'vehicle'
-            ? undefined
+            ? 'Ficha del vehículo'
             : currentSelection?.type === 'client'
               ? 'Ficha del cliente'
               : currentSelection?.type === 'geofence'
@@ -788,7 +820,7 @@ export const OperationalMap = memo(function OperationalMap() {
       >
         <ErrorBoundary section="la ficha seleccionada">
           {currentSelection?.type === 'vehicle' ? (
-            <VehiclePanel vehicleId={currentSelection.id} onClose={closeDetail} />
+            <VehiclePanel vehicleId={currentSelection.id} />
           ) : currentSelection?.type === 'client' ? (
             <ClientPanel clientId={currentSelection.id} />
           ) : currentSelection?.type === 'workOrder' ? (

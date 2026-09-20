@@ -3,12 +3,13 @@ import 'server-only';
 import { COMMUNES } from '@/data/communes';
 import { normalizeSearch } from '@/lib/format';
 import { isUsableCoordinate } from '@/lib/geo';
+import { geofencePoints } from '@/lib/map-navigation';
 import { getOperationsProvider } from '@/services/registry';
 import type { GlobalSearchResult } from '@/types/views';
 
 /**
  * Buscador global. Cubre cliente, RUT, codigo, patente, OT, pedido, direccion
- * y comuna, y devuelve siempre un destino navegable y, cuando existe, una
+ * geocerca y comuna, y devuelve siempre un destino navegable y, cuando existe, una
  * coordenada para la accion "Ver en mapa".
  */
 
@@ -19,11 +20,12 @@ export async function searchGlobal(rawQuery: string): Promise<GlobalSearchResult
   if (term.length < 2) return [];
 
   const operations = getOperationsProvider();
-  const [clients, vehicles, workOrders, routes] = await Promise.all([
+  const [clients, vehicles, workOrders, routes, geofences] = await Promise.all([
     operations.getClients(),
     operations.getVehicles(),
     operations.getWorkOrders({ limit: 800 }),
     operations.getRoutes(),
+    operations.getGeofences(),
   ]);
 
   const results: GlobalSearchResult[] = [];
@@ -112,6 +114,37 @@ export async function searchGlobal(rawQuery: string): Promise<GlobalSearchResult
       href: `/rutas/${route.id}`,
       position: route.plannedPath[0] ?? null,
       mapFocus: { type: 'route', id: route.id },
+    });
+  }
+
+  // --- Geocercas ------------------------------------------------------------
+  for (const geofence of geofences
+    .filter(
+      (entry) =>
+        normalizeSearch(entry.name).includes(term) ||
+        normalizeSearch(entry.description ?? '').includes(term) ||
+        normalizeSearch(entry.communeCode ?? '').includes(term),
+    )
+    .slice(0, MAX_PER_KIND)) {
+    const points = geofencePoints(geofence);
+    const position =
+      geofence.geometry.shape === 'circle'
+        ? geofence.geometry.center
+        : points.length > 0
+          ? {
+              lat: points.reduce((sum, point) => sum + point.lat, 0) / points.length,
+              lng: points.reduce((sum, point) => sum + point.lng, 0) / points.length,
+            }
+          : null;
+
+    results.push({
+      id: geofence.id,
+      kind: 'geocerca',
+      title: geofence.name,
+      subtitle: `${geofence.active ? 'Activa' : 'Inactiva'} · ${geofence.communeCode ?? 'Sin comuna'}`,
+      href: '/control',
+      position,
+      mapFocus: { type: 'geofence', id: geofence.id },
     });
   }
 

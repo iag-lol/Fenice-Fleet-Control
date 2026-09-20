@@ -266,14 +266,14 @@ export type HeatmapMode = 'clients' | 'orders' | 'visits' | 'dormant';
 
 export interface GlobalSearchResult {
   id: string;
-  kind: 'cliente' | 'vehiculo' | 'orden' | 'pedido' | 'ruta' | 'comuna';
+  kind: 'cliente' | 'vehiculo' | 'orden' | 'pedido' | 'ruta' | 'geocerca' | 'comuna';
   title: string;
   subtitle: string;
   href: string;
   /** Coordenada para la accion "Ver en mapa". */
   position: LatLng | null;
   /** Parametro de enfoque para el mapa operacional. */
-  mapFocus: { type: 'vehicle' | 'client' | 'workOrder' | 'route' | 'commune'; id: string } | null;
+  mapFocus: { type: 'vehicle' | 'client' | 'workOrder' | 'route' | 'geofence' | 'commune'; id: string } | null;
 }
 
 export interface LivePositionsPayload {

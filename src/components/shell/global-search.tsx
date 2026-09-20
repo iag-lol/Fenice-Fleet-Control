@@ -8,6 +8,7 @@ import {
   Package,
   Route as RouteIcon,
   Search,
+  Shield,
   Truck,
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
@@ -26,6 +27,7 @@ const KIND_ICON = {
   orden: ClipboardList,
   pedido: Package,
   ruta: RouteIcon,
+  geocerca: Shield,
   comuna: MapPin,
 } as const;
 
@@ -35,12 +37,13 @@ const KIND_LABEL = {
   orden: 'Orden de trabajo',
   pedido: 'Pedido',
   ruta: 'Ruta',
+  geocerca: 'Geocerca',
   comuna: 'Comuna',
 } as const;
 
 /**
- * Buscador global. Cubre cliente, RUT, codigo, patente, OT, pedido, direccion
- * y comuna, y cada resultado ofrece navegar al detalle o abrirlo en el mapa.
+ * Buscador global. Cubre cliente, RUT, codigo, patente, OT, pedido, direccion,
+ * ruta, geocerca y comuna. Cada resultado permite navegar o verlo en el mapa.
  */
 export function GlobalSearch({ className }: { className?: string }) {
   const router = useRouter();
@@ -97,6 +100,10 @@ export function GlobalSearch({ className }: { className?: string }) {
   const go = (result: GlobalSearchResult): void => {
     setOpen(false);
     setTerm('');
+    if (result.kind === 'geocerca' && result.mapFocus) {
+      select({ type: 'geofence', id: result.mapFocus.id });
+      if (result.position) focusOn(result.position, 15);
+    }
     router.push(result.href);
   };
 
@@ -141,7 +148,7 @@ export function GlobalSearch({ className }: { className?: string }) {
         onFocus={() => setOpen(true)}
         onKeyDown={onKeyDown}
         onClear={() => setTerm('')}
-        placeholder="Buscar cliente, patente, OT, pedido, direccion..."
+        placeholder="Buscar cliente, patente, OT, pedido, dirección, geocerca..."
         aria-label="Buscador global"
         className="bg-surface-850"
       />
