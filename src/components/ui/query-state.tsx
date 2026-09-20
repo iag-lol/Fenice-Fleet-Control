@@ -1,6 +1,6 @@
 'use client';
 
-import { AlertTriangle, RotateCw, WifiOff } from 'lucide-react';
+import { AlertTriangle, Info, RotateCw, WifiOff, X } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
 import { formatTimeWithSeconds } from '@/lib/format';
@@ -62,13 +62,18 @@ export function QueryError({
 export function GpsDegradedNotice({
   lastKnownAt,
   onRetry,
+  onDismiss,
 }: {
   lastKnownAt: string | null;
   onRetry?: () => void;
+  /** Si se entrega, muestra una X para colapsar el aviso mientras dure esta misma caida. */
+  onDismiss?: () => void;
 }) {
   return (
-    <div className="flex items-center gap-3 rounded-md border border-status-warning/30 bg-status-warning/10 px-3 py-2">
-      <WifiOff className="h-4 w-4 shrink-0 text-status-warning" />
+    <div className="flex items-center gap-3 rounded-xl border border-status-warning/30 bg-status-warning/10 px-3.5 py-2.5 shadow-float">
+      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-status-warning/15 text-status-warning">
+        <WifiOff className="h-4 w-4" />
+      </span>
       <p className="min-w-0 flex-1 text-xs text-ink">
         Conexion GPS temporalmente no disponible.{' '}
         {lastKnownAt ? (
@@ -82,6 +87,16 @@ export function GpsDegradedNotice({
           Reintentar
         </Button>
       ) : null}
+      {onDismiss ? (
+        <button
+          type="button"
+          onClick={onDismiss}
+          aria-label="Cerrar aviso"
+          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-ink-faint hover:bg-status-warning/15 hover:text-ink"
+        >
+          <X className="h-3.5 w-3.5" />
+        </button>
+      ) : null}
     </div>
   );
 }
@@ -90,11 +105,33 @@ export function GpsDegradedNotice({
  * Marca de funcionalidad que depende de una integracion aun no conectada.
  * La arquitectura interna existe; lo que falta son credenciales externas.
  */
-export function PendingIntegrationNotice({ what }: { what: ReactNode }) {
+export function PendingIntegrationNotice({
+  what,
+  onDismiss,
+}: {
+  what: ReactNode;
+  /** Si se entrega, muestra una X para colapsar el aviso mientras dure esta misma condicion. */
+  onDismiss?: () => void;
+}) {
   return (
-    <div className="rounded-md border border-brand-500/25 bg-brand-500/5 px-3 py-2.5 text-xs text-ink-muted">
-      <span className="font-medium text-brand-700">Disponible al conectar fuente externa.</span>{' '}
-      {what}
+    <div className="flex items-start gap-3 rounded-xl border border-brand-500/25 bg-brand-500/5 px-3.5 py-2.5 shadow-float">
+      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand-500/15 text-brand-700">
+        <Info className="h-4 w-4" />
+      </span>
+      <p className="min-w-0 flex-1 text-xs text-ink-muted">
+        <span className="font-medium text-brand-700">Disponible al conectar fuente externa.</span>{' '}
+        {what}
+      </p>
+      {onDismiss ? (
+        <button
+          type="button"
+          onClick={onDismiss}
+          aria-label="Cerrar aviso"
+          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-ink-faint hover:bg-brand-500/15 hover:text-ink"
+        >
+          <X className="h-3.5 w-3.5" />
+        </button>
+      ) : null}
     </div>
   );
 }

@@ -65,7 +65,19 @@ export function Sheet({
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex" role="dialog" aria-modal="true" aria-label={typeof title === 'string' ? title : undefined}>
+    <div
+      className={cn(
+        'fixed inset-0 z-50 flex',
+        // El contenedor tambien cubre toda la pantalla. Desactivar solo el
+        // velo no basta: el propio contenedor seguia siendo el objetivo del
+        // puntero y bloqueaba el mapa. En escritorio dejamos pasar los
+        // eventos y los reactivamos exclusivamente dentro del panel.
+        transparentOverlay && 'sm:pointer-events-none',
+      )}
+      role="dialog"
+      aria-modal="true"
+      aria-label={typeof title === 'string' ? title : undefined}
+    >
       <button
         type="button"
         aria-label="Cerrar panel"
@@ -81,7 +93,7 @@ export function Sheet({
 
       <div
         className={cn(
-          'relative z-10 flex w-full flex-col overflow-hidden border-line bg-surface-900 shadow-panel',
+          'pointer-events-auto relative z-10 flex w-full flex-col overflow-hidden border-line bg-surface-900 shadow-panel',
           // Movil: hoja inferior con esquinas superiores redondeadas.
           'mt-auto max-h-[88vh] animate-sheet-up rounded-t-xl border-t safe-bottom',
           // Escritorio: panel lateral a altura completa.

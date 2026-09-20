@@ -1,8 +1,9 @@
 'use client';
 
+import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { PanelLeftClose, PanelLeftOpen, Radio } from 'lucide-react';
+import { HelpCircle, PanelLeftClose, PanelLeftOpen, Radio } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
 import { BrandLockup } from '@/components/shell/brand';
@@ -10,6 +11,71 @@ import { getVisibleNavGroups, isActivePath } from '@/components/shell/navigation
 import { PlanBadge } from '@/components/product/plan-badge';
 import { useIsTabletRange } from '@/hooks/use-media-query';
 import { cn } from '@/lib/cn';
+
+interface MeResponse {
+  authenticated: boolean;
+  openAccess: boolean;
+  displayName: string | null;
+  role: string;
+}
+
+const ROLE_LABEL: Record<string, string> = {
+  administrador: 'Administrador',
+  supervisor: 'Supervisor',
+  operador: 'Operador',
+  invitado: 'Invitado',
+};
+
+function initialsOf(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return '?';
+  return (parts[0]![0] + (parts[1]?.[0] ?? '')).toUpperCase();
+}
+
+/**
+ * Sesion activa, al pie del sidebar.
+ *
+ * Comparte la misma clave de consulta que `UserMenu` del header (misma
+ * cache, sin peticion duplicada). Solo informa quien es y con que rol: cerrar
+ * sesion se mantiene en el header porque es el unico punto que existe tambien
+ * en movil, donde este sidebar no se renderiza.
+ */
+function SidebarUserCard({ collapsed }: { collapsed: boolean }) {
+  const { data } = useQuery({
+    queryKey: ['auth', 'me'],
+    staleTime: 60_000,
+    queryFn: async (): Promise<MeResponse> => {
+      const response = await fetch('/api/auth/me');
+      if (!response.ok) throw new Error('Sesion no disponible');
+      return (await response.json()) as MeResponse;
+    },
+  });
+
+  if (!data || data.openAccess || !data.authenticated) return null;
+
+  const name = data.displayName ?? 'Sesion activa';
+  const roleLabel = ROLE_LABEL[data.role] ?? data.role;
+
+  return (
+    <div
+      title={collapsed ? `${name} · ${roleLabel}` : undefined}
+      className={cn(
+        'mt-1 flex items-center gap-2.5 rounded-md border border-line bg-surface-800/60 px-2.5 py-2',
+        collapsed && 'justify-center px-0',
+      )}
+    >
+      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-brand-500/15 text-2xs font-semibold text-brand-700">
+        {initialsOf(name)}
+      </span>
+      {!collapsed ? (
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-[13px] font-medium text-ink">{name}</span>
+          <span className="block truncate text-2xs text-ink-faint">{roleLabel}</span>
+        </span>
+      ) : null}
+    </div>
+  );
+}
 
 /**
  * Barra lateral de escritorio.
@@ -143,6 +209,20 @@ export function Sidebar() {
           {!collapsed ? <span className="truncate">Seguimiento publico</span> : null}
         </Link>
 
+        <a
+          href="https://zyteron.cl"
+          target="_blank"
+          rel="noopener noreferrer"
+          title="¿Necesitas ayuda?"
+          className={cn(
+            'mb-1 flex items-center gap-2.5 rounded-md px-2.5 py-2 text-[13px] text-ink-muted transition-colors hover:bg-surface-800 hover:text-ink',
+            collapsed && 'justify-center px-0',
+          )}
+        >
+          <HelpCircle className="h-4 w-4 shrink-0" />
+          {!collapsed ? <span className="truncate">¿Necesitas ayuda?</span> : null}
+        </a>
+
         {/* En la torre de control el colapso es fijo: no hay nada que alternar. */}
         {isControlTower ? null : (
           <button
@@ -175,6 +255,8 @@ export function Sidebar() {
         >
           {!collapsed ? <span className="truncate">Desarrollado por Zyteron</span> : <span aria-hidden>Z</span>}
         </a>
+
+        <SidebarUserCard collapsed={collapsed} />
       </div>
     </aside>
   );

@@ -2,18 +2,26 @@
 
 import { useQuery } from '@tanstack/react-query';
 import {
+  AlertTriangle,
+  Bell,
   Clock,
   Crosshair,
   ExternalLink,
   Gauge,
   History,
+  Info,
+  ListChecks,
   MapPin,
   Navigation,
+  Power,
+  PowerOff,
   Route as RouteIcon,
+  Square,
   Truck,
   User,
 } from 'lucide-react';
 import Link from 'next/link';
+import { useState } from 'react';
 
 import { DetailList, Section } from '@/components/common/detail-list';
 import { RouteProgress } from '@/components/common/progress';
@@ -27,6 +35,8 @@ import { Timeline } from '@/components/common/timeline';
 import { Button, LinkButton } from '@/components/ui/button';
 import { QueryError } from '@/components/ui/query-state';
 import { SkeletonRows } from '@/components/ui/skeleton';
+import { systemModeQuery } from '@/hooks/use-control-data';
+import { useVehicleTrajectory, type TrajectoryEventType } from '@/hooks/use-vehicle-trajectory';
 import {
   formatCoordinates,
   formatDuration,
@@ -36,10 +46,30 @@ import {
   formatKm,
   formatSpeed,
   formatTime,
+  formatTimeWithSeconds,
 } from '@/lib/format';
+import { cn } from '@/lib/cn';
 import { useLiveFleet } from '@/hooks/use-live-fleet';
 import { useMapStore } from '@/stores/map-store';
 import type { VehicleDetail } from '@/types/views';
+
+const DEFAULT_MAX_LEGAL_SPEED_KMH = 60;
+
+type PanelTab = 'informacion' | 'actividad' | 'ordenes' | 'alertas';
+
+const TRAJECTORY_EVENT_ICON: Record<TrajectoryEventType, typeof Square> = {
+  stop: Square,
+  speeding: AlertTriangle,
+  ignition_on: Power,
+  ignition_off: PowerOff,
+};
+
+const TRAJECTORY_EVENT_TONE: Record<TrajectoryEventType, string> = {
+  stop: 'text-status-warning',
+  speeding: 'text-status-warning',
+  ignition_on: 'text-status-active',
+  ignition_off: 'text-ink-faint',
+};
 
 /**
  * Ficha operacional del vehiculo.
@@ -55,6 +85,7 @@ export function VehiclePanel({ vehicleId }: { vehicleId: string }) {
   const following = useMapStore((s) => s.followingVehicleId);
   const highlightRoute = useMapStore((s) => s.highlightRoute);
   const highlightedRouteId = useMapStore((s) => s.highlightedRouteId);
+  const [tab, setTab] = useState<PanelTab>('informacion');
 
   const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['vehicle', vehicleId],
@@ -68,6 +99,14 @@ export function VehiclePanel({ vehicleId }: { vehicleId: string }) {
       return (await response.json()) as VehicleDetail;
     },
   });
+
+  const { data: mode } = useQuery(systemModeQuery);
+  const maxLegalSpeedKmh = mode?.settings.route.maxLegalSpeedKmh ?? DEFAULT_MAX_LEGAL_SPEED_KMH;
+  const {
+    trajectory,
+    isLoading: trajectoryLoading,
+    isError: trajectoryError,
+  } = useVehicleTrajectory(vehicleId, data?.vehicle.plate ?? null, maxLegalSpeedKmh);
 
   if (isError) {
     return (
@@ -93,9 +132,19 @@ export function VehiclePanel({ vehicleId }: { vehicleId: string }) {
   const position = positions.get(vehicleId) ?? data.snapshot.position;
   const { vehicle, driver, currentWorkOrder, nextWorkOrder, route, journey, eta } = data;
   const isFollowing = following === vehicleId;
+  const ordersCount = (currentWorkOrder ? 1 : 0) + (nextWorkOrder ? 1 : 0);
+  const alertsCount = data.openAlerts.length;
+
+  const TABS: { id: PanelTab; label: string; icon: typeof Info; count?: number }[] = [
+    { id: 'informacion', label: 'Información', icon: Info },
+    { id: 'actividad', label: 'Actividad', icon: History },
+    { id: 'ordenes', label: 'Órdenes', icon: ListChecks, count: ordersCount },
+    { id: 'alertas', label: 'Alertas', icon: Bell, count: alertsCount },
+  ];
 
   return (
-    <div className="space-y-5 p-4 pb-6">
+    <div className="flex flex-col">
+      <div className="space-y-5 p-4 pb-4">
       {/* --- Encabezado --- */}
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
@@ -153,7 +202,44 @@ export function VehiclePanel({ vehicleId }: { vehicleId: string }) {
           Ver historial
         </LinkButton>
       </div>
+      </div>
 
+      {/* --- Pestañas --- */}
+      <div className="flex shrink-0 border-b border-line px-2" aria-label="Secciones del vehículo">
+        {TABS.map((entry) => {
+          const Icon = entry.icon;
+          const active = tab === entry.id;
+          return (
+            <button
+              key={entry.id}
+              type="button"
+              onClick={() => setTab(entry.id)}
+              aria-pressed={active}
+              className={cn(
+                'flex min-h-11 flex-1 items-center justify-center gap-1.5 border-b-2 px-1 text-xs font-medium transition-colors',
+                active ? 'border-brand-600 text-brand-700' : 'border-transparent text-ink-faint hover:text-ink',
+              )}
+            >
+              <Icon className="h-3.5 w-3.5 shrink-0" />
+              <span className="truncate">{entry.label}</span>
+              {typeof entry.count === 'number' && entry.count > 0 ? (
+                <span
+                  className={cn(
+                    'numeric shrink-0 rounded px-1 text-[10px] font-semibold',
+                    active ? 'bg-brand-500/15 text-brand-700' : 'bg-surface-750 text-ink-faint',
+                  )}
+                >
+                  {entry.count}
+                </span>
+              ) : null}
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="space-y-5 p-4 pb-6">
+      {tab === 'informacion' ? (
+      <>
       {/* --- Telemetria --- */}
       <Section title="Vehiculo">
         <DetailList
@@ -217,6 +303,18 @@ export function VehiclePanel({ vehicleId }: { vehicleId: string }) {
         />
       </Section>
 
+      <div className="flex items-center gap-2 border-t border-line pt-3">
+        <Truck className="h-3.5 w-3.5 text-ink-faint" />
+        <p className="text-2xs text-ink-faint">
+          Equipo {vehicle.device?.model ?? 'no instalado'}
+          {vehicle.device ? ` · IMEI ${vehicle.device.imei}` : ''}
+        </p>
+      </div>
+      </>
+      ) : null}
+
+      {tab === 'ordenes' ? (
+      <>
       {/* --- Orden actual --- */}
       <Section title="Orden actual">
         {currentWorkOrder ? (
@@ -350,7 +448,16 @@ export function VehiclePanel({ vehicleId }: { vehicleId: string }) {
           </ol>
         </Section>
       ) : null}
+      {!currentWorkOrder && !nextWorkOrder && !route ? (
+        <p className="rounded-md border border-line bg-surface-800 px-3 py-2.5 text-xs text-ink-faint">
+          Este vehiculo no tiene una ruta asignada en este momento.
+        </p>
+      ) : null}
+      </>
+      ) : null}
 
+      {tab === 'actividad' ? (
+      <>
       {/* --- Recorrido --- */}
       <Section title="Recorrido de la jornada">
         <DetailList
@@ -378,6 +485,45 @@ export function VehiclePanel({ vehicleId }: { vehicleId: string }) {
         />
       </Section>
 
+      {/* --- Trayecto del dia --- */}
+      <Section title="Eventos del trayecto (00:00 - 23:59)">
+        {trajectoryLoading ? (
+          <p className="text-2xs text-ink-faint">Cargando trayecto del dia...</p>
+        ) : trajectoryError ? (
+          <p className="text-2xs text-status-warning">
+            No fue posible cargar el trayecto del dia de este vehiculo.
+          </p>
+        ) : trajectory && trajectory.events.length > 0 ? (
+          <ul className="space-y-1.5">
+            {trajectory.events.map((event) => {
+              const Icon = TRAJECTORY_EVENT_ICON[event.type];
+              return (
+                <li key={event.id}>
+                  <button
+                    type="button"
+                    onClick={() => focusOn(event.position, 16)}
+                    className="flex min-h-11 w-full items-center gap-2.5 rounded-md border border-line bg-surface-800 px-3 py-2 text-left hover:border-brand-500/40"
+                  >
+                    <Icon className={cn('h-3.5 w-3.5 shrink-0', TRAJECTORY_EVENT_TONE[event.type])} />
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-xs font-medium text-ink">{event.title}</span>
+                      <span className="block truncate text-2xs text-ink-faint">{event.detail}</span>
+                    </span>
+                    <span className="numeric shrink-0 text-2xs text-ink-faint">
+                      {formatTimeWithSeconds(event.at)}
+                    </span>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        ) : (
+          <p className="rounded-md border border-line bg-surface-800 px-3 py-2.5 text-xs text-ink-faint">
+            Sin eventos registrados en el trayecto de hoy.
+          </p>
+        )}
+      </Section>
+
       {/* --- Historial --- */}
       <Section title="Historial de la jornada">
         <Timeline
@@ -385,29 +531,30 @@ export function VehiclePanel({ vehicleId }: { vehicleId: string }) {
           onFocus={(entry) => entry.position && focusOn(entry.position, 16)}
         />
       </Section>
-
-      {data.openAlerts.length > 0 ? (
-        <Section title={`Alertas abiertas (${data.openAlerts.length})`}>
-          <ul className="space-y-1.5">
-            {data.openAlerts.map((alert) => (
-              <li
-                key={alert.id}
-                className="rounded-md border border-status-warning/25 bg-status-warning/5 px-3 py-2"
-              >
-                <p className="text-xs font-medium text-ink">{alert.title}</p>
-                <p className="mt-0.5 text-2xs leading-relaxed text-ink-faint">{alert.description}</p>
-              </li>
-            ))}
-          </ul>
-        </Section>
+      </>
       ) : null}
 
-      <div className="flex items-center gap-2 border-t border-line pt-3">
-        <Truck className="h-3.5 w-3.5 text-ink-faint" />
-        <p className="text-2xs text-ink-faint">
-          Equipo {vehicle.device?.model ?? 'no instalado'}
-          {vehicle.device ? ` · IMEI ${vehicle.device.imei}` : ''}
+      {tab === 'alertas' ? (
+      <>
+      {data.openAlerts.length > 0 ? (
+        <ul className="space-y-1.5">
+          {data.openAlerts.map((alert) => (
+            <li
+              key={alert.id}
+              className="rounded-md border border-status-warning/25 bg-status-warning/5 px-3 py-2"
+            >
+              <p className="text-xs font-medium text-ink">{alert.title}</p>
+              <p className="mt-0.5 text-2xs leading-relaxed text-ink-faint">{alert.description}</p>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="rounded-md border border-line bg-surface-800 px-3 py-2.5 text-xs text-ink-faint">
+          Este vehiculo no tiene alertas abiertas en este momento.
         </p>
+      )}
+      </>
+      ) : null}
       </div>
     </div>
   );

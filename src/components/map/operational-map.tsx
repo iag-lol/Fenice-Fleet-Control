@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import {
   AlertTriangle,
   Building2,
+  ClipboardList,
   Filter,
   Gauge,
   Maximize2,
@@ -14,6 +15,7 @@ import {
   PowerOff,
   Target,
   Truck,
+  WifiOff,
 } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -30,7 +32,7 @@ import { FocusBanner } from '@/components/map/focus-banner';
 import { ClientFiltersPanel, applyClientFilters } from '@/components/map/client-filters-panel';
 import { FleetMap, type FleetMapVehicle } from '@/components/map/fleet-map';
 import { LayerControl } from '@/components/map/layer-control';
-import { ViewModeControl } from '@/components/map/view-mode-control';
+import { MapViewQuickToggle, ViewModeControl } from '@/components/map/view-mode-control';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ErrorBoundary } from '@/components/ui/error-boundary';
@@ -43,6 +45,7 @@ import {
 import { Skeleton } from '@/components/ui/skeleton';
 import { useLiveFleet } from '@/hooks/use-live-fleet';
 import { OPERATION_BOUNDS } from '@/config/map-viewport';
+import { ACTIVITY_COLOR, ACTIVITY_LABEL } from '@/lib/engines/vehicle-activity';
 import { cn } from '@/lib/cn';
 import { useMapStore } from '@/stores/map-store';
 import { mapQuery, communesQuery, systemModeQuery } from '@/hooks/use-control-data';
@@ -97,6 +100,15 @@ export const OperationalMap = memo(function OperationalMap() {
   const containerRef = useRef<HTMLDivElement>(null);
 
   const { positions, error: gpsError, lastUpdateAt, refresh } = useLiveFleet();
+
+  // El aviso de GPS/integracion se puede colapsar, pero solo mientras dure
+  // ESTA MISMA caida: si la senal se recupera y luego vuelve a fallar, hay
+  // que verlo de nuevo. Por eso se reinicia cuando `gpsError` pasa a `true`,
+  // no en cada render mientras se mantiene en ese estado.
+  const [gpsNoticeDismissed, setGpsNoticeDismissed] = useState(false);
+  useEffect(() => {
+    if (gpsError) setGpsNoticeDismissed(false);
+  }, [gpsError]);
 
   const layers = useMapStore((s) => s.layers);
   const heatmapMode = useMapStore((s) => s.heatmapMode);
@@ -364,8 +376,30 @@ export const OperationalMap = memo(function OperationalMap() {
   const vehicleCounts = {
     total: vehicles.length,
     enRuta: snapshot?.vehicles.filter((v) => v.status === 'en_ruta').length ?? 0,
+    detenido: snapshot?.vehicles.filter((v) => v.status === 'detenido').length ?? 0,
     offline: snapshot?.vehicles.filter((v) => v.status === 'offline').length ?? 0,
+    // "En observacion": el vehiculo arrastra al menos una alerta abierta,
+    // independiente de si sigue en movimiento o esta detenido.
+    enObservacion: snapshot?.vehicles.filter((v) => v.openAlertCount > 0).length ?? 0,
+    // "OT en curso": el vehiculo tiene una orden de trabajo asignada que esta
+    // ejecutando en este momento (no simplemente pendiente de despacho).
+    otEnCurso: snapshot?.vehicles.filter((v) => v.activeWorkOrderId !== null).length ?? 0,
   };
+
+  const kpiCards: { key: string; label: string; value: number; icon: typeof Truck; tone: string }[] = [
+    { key: 'en-ruta', label: 'En ruta', value: vehicleCounts.enRuta, icon: Truck, tone: 'text-brand-700' },
+    { key: 'detenidos', label: 'Detenidos', value: vehicleCounts.detenido, icon: MinusCircle, tone: 'text-status-warning' },
+    { key: 'observacion', label: 'En observación', value: vehicleCounts.enObservacion, icon: AlertTriangle, tone: 'text-status-dormant' },
+    { key: 'sin-senal', label: 'Sin señal', value: vehicleCounts.offline, icon: WifiOff, tone: 'text-ink-faint' },
+    {
+      key: 'clientes',
+      label: 'Clientes visibles',
+      value: layers.clientes ? clientesEnfocados.length : 0,
+      icon: Building2,
+      tone: 'text-brand-700',
+    },
+    { key: 'ot-en-curso', label: 'OT en curso', value: vehicleCounts.otEnCurso, icon: ClipboardList, tone: 'text-brand-700' },
+  ];
 
   return (
     <div
@@ -403,44 +437,33 @@ export const OperationalMap = memo(function OperationalMap() {
       )}
 
       {/*
-        --- Barra superior de controles ---
+        --- Barra superior: resumen KPI y controles ---
 
-        En movil se apila: el resumen de flota arriba y los controles debajo.
-        En una sola fila, el resumen y los cuatro botones sumaban mas de 390 px
-        y el ultimo control quedaba cortado fuera de la pantalla.
+        Siempre en dos filas, en cualquier ancho: la fila de KPIs necesita el
+        ancho completo para sus seis tarjetas (si comparte fila con los
+        controles a la derecha, como se probo antes, le queda tan poco
+        espacio que se corta a la mitad y exige scroll horizontal sin ninguna
+        pista visual de que hay mas). Los banners de abajo (`top-*`) asumen
+        esta misma altura de dos filas en todos los anchos.
       */}
-      <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex flex-col items-start gap-2 p-2.5 xl:flex-row xl:items-start xl:justify-between sm:p-3">
-        <div className="pointer-events-auto flex max-w-full flex-wrap items-center gap-2">
-          <div className="flex items-center gap-1.5 whitespace-nowrap rounded-md border border-line-strong bg-surface-900/95 px-2.5 py-1.5 text-2xs shadow-float backdrop-blur sm:gap-2">
-            <Truck className="h-3.5 w-3.5 text-brand-700" />
-            <span className="numeric font-medium text-ink">{vehicleCounts.enRuta}</span>
-            <span className="text-ink-faint">en ruta</span>
-            <span className="text-line-strong">·</span>
-            <span className="numeric font-medium text-ink">{vehicleCounts.total}</span>
-            <span className="text-ink-faint">flota</span>
-            {vehicleCounts.offline > 0 ? (
-              <>
-                <span className="text-line-strong">·</span>
-                <span className="numeric font-medium text-status-dormant">
-                  {vehicleCounts.offline}
-                </span>
-                <span className="text-ink-faint">offline</span>
-              </>
-            ) : null}
-          </div>
-
-          <div className="hidden items-center gap-2 whitespace-nowrap rounded-md border border-line-strong bg-surface-900/95 px-2.5 py-1.5 text-2xs shadow-float backdrop-blur sm:flex">
-            <Building2 className="h-3.5 w-3.5 text-brand-700" />
-            <span className="numeric font-medium text-ink">
-              {layers.clientes ? clientesEnfocados.length : 0}
-            </span>
-            <span className="text-ink-faint">de</span>
-            <span className="numeric font-medium text-ink">{allClients.length}</span>
-            <span className="text-ink-faint">clientes visibles</span>
-          </div>
+      <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex flex-col gap-2 p-2.5 sm:p-3">
+        <div className="pointer-events-auto flex max-w-full gap-1 overflow-x-auto rounded-md border border-line-strong bg-surface-900/95 p-1 shadow-float backdrop-blur sm:gap-1.5">
+          {kpiCards.map((kpi) => {
+            const Icon = kpi.icon;
+            return (
+              <div
+                key={kpi.key}
+                className="flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded px-2 py-1 text-2xs"
+              >
+                <Icon className={cn('h-3.5 w-3.5', kpi.tone)} />
+                <span className="numeric font-medium text-ink">{kpi.value}</span>
+                <span className="text-ink-faint">{kpi.label}</span>
+              </div>
+            );
+          })}
         </div>
 
-        <div className="pointer-events-auto flex items-center gap-2">
+        <div className="pointer-events-auto flex flex-wrap items-center gap-2">
           <button
             type="button"
             onClick={() => setFiltersOpen(true)}
@@ -457,6 +480,7 @@ export const OperationalMap = memo(function OperationalMap() {
           </button>
 
           <LayerControl />
+          <MapViewQuickToggle />
           <ViewModeControl />
 
           <button
@@ -504,11 +528,11 @@ export const OperationalMap = memo(function OperationalMap() {
       {/*
         --- Aviso de degradacion GPS ---
 
-        `top-28` (no `xl:top-16` hasta que la barra de controles vuelve a ser
-        una sola fila): por debajo de `xl` el resumen de flota y los botones
-        se apilan en dos filas que llegan hasta ahi, y con un offset menor
-        este aviso se dibujaba encima de "Filtros/Capas/Vista" y les robaba
-        el clic sin que se notara visualmente por que dejaban de responder.
+        `top-28`: la barra superior siempre ocupa dos filas (KPIs arriba,
+        controles debajo) en cualquier ancho, asi que un solo offset alcanza
+        para todos los tamanos de pantalla. Con uno menor este aviso se
+        dibujaba encima de "Filtros/Capas/Vista" y les robaba el clic sin que
+        se notara visualmente por que dejaban de responder.
 
         `z-[5]` (menor que el `z-10` de la barra de controles): con el mismo
         z-index, el orden del DOM decidia el empate a favor de este aviso (va
@@ -518,10 +542,11 @@ export const OperationalMap = memo(function OperationalMap() {
         contexto de apilamiento de la barra, no frente a un hermano con el
         mismo nivel que ella.
       */}
-      {gpsError ? (
-        <div className="pointer-events-auto absolute inset-x-2.5 top-28 z-[5] sm:inset-x-auto sm:left-1/2 sm:w-[440px] sm:-translate-x-1/2 xl:top-16">
+      {gpsError && !gpsNoticeDismissed ? (
+        <div className="pointer-events-auto absolute inset-x-2.5 top-28 z-[5] sm:inset-x-auto sm:left-1/2 sm:w-[440px] sm:-translate-x-1/2">
           {mode?.gps.provider === 'unavailable' ? (
             <PendingIntegrationNotice
+              onDismiss={() => setGpsNoticeDismissed(true)}
               what={
                 <>
                   La flota no aparece en el mapa: el proveedor de telemetria GPS no esta conectado.
@@ -534,7 +559,11 @@ export const OperationalMap = memo(function OperationalMap() {
               }
             />
           ) : (
-            <GpsDegradedNotice lastKnownAt={lastUpdateAt} onRetry={refresh} />
+            <GpsDegradedNotice
+              lastKnownAt={lastUpdateAt}
+              onRetry={refresh}
+              onDismiss={() => setGpsNoticeDismissed(true)}
+            />
           )}
         </div>
       ) : null}
@@ -562,6 +591,11 @@ export const OperationalMap = memo(function OperationalMap() {
             vehiclePlate={
               currentSelection?.type === 'vehicle'
                 ? (vehicles.find((v) => v.vehicleId === currentSelection.id)?.plate ?? null)
+                : null
+            }
+            vehicleFleetCode={
+              currentSelection?.type === 'vehicle'
+                ? (vehicles.find((v) => v.vehicleId === currentSelection.id)?.fleetCode ?? null)
                 : null
             }
             routeCode={
@@ -663,6 +697,24 @@ export const OperationalMap = memo(function OperationalMap() {
           <Button size="sm" variant="secondary" onClick={() => followVehicle(null)}>
             Cancelar
           </Button>
+        </div>
+      ) : null}
+
+      {/* --- Leyenda de estados de vehiculos --- */}
+      {layers.camiones ? (
+        <div className="pointer-events-none absolute bottom-[132px] right-2.5 z-10 hidden flex-col gap-1 rounded-md border border-line bg-surface-900/90 px-2.5 py-2 text-2xs shadow-float backdrop-blur lg:flex lg:bottom-52 lg:right-14">
+          <p className="mb-0.5 font-semibold uppercase tracking-wider text-ink-faint">
+            Estados de vehículos
+          </p>
+          {(Object.keys(ACTIVITY_LABEL) as (keyof typeof ACTIVITY_LABEL)[]).map((status) => (
+            <span key={status} className="flex items-center gap-1.5 text-ink-muted">
+              <span
+                className="h-2 w-2 rounded-full"
+                style={{ backgroundColor: ACTIVITY_COLOR[status] }}
+              />
+              {ACTIVITY_LABEL[status]}
+            </span>
+          ))}
         </div>
       ) : null}
 

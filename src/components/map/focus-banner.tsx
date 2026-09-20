@@ -18,6 +18,8 @@ import { useMapStore } from '@/stores/map-store';
 
 export interface FocusBannerProps {
   vehiclePlate: string | null;
+  /** Codigo interno de flota del vehiculo enfocado, ej. "C-104". */
+  vehicleFleetCode?: string | null;
   routeCode: string | null;
   communeName: string | null;
   /** Cuantas entidades quedan ocultas por el enfoque. */
@@ -29,6 +31,7 @@ export interface FocusBannerProps {
 
 export function FocusBanner({
   vehiclePlate,
+  vehicleFleetCode,
   routeCode,
   communeName,
   hiddenCount,
@@ -41,23 +44,37 @@ export function FocusBanner({
 
   const focos = [
     vehiclePlate
-      ? { id: 'vehiculo', icono: <Truck className="h-3.5 w-3.5" />, texto: vehiclePlate, quitar: onClearVehicle }
+      ? {
+          id: 'vehiculo',
+          icono: <Truck className="h-3.5 w-3.5" />,
+          texto: vehiclePlate,
+          subtexto: vehicleFleetCode ?? null,
+          quitar: onClearVehicle,
+        }
       : null,
     routeCode
-      ? { id: 'ruta', icono: <RouteIcon className="h-3.5 w-3.5" />, texto: routeCode, quitar: onClearRoute }
+      ? { id: 'ruta', icono: <RouteIcon className="h-3.5 w-3.5" />, texto: routeCode, subtexto: null, quitar: onClearRoute }
       : null,
     communeName
-      ? { id: 'comuna', icono: <MapPin className="h-3.5 w-3.5" />, texto: communeName, quitar: onClearCommune }
+      ? { id: 'comuna', icono: <MapPin className="h-3.5 w-3.5" />, texto: communeName, subtexto: null, quitar: onClearCommune }
       : null,
   ].filter((f) => f !== null);
 
   if (focos.length === 0) return null;
 
+  // Cuando lo unico enfocado es UN vehiculo (el caso mas frecuente), el
+  // rotulo lo nombra explicitamente en vez del generico "Seleccionado":
+  // es la frase que pide la operacion ("1 vehiculo seleccionado").
+  const label =
+    focos.length === 1 && focos[0]?.id === 'vehiculo' && !isolate
+      ? '1 vehículo seleccionado'
+      : isolate
+        ? 'Viendo solo'
+        : 'Seleccionado';
+
   return (
     <div className="pointer-events-auto flex max-w-[calc(100vw-1.25rem)] flex-wrap items-center gap-2 rounded-lg border border-brand-500/45 bg-surface-900/96 px-2.5 py-2 shadow-float backdrop-blur">
-      <span className="text-2xs font-semibold uppercase tracking-wider text-ink-faint">
-        {isolate ? 'Viendo solo' : 'Seleccionado'}
-      </span>
+      <span className="text-2xs font-semibold uppercase tracking-wider text-ink-faint">{label}</span>
 
       {focos.map((foco) => (
         <span
@@ -66,6 +83,11 @@ export function FocusBanner({
         >
           {foco.icono}
           <span className="numeric max-w-[9rem] truncate">{foco.texto}</span>
+          {foco.subtexto ? (
+            <span className="numeric shrink-0 rounded bg-surface-900/60 px-1 py-0.5 text-2xs text-brand-700/80">
+              {foco.subtexto}
+            </span>
+          ) : null}
           <button
             type="button"
             onClick={foco.quitar}
@@ -88,7 +110,7 @@ export function FocusBanner({
         className="inline-flex min-h-11 items-center gap-1.5 rounded-md border border-line-strong px-2 text-2xs font-medium text-ink-muted hover:text-ink sm:min-h-7"
       >
         {isolate ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
-        {isolate ? `${hiddenCount} ocultos` : 'Mostrando todo'}
+        {isolate ? `${hiddenCount} ocultos` : 'Mostrando todos'}
       </button>
     </div>
   );

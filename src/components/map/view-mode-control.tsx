@@ -26,6 +26,65 @@ const MODE_ICON: Record<MapViewMode, typeof Layers2> = {
 };
 
 /**
+ * Alterna rapida Mapa / Satelite, junto al selector completo de vista.
+ *
+ * Cubre el atajo mas usado (mapa base vs. imagen satelital) sin abrir el
+ * desplegable. Respeta la misma reja de plan que `ViewModeControl`: si el
+ * satelite no esta incluido, el boton queda visible pero bloqueado con
+ * candado, nunca oculto (ocultarlo haria pensar que la plataforma no lo
+ * ofrece).
+ */
+export function MapViewQuickToggle() {
+  const viewMode = useMapStore((s) => s.viewMode);
+  const setViewMode = useMapStore((s) => s.setViewMode);
+  const satelliteAccess = resolveFeature('satellite-view');
+  const satelliteActive = viewMode === 'satellite' || viewMode === 'hybrid';
+
+  return (
+    <div
+      role="group"
+      aria-label="Vista rapida del mapa"
+      className="tap flex items-center rounded-md border border-line-strong bg-surface-900/95 p-0.5 text-[13px] text-ink shadow-float backdrop-blur sm:h-9"
+    >
+      <button
+        type="button"
+        onClick={() => setViewMode('standard')}
+        aria-pressed={!satelliteActive}
+        className={cn(
+          'flex h-full items-center gap-1.5 rounded px-2.5 transition-colors',
+          !satelliteActive ? 'bg-brand-500/15 text-brand-700' : 'text-ink-faint hover:text-ink',
+        )}
+      >
+        <Layers2 className="h-3.5 w-3.5" />
+        <span className="hidden sm:inline">Mapa</span>
+      </button>
+      <button
+        type="button"
+        disabled={!satelliteAccess.includedInPlan}
+        title={!satelliteAccess.includedInPlan ? (satelliteAccess.reason ?? undefined) : undefined}
+        onClick={() => setViewMode('satellite')}
+        aria-pressed={satelliteActive}
+        className={cn(
+          'flex h-full items-center gap-1.5 rounded px-2.5 transition-colors',
+          satelliteActive
+            ? 'bg-brand-500/15 text-brand-700'
+            : satelliteAccess.includedInPlan
+              ? 'text-ink-faint hover:text-ink'
+              : 'cursor-not-allowed text-ink-faint/50',
+        )}
+      >
+        {satelliteAccess.includedInPlan ? (
+          <Satellite className="h-3.5 w-3.5" />
+        ) : (
+          <Lock className="h-3.5 w-3.5" />
+        )}
+        <span className="hidden sm:inline">Satélite</span>
+      </button>
+    </div>
+  );
+}
+
+/**
  * Selector de vista del mapa y capa de trafico.
  *
  * Los modos que requieren proveedor NO se ocultan: se muestran con su motivo.
