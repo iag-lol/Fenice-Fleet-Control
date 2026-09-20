@@ -3,6 +3,7 @@
 import { useQuery } from '@tanstack/react-query';
 import {
   AlertTriangle,
+  CheckCircle2,
   Clock,
   Copy,
   Crosshair,
@@ -15,9 +16,11 @@ import {
   Power,
   PowerOff,
   Route as RouteIcon,
+  ShieldCheck,
   Square,
   Truck,
   User,
+  UserCheck,
 } from 'lucide-react';
 import Link from 'next/link';
 import { useState } from 'react';
@@ -48,6 +51,7 @@ import {
   formatTimeWithSeconds,
 } from '@/lib/format';
 import { cn } from '@/lib/cn';
+import { findDeviceCapabilities } from '@/config/gps-device-capabilities';
 import { useLiveFleet } from '@/hooks/use-live-fleet';
 import { useMapStore } from '@/stores/map-store';
 import type { VehicleDetail } from '@/types/views';
@@ -134,6 +138,7 @@ export function VehiclePanel({ vehicleId }: { vehicleId: string }) {
   const isFollowing = following === vehicleId;
   const ordersCount = (currentWorkOrder ? 1 : 0) + (nextWorkOrder ? 1 : 0);
   const alertsCount = data.openAlerts.length;
+  const deviceCapabilities = findDeviceCapabilities(vehicle.device?.model);
 
   const TABS: { id: PanelTab; label: string; count?: number }[] = [
     { id: 'informacion', label: 'Información' },
@@ -433,6 +438,41 @@ export function VehiclePanel({ vehicleId }: { vehicleId: string }) {
           onFocus={(entry) => entry.position && focusOn(entry.position, 16)}
         />
       </Section>
+
+      {/* --- Condiciones del equipo GPS --- */}
+      {deviceCapabilities ? (
+        <Section
+          title="Condiciones del equipo GPS"
+          className="rounded-lg border border-line bg-surface-900 p-3 shadow-card"
+          action={<span className="numeric text-2xs text-ink-faint">{vehicle.device?.model}</span>}
+        >
+          <p className="mb-3 text-2xs leading-relaxed text-ink-faint">
+            Eventos que este equipo puede reportar una vez instalado y configurado.
+          </p>
+          <div className="space-y-3">
+            {deviceCapabilities.map((group) => (
+              <div key={group.title}>
+                <p className="mb-1.5 flex items-center gap-1.5 text-2xs font-semibold uppercase tracking-wider text-ink-faint">
+                  {group.title === 'Conducción y comportamiento' ? (
+                    <UserCheck className="h-3.5 w-3.5 text-brand-700" />
+                  ) : (
+                    <ShieldCheck className="h-3.5 w-3.5 text-brand-700" />
+                  )}
+                  {group.title}
+                </p>
+                <ul className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
+                  {group.items.map((item) => (
+                    <li key={item} className="flex items-start gap-1.5 text-xs text-ink-muted">
+                      <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-status-active" />
+                      <span>{item}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
+        </Section>
+      ) : null}
 
       <div className="flex items-center gap-2 px-1">
         <Truck className="h-3.5 w-3.5 text-ink-faint" />
