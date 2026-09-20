@@ -163,6 +163,24 @@ export function projectOnPolyline(point: LatLng, path: LatLng[]): PolylineProjec
   return best;
 }
 
+/**
+ * Recorta un tramo de un corredor entre dos proyecciones sobre el MISMO
+ * `path` (obtenidas con `projectOnPolyline`).
+ *
+ * Sirve para mostrar solo el tramo que le importa a un destinatario (de
+ * donde viene el camion a su domicilio) sin exponer el resto de una ruta que
+ * puede visitar otros clientes.
+ */
+export function sliceCorridor(
+  path: LatLng[],
+  from: PolylineProjection,
+  to: PolylineProjection,
+): LatLng[] {
+  if (to.alongMeters <= from.alongMeters) return [];
+  const between = path.slice(from.segmentIndex + 1, to.segmentIndex + 1);
+  return [from.closest, ...between, to.closest];
+}
+
 /** Longitud total de una polilinea en metros. */
 export function polylineLengthMeters(path: LatLng[]): number {
   let total = 0;

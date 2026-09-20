@@ -2,11 +2,11 @@ import 'server-only';
 
 import { getOperationalSettings } from '@/services/settings/settings-store';
 import { evaluateConnectionState } from '@/lib/engines/gps-health';
-import { isUsableCoordinate } from '@/lib/geo';
+import { isUsableCoordinate, projectOnPolyline, sliceCorridor } from '@/lib/geo';
 import { isTrackingAllowed } from '@/lib/engines/delivery-detection';
 import { estimateEta } from '@/services/eta/eta-service';
 import { getGpsProvider, getOperationsProvider } from '@/services/registry';
-import type { TrackingSession, WorkOrderStatus } from '@/types/core';
+import type { LatLng, TrackingSession, WorkOrderStatus } from '@/types/core';
 
 /**
  * Seguimiento publico por numero de orden.
@@ -138,6 +138,7 @@ export async function loadTrackingSession(
   // --- Vehiculo -------------------------------------------------------------
   let vehicle: TrackingSession['vehicle'] = null;
   let eta: TrackingSession['eta'] = null;
+  let trajectory: TrackingSession['trajectory'] = null;
 
   if (trackingAllowed && workOrder.vehicleId && SHARE_POSITION_STATUSES.has(status)) {
     const [vehicles, position] = await Promise.all([
@@ -178,8 +179,44 @@ export async function loadTrackingSession(
         distanceKm: result.distanceKm,
         source: result.source,
       };
+
+      // Solo el tramo entre el vehiculo y ESTE domicilio, nunca la ruta
+      // completa: el resto de las paradas de la ruta no son asunto de este
+      // destinatario. Sin corredor real que recortar, se prefiere no dibujar
+      // nada a inventar una linea recta que aparente ser trazado vial.
+      if (route && route.plannedPath.length >= 2) {
+        const origin: LatLng = { lat: position.lat, lng: position.lng };
+        const originProjection = projectOnPolyline(origin, route.plannedPath);
+        const destinationProjection = projectOnPolyline(workOrder.coordinates, route.plannedPath);
+
+        if (originProjection && destinationProjection) {
+          const slice = sliceCorridor(route.plannedPath, originProjection, destinationProjection);
+          if (slice.length >= 2) trajectory = slice;
+        }
+      }
     }
   }
+
+  // --- Visita al domicilio ---------------------------------------------------
+  //
+  // A diferencia de la posicion del vehiculo, esto es un hecho puntual sobre
+  // ESTE pedido (no revela donde anda el camion ahora), asi que se informa
+  // incluso despues de cortar el seguimiento en vivo.
+  const arrival: TrackingSession['arrival'] = workOrder.actualArrivalAt
+    ? {
+        arrivedAt: workOrder.actualArrivalAt,
+        departedAt: workOrder.actualDepartureAt,
+        dwellMinutes:
+          workOrder.dwellSeconds !== null
+            ? Math.round(workOrder.dwellSeconds / 60)
+            : workOrder.actualDepartureAt === null
+              ? Math.max(
+                  0,
+                  Math.round((now.getTime() - new Date(workOrder.actualArrivalAt).getTime()) / 60_000),
+                )
+              : null,
+      }
+    : null;
 
   /**
    * Etiqueta que ve el cliente.
@@ -204,6 +241,8 @@ export async function loadTrackingSession(
     vehicle,
     progress: delivered ? 1 : Math.max(0, Math.min(1, progress)),
     eta: trackingAllowed ? eta : null,
+    arrival,
+    trajectory: trackingAllowed ? trajectory : null,
     deliveredAt: delivered ? workOrder.actualArrivalAt : null,
     trackingAllowed,
     lastUpdateAt: now.toISOString(),

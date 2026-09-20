@@ -1,9 +1,10 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
-import { ArrowLeft, MapPin, Package, Route as RouteIcon, Share2, Truck } from 'lucide-react';
+import { ArrowLeft, Check, Copy, MapPin, Package, Route as RouteIcon, Share2, Truck } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { useState } from 'react';
 
 import { DetailList } from '@/components/common/detail-list';
 import { PageHeader } from '@/components/common/page-header';
@@ -51,6 +52,7 @@ export function WorkOrderDetailView({ workOrderId }: { workOrderId: string }) {
   const focusOn = useMapStore((s) => s.focusOn);
   const select = useMapStore((s) => s.select);
   const highlightRoute = useMapStore((s) => s.highlightRoute);
+  const [linkCopied, setLinkCopied] = useState(false);
 
   const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['work-order', workOrderId],
@@ -134,13 +136,29 @@ export function WorkOrderDetailView({ workOrderId }: { workOrderId: string }) {
             ) : null}
 
             <LinkButton
-              href={`/seguimiento?ref=${encodeURIComponent(workOrder.number)}`}
+              href={`/seguimiento/${encodeURIComponent(workOrder.number)}`}
+              target="_blank"
+              rel="noopener noreferrer"
               variant="secondary"
               size="sm"
               icon={<Share2 className="h-3.5 w-3.5" />}
             >
-              Seguimiento del cliente
+              Ver como el cliente
             </LinkButton>
+
+            <Button
+              variant="secondary"
+              size="sm"
+              icon={linkCopied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+              onClick={() => {
+                const link = `${window.location.origin}/seguimiento/${encodeURIComponent(workOrder.number)}`;
+                void navigator.clipboard.writeText(link);
+                setLinkCopied(true);
+                setTimeout(() => setLinkCopied(false), 2000);
+              }}
+            >
+              {linkCopied ? 'Enlace copiado' : 'Copiar enlace para el cliente'}
+            </Button>
           </>
         }
       />

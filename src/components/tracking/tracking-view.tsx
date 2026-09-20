@@ -4,9 +4,11 @@ import { useQuery } from '@tanstack/react-query';
 import {
   CheckCircle2,
   Clock,
+  LogOut,
   MapPin,
   PackageSearch,
   Search,
+  Timer,
   Truck,
 } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -19,9 +21,14 @@ import { Input } from '@/components/ui/input';
 import { ErrorBoundary } from '@/components/ui/error-boundary';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useAppHeight } from '@/hooks/use-app-height';
-import { formatElapsed, formatEta, formatSmartDateTime } from '@/lib/format';
+import { formatDuration, formatElapsed, formatEta, formatSmartDateTime, formatTime } from '@/lib/format';
 import { cn } from '@/lib/cn';
+import { useMapStore } from '@/stores/map-store';
+import type { RouteGeometry } from '@/types/views';
 import type { TrackingSession } from '@/types/core';
+
+/** Id fijo: en esta pantalla nunca hay mas de un trazado que resaltar. */
+const TRAJECTORY_ROUTE_ID = 'tracking-trajectory';
 
 /**
  * Seguimiento publico de pedido.
@@ -30,14 +37,18 @@ import type { TrackingSession } from '@/types/core';
  * cliente final de Fenice. Muestra exclusivamente su pedido, y nada del resto
  * de la operacion.
  */
-export function TrackingView() {
+export function TrackingView({ presetReference }: { presetReference?: string } = {}) {
   useAppHeight();
   const router = useRouter();
   const searchParams = useSearchParams();
 
-  const initialRef = searchParams.get('ref') ?? '';
+  const initialRef = presetReference ?? searchParams.get('ref') ?? '';
   const [reference, setReference] = useState(initialRef);
   const [submitted, setSubmitted] = useState(initialRef);
+  // Con un enlace directo por pedido, el formulario de busqueda solo estorba:
+  // el destinatario ya llego a lo que le interesa. Se puede revelar igual,
+  // por si quiere consultar otro numero.
+  const [searchOpen, setSearchOpen] = useState(!presetReference);
 
   useEffect(() => {
     setReference(initialRef);
@@ -60,12 +71,21 @@ export function TrackingView() {
     },
   });
 
+  const highlightRoute = useMapStore((s) => s.highlightRoute);
+  const hasTrajectory = (data?.trajectory?.length ?? 0) > 0;
+  useEffect(() => {
+    // Aca nunca hay mas de un trazado que mostrar: siempre "resaltado", nunca
+    // el estilo de fondo que usa el mapa operativo para rutas no elegidas.
+    highlightRoute(hasTrajectory ? TRAJECTORY_ROUTE_ID : null);
+    return () => highlightRoute(null);
+  }, [hasTrajectory, highlightRoute]);
+
   const onSubmit = (event: FormEvent): void => {
     event.preventDefault();
     const value = reference.trim();
     if (value.length < 4) return;
     setSubmitted(value);
-    router.replace(`/seguimiento?ref=${encodeURIComponent(value)}`);
+    router.replace(`/seguimiento/${encodeURIComponent(value)}`);
   };
 
   // Se apoya en `trackingAllowed`, que es la misma decision que tomo el
@@ -85,36 +105,56 @@ export function TrackingView() {
       </header>
 
       <main className="safe-bottom mx-auto max-w-3xl px-4 py-6">
-        <form onSubmit={onSubmit} className="mb-6">
-          <label htmlFor="ref" className="mb-2 block text-sm font-medium text-ink">
-            Ingresa tu numero de pedido u orden de trabajo
-          </label>
-          <div className="flex gap-2">
-            <Input
-              id="ref"
-              value={reference}
-              onChange={(event) => setReference(event.target.value.toUpperCase())}
-              onClear={() => setReference('')}
-              placeholder="Ej: OT-2026-001582"
-              autoComplete="off"
-              spellCheck={false}
-              className="numeric"
-            />
+        {searchOpen ? (
+          <form onSubmit={onSubmit} className="mb-6">
+            <label htmlFor="ref" className="mb-2 block text-sm font-medium text-ink">
+              Ingresa tu numero de pedido u orden de trabajo
+            </label>
+            <div className="flex gap-2">
+              <Input
+                id="ref"
+                value={reference}
+                onChange={(event) => setReference(event.target.value.toUpperCase())}
+                onClear={() => setReference('')}
+                placeholder="Ej: OT-2026-001582"
+                autoComplete="off"
+                spellCheck={false}
+                className="numeric"
+              />
+              <Button
+                type="submit"
+                variant="primary"
+                icon={<Search className="h-4 w-4" />}
+                loading={isFetching && submitted === reference.trim()}
+                disabled={reference.trim().length < 4}
+              >
+                <span className="hidden sm:inline">Buscar</span>
+              </Button>
+            </div>
+            <p className="mt-2 text-2xs text-ink-faint">
+              Puedes usar el numero de pedido o el numero de orden de trabajo que aparece en tu
+              documento de despacho.
+            </p>
+          </form>
+        ) : (
+          <div className="mb-6 flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <p className="truncate text-2xs uppercase tracking-wider text-ink-faint">
+                Pedido consultado
+              </p>
+              <p className="numeric truncate text-sm font-semibold text-ink">{submitted}</p>
+            </div>
             <Button
-              type="submit"
-              variant="primary"
-              icon={<Search className="h-4 w-4" />}
-              loading={isFetching && submitted === reference.trim()}
-              disabled={reference.trim().length < 4}
+              type="button"
+              variant="ghost"
+              size="sm"
+              icon={<Search className="h-3.5 w-3.5" />}
+              onClick={() => setSearchOpen(true)}
             >
-              <span className="hidden sm:inline">Buscar</span>
+              Buscar otro pedido
             </Button>
           </div>
-          <p className="mt-2 text-2xs text-ink-faint">
-            Puedes usar el numero de pedido o el numero de orden de trabajo que aparece en tu
-            documento de despacho.
-          </p>
-        </form>
+        )}
 
         {submitted.trim().length < 4 ? (
           <div className="rounded-lg border border-line bg-surface-850 px-6 py-12 text-center">
@@ -235,6 +275,42 @@ export function TrackingView() {
               </p>
             </section>
 
+            {/* --- Visita al domicilio: llego, cuanto lleva, si ya se fue --- */}
+            {data.arrival ? (
+              <section className="rounded-lg border border-line bg-surface-850 p-4">
+                <p className="text-2xs uppercase tracking-wider text-ink-faint">
+                  {data.arrival.departedAt ? 'Visita al domicilio' : 'El vehiculo esta en el domicilio'}
+                </p>
+                <div className="mt-1 flex items-start gap-2 text-[13px] text-ink">
+                  {data.arrival.departedAt ? (
+                    <LogOut className="mt-0.5 h-4 w-4 shrink-0 text-ink-faint" />
+                  ) : (
+                    <Timer className="mt-0.5 h-4 w-4 shrink-0 text-brand-700" />
+                  )}
+                  <span>
+                    Llego a las <span className="numeric font-medium">{formatTime(data.arrival.arrivedAt)}</span>
+                    {data.arrival.departedAt ? (
+                      <>
+                        {' '}y salio a las{' '}
+                        <span className="numeric font-medium">{formatTime(data.arrival.departedAt)}</span>
+                      </>
+                    ) : null}
+                    {data.arrival.dwellMinutes !== null ? (
+                      <>
+                        {' '}
+                        ·{' '}
+                        <span className="numeric font-medium">
+                          {formatDuration(data.arrival.dwellMinutes * 60)}
+                        </span>{' '}
+                        {data.arrival.departedAt ? 'en el lugar' : 'dentro del domicilio'}
+                      </>
+                    ) : null}
+                    .
+                  </span>
+                </div>
+              </section>
+            ) : null}
+
             {/* --- Mapa: solo mientras el pedido este en curso --- */}
             {data.trackingAllowed && data.vehicle?.position && data.destination.coordinates ? (
               <section className="overflow-hidden rounded-lg border border-line bg-surface-850">
@@ -266,7 +342,7 @@ export function TrackingView() {
                       layerOverride={{
                         camiones: true,
                         clientes: true,
-                        rutas: false,
+                        rutas: data.trajectory !== null,
                         geocercas: false,
                         calor: false,
                         pedidos: false,
@@ -312,7 +388,25 @@ export function TrackingView() {
                           salesRep: null,
                         },
                       ]}
-                      routes={[]}
+                      routes={
+                        data.trajectory
+                          ? [
+                              {
+                                routeId: TRAJECTORY_ROUTE_ID,
+                                code: '',
+                                name: 'Trayecto hacia tu domicilio',
+                                vehicleId: 'tracking-vehicle',
+                                vehiclePlate: data.vehicle.label,
+                                status: 'en_curso',
+                                // Solo el tramo hasta este domicilio: el resto de la
+                                // ruta no se comparte con el cliente final.
+                                plannedPath: data.trajectory,
+                                executedPath: [],
+                                stops: [],
+                              } satisfies RouteGeometry,
+                            ]
+                          : []
+                      }
                       geofences={[]}
                       alerts={[]}
                       workOrders={[]}

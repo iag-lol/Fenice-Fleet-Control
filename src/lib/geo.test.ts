@@ -13,6 +13,7 @@ import {
   polygonCentroid,
   polylineLengthMeters,
   projectOnPolyline,
+  sliceCorridor,
 } from '@/lib/geo';
 
 /** Referencias reales usadas para validar las formulas geodesicas. */
@@ -122,6 +123,40 @@ describe('projectOnPolyline', () => {
     const result = projectOnPolyline(SANTIAGO, [VALPARAISO]);
     expect(result?.alongMeters).toBe(0);
     expect(result?.closest).toEqual(VALPARAISO);
+  });
+});
+
+describe('sliceCorridor', () => {
+  const path = [
+    { lat: -33.45, lng: -70.7 },
+    { lat: -33.45, lng: -70.65 },
+    { lat: -33.45, lng: -70.6 },
+    { lat: -33.45, lng: -70.55 },
+  ];
+
+  it('recorta el tramo entre dos proyecciones sobre el mismo corredor', () => {
+    const from = projectOnPolyline({ lat: -33.451, lng: -70.68 }, path)!;
+    const to = projectOnPolyline({ lat: -33.451, lng: -70.58 }, path)!;
+    const slice = sliceCorridor(path, from, to);
+
+    // Incluye los dos vertices intermedios del corredor (-70.65 y -70.6),
+    // ademas de los puntos proyectados en los extremos.
+    expect(slice[0]).toEqual(from.closest);
+    expect(slice.at(-1)).toEqual(to.closest);
+    expect(slice).toContainEqual(path[1]);
+    expect(slice).toContainEqual(path[2]);
+  });
+
+  it('devuelve solo los dos extremos cuando ambos caen en el mismo segmento', () => {
+    const from = projectOnPolyline({ lat: -33.451, lng: -70.69 }, path)!;
+    const to = projectOnPolyline({ lat: -33.451, lng: -70.66 }, path)!;
+    expect(sliceCorridor(path, from, to)).toEqual([from.closest, to.closest]);
+  });
+
+  it('devuelve un tramo vacio si el destino queda detras del origen', () => {
+    const from = projectOnPolyline({ lat: -33.451, lng: -70.58 }, path)!;
+    const to = projectOnPolyline({ lat: -33.451, lng: -70.68 }, path)!;
+    expect(sliceCorridor(path, from, to)).toEqual([]);
   });
 });
 

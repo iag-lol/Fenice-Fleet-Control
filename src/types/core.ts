@@ -737,6 +737,27 @@ export interface TrackingSession {
     /** Indica si el ETA proviene de un proveedor real o de estimacion interna. */
     source: 'routing_provider' | 'estimated';
   } | null;
+  /**
+   * Paso a paso de la visita en el domicilio: cuando llego, cuanto lleva (o
+   * llevo) dentro del perimetro y cuando se fue. `null` mientras el vehiculo
+   * no ha llegado todavia.
+   */
+  arrival: {
+    arrivedAt: IsoDateTime | null;
+    departedAt: IsoDateTime | null;
+    /**
+     * Minutos dentro del perimetro. Si `departedAt` es `null`, se calcula
+     * hasta el instante de la consulta (sigue en curso).
+     */
+    dwellMinutes: number | null;
+  } | null;
+  /**
+   * Tramo del corredor planificado entre la posicion actual del vehiculo y
+   * este domicilio. SOLO ese tramo, nunca la ruta completa: el resto de las
+   * paradas no son asunto de este destinatario. `null` cuando no hay un
+   * corredor real que mostrar (sin ruta asignada, o sin evidencia vial).
+   */
+  trajectory: LatLng[] | null;
   deliveredAt: IsoDateTime | null;
   /**
    * `false` cuando el pedido ya fue entregado o cancelado.
