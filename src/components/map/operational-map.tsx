@@ -757,13 +757,23 @@ export const OperationalMap = memo(function OperationalMap() {
         </div>
       </Sheet>
 
-      {/* --- Ficha de detalle --- */}
+      {/* --- Ficha de detalle ---
+
+        Flotante SOLO para el vehiculo: es la ficha que mas se abre desde el
+        mapa, y a toda altura (el resto de las fichas de esta hoja) tapaba
+        capas que el operador seguia necesitando ver detras. Sin titulo
+        propio en el Sheet para ese caso: la ficha del vehiculo ya trae su
+        propio encabezado (patente, codigo, estado) y su propia X, asi que
+        duplicarlo solo restaba altura util a una tarjeta que ahora es chica
+        a proposito.
+      */}
       <Sheet
         open={detailOpen && currentSelection !== null}
         onClose={closeDetail}
+        floating={currentSelection?.type === 'vehicle'}
         title={
           currentSelection?.type === 'vehicle'
-            ? 'Ficha del vehiculo'
+            ? undefined
             : currentSelection?.type === 'client'
               ? 'Ficha del cliente'
               : currentSelection?.type === 'geofence'
@@ -778,7 +788,7 @@ export const OperationalMap = memo(function OperationalMap() {
       >
         <ErrorBoundary section="la ficha seleccionada">
           {currentSelection?.type === 'vehicle' ? (
-            <VehiclePanel vehicleId={currentSelection.id} />
+            <VehiclePanel vehicleId={currentSelection.id} onClose={closeDetail} />
           ) : currentSelection?.type === 'client' ? (
             <ClientPanel clientId={currentSelection.id} />
           ) : currentSelection?.type === 'workOrder' ? (

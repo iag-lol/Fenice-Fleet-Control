@@ -26,6 +26,16 @@ export interface SheetProps {
    * patron nativo.
    */
   transparentOverlay?: boolean;
+  /**
+   * En escritorio/tablet, se muestra como tarjeta flotante DENTRO del mapa
+   * en vez de panel lateral a toda la altura.
+   *
+   * Pensado para fichas breves (la del vehiculo, por ejemplo): a toda altura
+   * se veian enormes y tapaban capas del mapa que el operador seguia
+   * necesitando ver. Solo tiene sentido junto a `transparentOverlay`, que es
+   * lo que deja el mapa visible y usable alrededor.
+   */
+  floating?: boolean;
 }
 
 /**
@@ -43,6 +53,7 @@ export function Sheet({
   side = 'right',
   className,
   transparentOverlay,
+  floating,
 }: SheetProps) {
   useEffect(() => {
     if (!open) return;
@@ -96,11 +107,16 @@ export function Sheet({
           'pointer-events-auto relative z-10 flex w-full flex-col overflow-hidden border-line bg-surface-900 shadow-panel',
           // Movil: hoja inferior con esquinas superiores redondeadas.
           'mt-auto max-h-[88vh] animate-sheet-up rounded-t-xl border-t safe-bottom',
-          // Escritorio: panel lateral a altura completa.
-          'sm:mt-0 sm:max-h-none sm:animate-fade-in sm:rounded-none sm:border-t-0',
+          // Escritorio: panel lateral a altura completa, salvo `floating`.
+          'sm:mt-0 sm:animate-fade-in',
+          floating ? 'sm:rounded-xl sm:border' : 'sm:max-h-none sm:rounded-none sm:border-t-0',
           side === 'right'
-            ? 'sm:ml-auto sm:h-full sm:w-[420px] sm:border-l lg:w-[460px]'
-            : 'sm:mr-auto sm:h-full sm:w-[420px] sm:border-r lg:w-[460px]',
+            ? floating
+              ? 'sm:ml-auto sm:mr-3 sm:mt-28 sm:mb-3 sm:h-auto sm:max-h-[min(75vh,700px)] sm:w-[380px] sm:self-start'
+              : 'sm:ml-auto sm:h-full sm:w-[420px] sm:border-l lg:w-[460px]'
+            : floating
+              ? 'sm:mr-auto sm:ml-3 sm:mt-28 sm:mb-3 sm:h-auto sm:max-h-[min(75vh,700px)] sm:w-[380px] sm:self-start'
+              : 'sm:mr-auto sm:h-full sm:w-[420px] sm:border-r lg:w-[460px]',
           className,
         )}
       >

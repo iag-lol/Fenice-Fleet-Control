@@ -19,6 +19,7 @@ import {
   Square,
   Truck,
   User,
+  X,
 } from 'lucide-react';
 import Link from 'next/link';
 import { useState } from 'react';
@@ -78,7 +79,14 @@ const TRAJECTORY_EVENT_TONE: Record<TrajectoryEventType, string> = {
  * operacion hace en ese momento: donde esta, que lleva, a quien va, cuanto
  * falta y como viene la ruta.
  */
-export function VehiclePanel({ vehicleId }: { vehicleId: string }) {
+export function VehiclePanel({
+  vehicleId,
+  onClose,
+}: {
+  vehicleId: string;
+  /** Si se entrega, la ficha muestra su propia X: evita duplicar el cierre del Sheet que la contiene. */
+  onClose?: () => void;
+}) {
   const { positions } = useLiveFleet();
   const focusOn = useMapStore((s) => s.focusOn);
   const followVehicle = useMapStore((s) => s.followVehicle);
@@ -144,9 +152,9 @@ export function VehiclePanel({ vehicleId }: { vehicleId: string }) {
 
   return (
     <div className="flex flex-col">
-      <div className="space-y-5 p-4 pb-4">
+      <div className="space-y-4 p-3.5 pb-3.5">
       {/* --- Encabezado --- */}
-      <div className="flex items-start justify-between gap-3">
+      <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             <h3 className="text-base font-semibold tracking-tight text-ink">{vehicle.plate}</h3>
@@ -158,11 +166,23 @@ export function VehiclePanel({ vehicleId }: { vehicleId: string }) {
             {vehicle.brand} {vehicle.model} · {vehicle.year}
           </p>
         </div>
-        <VehicleStatusBadge status={data.snapshot.status} size="md" />
+        <div className="flex shrink-0 items-center gap-1.5">
+          <VehicleStatusBadge status={data.snapshot.status} size="md" />
+          {onClose ? (
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Cerrar ficha del vehiculo"
+              className="tap -mr-1 flex items-center justify-center rounded text-ink-faint transition-colors hover:bg-surface-800 hover:text-ink sm:h-7 sm:w-7 sm:min-h-0 sm:min-w-0"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          ) : null}
+        </div>
       </div>
 
       {/* --- Acciones --- */}
-      <div className="grid grid-cols-2 gap-2">
+      <div className="grid grid-cols-2 gap-1.5">
         <Button
           variant={isFollowing ? 'primary' : 'secondary'}
           size="sm"
@@ -237,7 +257,7 @@ export function VehiclePanel({ vehicleId }: { vehicleId: string }) {
         })}
       </div>
 
-      <div className="space-y-5 p-4 pb-6">
+      <div className="space-y-4 p-3.5 pb-4">
       {tab === 'informacion' ? (
       <>
       {/* --- Telemetria --- */}
