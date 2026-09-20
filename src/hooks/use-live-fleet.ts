@@ -25,6 +25,8 @@ import type { LivePositionsPayload } from '@/types/views';
 
 export interface LiveFleetSnapshot {
   positions: Map<string, Position>;
+  /** Ultimo estado completo recibido en el mismo pulso que las posiciones. */
+  payload: LivePositionsPayload | null;
   transport: GpsTransport;
   /** Falla vigente de telemetria. La UI degrada, no se cae. */
   error: string | null;
@@ -34,6 +36,7 @@ export interface LiveFleetSnapshot {
 
 const EMPTY_SNAPSHOT: LiveFleetSnapshot = {
   positions: new Map(),
+  payload: null,
   transport: 'disconnected',
   error: null,
   lastUpdateAt: null,
@@ -93,9 +96,11 @@ function resolveTransport(): Promise<void> {
   return transportResolution ??= readTransport().finally(() => { transportResolved = true; });
 }
 
-function receivePositions(incoming: Position[]): void {
+function receivePositions(incoming: Position[], payload = snapshot.payload): void {
   if (incoming.length === 0) {
-    if (snapshot.error !== 'No hay posiciones GPS recibidas.') emit({ ...snapshot, error: 'No hay posiciones GPS recibidas.' });
+    if (snapshot.error !== 'No hay posiciones GPS recibidas.' || snapshot.payload !== payload) {
+      emit({ ...snapshot, payload, error: 'No hay posiciones GPS recibidas.' });
+    }
     return;
   }
   const positions = new Map(snapshot.positions);
@@ -108,10 +113,15 @@ function receivePositions(incoming: Position[]): void {
   const now = Date.now();
   const hasFreshFix = incoming.some((p) => p.valid && Number.isFinite(Date.parse(p.timestamp)) &&
     now - Date.parse(p.timestamp) <= 180_000 && Date.parse(p.timestamp) - now <= 60_000);
-  emit({ ...snapshot, positions,
+  emit({ ...snapshot, positions, payload,
     error: hasFreshFix ? null : 'La fuente responde, pero no entrega posiciones GPS recientes.',
     lastUpdateAt: hasFreshFix ? new Date(now).toISOString() : snapshot.lastUpdateAt,
   });
+}
+
+/** Une coordenadas y estados del mismo mensaje antes de notificar a React. */
+function receiveSnapshot(payload: LivePositionsPayload): void {
+  receivePositions(payload.positions, payload);
 }
 
 function startStream(): void {
@@ -130,6 +140,7 @@ function startStream(): void {
 
   unsubscribeProvider = provider.subscribeToPositions({
     onPositions: receivePositions,
+    onSnapshot: receiveSnapshot,
     onError: (error) => {
       if (snapshot.error !== error.message) emit({ ...snapshot, error: error.message });
     },
@@ -180,8 +191,6 @@ function getServerSnapshot(): LiveFleetSnapshot {
 }
 
 export interface LiveFleetState extends LiveFleetSnapshot {
-  /** Instantanea de flota (conductor, estado, alertas) que acompana a las posiciones. */
-  payload: LivePositionsPayload | null;
   isPaused: boolean;
   refresh: () => void;
 }
@@ -191,7 +200,7 @@ export function useLiveFleet(): LiveFleetState {
 
   // Metadatos de flota. React Query deduplica por clave, de modo que varios
   // consumidores comparten una unica peticion.
-  const { data: payload, refetch } = useQuery({
+  const { data: queryPayload, refetch } = useQuery({
     queryKey: ['gps', 'positions'],
     staleTime: 20_000,
     refetchInterval: 30_000,
@@ -199,7 +208,7 @@ export function useLiveFleet(): LiveFleetState {
       const response = await fetch('/api/gps/positions', { cache: 'no-store' });
       if (!response.ok) throw new Error('No fue posible obtener el estado de la flota.');
       const result = (await response.json()) as LivePositionsPayload;
-      receivePositions(result.positions);
+      receiveSnapshot(result);
       return result;
     },
   });
@@ -210,8 +219,8 @@ export function useLiveFleet(): LiveFleetState {
 
   return {
     ...live,
-    payload: payload ?? null,
-    isPaused: payload?.simulator?.paused ?? false,
+    payload: live.payload ?? queryPayload ?? null,
+    isPaused: (live.payload ?? queryPayload)?.simulator?.paused ?? false,
     refresh,
   };
 }

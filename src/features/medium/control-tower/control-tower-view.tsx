@@ -2,7 +2,7 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { PanelRightClose, PanelRightOpen, X } from 'lucide-react';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { OperationalMap } from '@/components/map/operational-map';
 import { ClientPanel } from '@/components/map/client-panel';
@@ -51,7 +51,7 @@ export function ControlTowerView() {
   const hasOperationsPanel = hasFeature('control-tower');
   const isDesktop = useIsDesktop();
   const isTabletRange = useIsTabletRange();
-  const { positions } = useLiveFleet();
+  const { positions, payload: livePayload } = useLiveFleet();
   const select = useMapStore((s) => s.select);
   const currentSelection = useMapStore((s) => s.selection);
 
@@ -112,7 +112,13 @@ export function ControlTowerView() {
 
   const { map, alerts, communes } = useControlData();
   const { data: mode } = useQuery(systemModeQuery);
-  const snapshot = map.data;
+  const snapshot = useMemo(
+    () =>
+      map.data
+        ? { ...map.data, vehicles: livePayload?.vehicles ?? map.data.vehicles }
+        : undefined,
+    [map.data, livePayload?.vehicles],
+  );
   const desktopSelection = isDesktop ? currentSelection : null;
   const visiblePanelWidth = desktopSelection ? Math.max(panelWidth, 400) : panelWidth;
   const refreshAll = () => {

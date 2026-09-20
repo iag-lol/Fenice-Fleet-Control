@@ -82,7 +82,7 @@ const TRAJECTORY_EVENT_TONE: Record<TrajectoryEventType, string> = {
  * falta y como viene la ruta.
  */
 export function VehiclePanel({ vehicleId }: { vehicleId: string }) {
-  const { positions } = useLiveFleet();
+  const { positions, payload: livePayload } = useLiveFleet();
   const focusOn = useMapStore((s) => s.focusOn);
   const followVehicle = useMapStore((s) => s.followVehicle);
   const following = useMapStore((s) => s.followingVehicleId);
@@ -132,8 +132,11 @@ export function VehiclePanel({ vehicleId }: { vehicleId: string }) {
     );
   }
 
-  // La posicion viva del stream tiene prioridad sobre la de la consulta.
-  const position = positions.get(vehicleId) ?? data.snapshot.position;
+  // Posicion y estado del stream tienen prioridad sobre la consulta de
+  // detalle: ambos provienen del mismo reporte y deben cambiar juntos.
+  const vehicleSnapshot =
+    livePayload?.vehicles.find((entry) => entry.vehicle.id === vehicleId) ?? data.snapshot;
+  const position = positions.get(vehicleId) ?? vehicleSnapshot.position;
   const { vehicle, driver, currentWorkOrder, nextWorkOrder, route, journey, eta } = data;
   const isFollowing = following === vehicleId;
   const ordersCount = (currentWorkOrder ? 1 : 0) + (nextWorkOrder ? 1 : 0);
@@ -168,7 +171,7 @@ export function VehiclePanel({ vehicleId }: { vehicleId: string }) {
             </p>
           </div>
         </div>
-        <VehicleStatusBadge status={data.snapshot.status} size="md" />
+        <VehicleStatusBadge status={vehicleSnapshot.status} size="md" />
       </div>
 
       {/* --- Acciones --- */}
@@ -293,7 +296,7 @@ export function VehiclePanel({ vehicleId }: { vehicleId: string }) {
         className="rounded-lg border border-line bg-surface-900 p-3 shadow-card"
         action={
           <span className="numeric text-[10px] text-ink-faint">
-            Actualizado {formatTime(position?.timestamp ?? data.snapshot.device?.lastPositionAt ?? null)}
+            Actualizado {formatTime(position?.timestamp ?? vehicleSnapshot.device?.lastPositionAt ?? null)}
           </span>
         }
       >
@@ -345,10 +348,10 @@ export function VehiclePanel({ vehicleId }: { vehicleId: string }) {
               value: (
                 <span className="flex flex-wrap items-center gap-2">
                   <span className="numeric">
-                    {formatElapsed(data.snapshot.device?.secondsSinceLastPosition ?? null)}
+                    {formatElapsed(vehicleSnapshot.device?.secondsSinceLastPosition ?? null)}
                   </span>
-                  {data.snapshot.device ? (
-                    <ConnectionBadge state={data.snapshot.device.connection} />
+                  {vehicleSnapshot.device ? (
+                    <ConnectionBadge state={vehicleSnapshot.device.connection} />
                   ) : null}
                 </span>
               ),

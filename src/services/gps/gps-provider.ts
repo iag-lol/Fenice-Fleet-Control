@@ -6,6 +6,7 @@ import type {
   Vehicle,
   VehicleId,
 } from '@/types/core';
+import type { LivePositionsPayload } from '@/types/views';
 
 /**
  * Contrato UNICO de telemetria GPS.
@@ -35,6 +36,14 @@ export type Unsubscribe = () => void;
 
 export interface PositionSubscriptionHandlers {
   onPositions: (positions: Position[]) => void;
+  /**
+   * Instantanea completa que acompana la transmision HTTP/SSE.
+   *
+   * Los proveedores nativos pueden omitirla; el proxy del navegador la usa
+   * para actualizar estados, asignaciones y contadores en el mismo pulso que
+   * las coordenadas, sin esperar el siguiente refetch de React Query.
+   */
+  onSnapshot?: (payload: LivePositionsPayload) => void;
   onError?: (error: Error) => void;
   /** Se dispara cuando cambia el transporte activo (ws / sse / polling). */
   onTransportChange?: (transport: GpsTransport) => void;

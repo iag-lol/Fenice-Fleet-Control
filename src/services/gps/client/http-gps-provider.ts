@@ -107,7 +107,10 @@ export class HttpGpsProvider implements GpsProvider {
       try {
         const signal = AbortSignal.any([controller.signal, AbortSignal.timeout(20_000)]);
         const payload = await this.fetchJson<LivePositionsPayload>('/api/gps/positions', signal);
-        if (!closed && !suspended && !controller.signal.aborted) handlers.onPositions(payload.positions);
+        if (!closed && !suspended && !controller.signal.aborted) {
+          handlers.onSnapshot?.(payload);
+          handlers.onPositions(payload.positions);
+        }
       } catch (error) {
         if (!closed && !suspended && !controller.signal.aborted) {
           handlers.onError?.(error instanceof Error ? error : new Error(String(error)));
@@ -141,6 +144,7 @@ export class HttpGpsProvider implements GpsProvider {
             // Una respuesta de respaldo pendiente no puede pisar el stream recuperado.
             pending?.abort();
             handlers.onTransportChange?.('sse');
+            handlers.onSnapshot?.(payload);
             handlers.onPositions(payload.positions);
           } catch (error) {
             handlers.onError?.(error instanceof Error ? error : new Error(String(error)));

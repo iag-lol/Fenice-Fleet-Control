@@ -114,9 +114,10 @@ export function buildVehicleSnapshot(
   const position = context.positions.get(vehicle.id) ?? null;
   const device = context.devices.get(vehicle.id) ?? null;
 
-  const connection = device
-    ? evaluateConnectionState(device.lastPositionAt, settings.gps, now).state
-    : 'unknown';
+  const evaluatedConnection = device
+    ? evaluateConnectionState(device.lastPositionAt, settings.gps, now)
+    : { state: 'unknown' as const, secondsSinceLastPosition: null };
+  const connection = evaluatedConnection.state;
 
   const route = context.routes.find((r) => r.vehicleId === vehicle.id) ?? null;
 
@@ -181,7 +182,11 @@ export function buildVehicleSnapshot(
       hasActiveAssignment: route !== null,
     }),
     device: device
-      ? { ...device, connection, secondsSinceLastPosition: device.secondsSinceLastPosition }
+      ? {
+          ...device,
+          connection,
+          secondsSinceLastPosition: evaluatedConnection.secondsSinceLastPosition,
+        }
       : null,
     activeWorkOrderId: activeWorkOrder?.id ?? null,
     activeRouteId: route?.id ?? null,

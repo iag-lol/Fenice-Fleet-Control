@@ -108,7 +108,13 @@ export const OperationalMap = memo(function OperationalMap({
   const [fullscreen, setFullscreen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  const { positions, error: gpsError, lastUpdateAt, refresh } = useLiveFleet();
+  const {
+    positions,
+    payload: livePayload,
+    error: gpsError,
+    lastUpdateAt,
+    refresh,
+  } = useLiveFleet();
 
   // El aviso de GPS/integracion se puede colapsar, pero solo mientras dure
   // ESTA MISMA caida: si la senal se recupera y luego vuelve a fallar, hay
@@ -189,9 +195,16 @@ export const OperationalMap = memo(function OperationalMap({
     [allClients, filters],
   );
 
+  // El stream GPS incluye la instantanea de estados calculada por el
+  // servidor. Tiene prioridad sobre `/api/map`, que solo se refresca cada
+  // 30 s, para que KPI y marcadores cambien en el mismo pulso que la posicion.
+  const vehicleSnapshots = useMemo(
+    () => livePayload?.vehicles ?? snapshot?.vehicles ?? [],
+    [livePayload?.vehicles, snapshot?.vehicles],
+  );
+
   const vehicles: FleetMapVehicle[] = useMemo(() => {
-    if (!snapshot?.vehicles) return [];
-    return snapshot.vehicles.map((v) => ({
+    return vehicleSnapshots.map((v) => ({
       vehicleId: v.vehicle.id,
       plate: v.vehicle.plate,
       fleetCode: v.vehicle.fleetCode,
@@ -199,7 +212,7 @@ export const OperationalMap = memo(function OperationalMap({
       // La posicion viva del stream tiene prioridad sobre la de la instantanea.
       position: positions.get(v.vehicle.id) ?? v.position,
     }));
-  }, [snapshot?.vehicles, positions]);
+  }, [vehicleSnapshots, positions]);
 
   /**
    * Enfoque activo.
@@ -384,15 +397,15 @@ export const OperationalMap = memo(function OperationalMap({
 
   const vehicleCounts = {
     total: vehicles.length,
-    enRuta: snapshot?.vehicles.filter((v) => v.status === 'en_ruta').length ?? 0,
-    detenido: snapshot?.vehicles.filter((v) => v.status === 'detenido').length ?? 0,
-    offline: snapshot?.vehicles.filter((v) => v.status === 'offline').length ?? 0,
+    enRuta: vehicleSnapshots.filter((v) => v.status === 'en_ruta').length,
+    detenido: vehicleSnapshots.filter((v) => v.status === 'detenido').length,
+    offline: vehicleSnapshots.filter((v) => v.status === 'offline').length,
     // "En observacion": el vehiculo arrastra al menos una alerta abierta,
     // independiente de si sigue en movimiento o esta detenido.
-    enObservacion: snapshot?.vehicles.filter((v) => v.openAlertCount > 0).length ?? 0,
+    enObservacion: vehicleSnapshots.filter((v) => v.openAlertCount > 0).length,
     // "OT en curso": el vehiculo tiene una orden de trabajo asignada que esta
     // ejecutando en este momento (no simplemente pendiente de despacho).
-    otEnCurso: snapshot?.vehicles.filter((v) => v.activeWorkOrderId !== null).length ?? 0,
+    otEnCurso: vehicleSnapshots.filter((v) => v.activeWorkOrderId !== null).length,
   };
 
   const kpiCards: {

@@ -28,6 +28,25 @@ describe('GPS polling under slow network conditions', () => {
     expect(onPositions).toHaveBeenCalledTimes(1);
   });
 
+  it('forwards the complete fleet snapshot with every polling update', async () => {
+    const payload = {
+      generatedAt: '2026-09-20T10:00:00.000Z',
+      positions: [],
+      vehicles: [],
+      simulator: null,
+    };
+    vi.stubGlobal('fetch', vi.fn(async () => Response.json(payload)));
+    const onSnapshot = vi.fn();
+    const stop = new HttpGpsProvider({ preferredTransport: 'polling' }).subscribeToPositions({
+      onPositions: vi.fn(),
+      onSnapshot,
+    });
+
+    await vi.advanceTimersByTimeAsync(0);
+    expect(onSnapshot).toHaveBeenCalledWith(payload);
+    stop();
+  });
+
   it('aborts the in-flight request on unsubscribe without reporting a GPS failure', async () => {
     let signal: AbortSignal | undefined;
     vi.stubGlobal('fetch', vi.fn((_path: string, init: RequestInit) => {
