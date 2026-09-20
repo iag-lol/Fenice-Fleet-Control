@@ -45,7 +45,6 @@ import {
 import { Skeleton } from '@/components/ui/skeleton';
 import { useLiveFleet } from '@/hooks/use-live-fleet';
 import { OPERATION_BOUNDS } from '@/config/map-viewport';
-import { ACTIVITY_COLOR, ACTIVITY_LABEL } from '@/lib/engines/vehicle-activity';
 import { cn } from '@/lib/cn';
 import { useMapStore } from '@/stores/map-store';
 import { mapQuery, communesQuery, systemModeQuery } from '@/hooks/use-control-data';
@@ -93,7 +92,17 @@ const WorkOrderPanel = dynamic(() => import('@/components/map/work-order-panel')
  * panel, es la aplicacion. Los controles flotan encima y las fichas se abren
  * como panel lateral en escritorio y hoja inferior en movil.
  */
-export const OperationalMap = memo(function OperationalMap() {
+export interface OperationalMapProps {
+  /**
+   * En escritorio la torre aloja cualquier ficha en su columna derecha.
+   * En ese caso el mapa no debe crear un segundo panel flotante encima.
+   */
+  detailExternal?: boolean;
+}
+
+export const OperationalMap = memo(function OperationalMap({
+  detailExternal = false,
+}: OperationalMapProps) {
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [detailOpen, setDetailOpen] = useState(false);
   const [fullscreen, setFullscreen] = useState(false);
@@ -751,29 +760,6 @@ export const OperationalMap = memo(function OperationalMap() {
         </div>
       ) : null}
 
-      {/* --- Leyenda de estados de vehiculos --- */}
-      {layers.camiones ? (
-        <div className="pointer-events-none absolute bottom-24 right-3 z-10 hidden min-w-44 flex-col gap-1 rounded-lg border border-line bg-surface-900/95 px-3 py-2.5 text-2xs shadow-float backdrop-blur lg:flex">
-          <p className="mb-0.5 font-semibold uppercase tracking-wider text-ink-faint">
-            Estados de vehículos
-          </p>
-          {(Object.keys(ACTIVITY_LABEL) as (keyof typeof ACTIVITY_LABEL)[]).map((status) => (
-            <span key={status} className="flex items-center gap-1.5 text-ink-muted">
-              <span className="flex min-w-0 flex-1 items-center gap-1.5">
-                <span
-                  className="h-2 w-2 shrink-0 rounded-full"
-                  style={{ backgroundColor: ACTIVITY_COLOR[status] }}
-                />
-                <span className="truncate">{ACTIVITY_LABEL[status]}</span>
-              </span>
-              <span className="numeric rounded-full bg-surface-750 px-1.5 text-[10px] text-ink-faint">
-                {vehicles.filter((vehicle) => vehicle.status === status).length}
-              </span>
-            </span>
-          ))}
-        </div>
-      ) : null}
-
       {/* --- Filtros --- */}
       <Sheet
         open={filtersOpen}
@@ -801,7 +787,11 @@ export const OperationalMap = memo(function OperationalMap() {
 
       {/* --- Ficha de detalle: lateral, compacta y sin bloquear el mapa. --- */}
       <Sheet
-        open={detailOpen && currentSelection !== null}
+        open={
+          detailOpen &&
+          currentSelection !== null &&
+          !detailExternal
+        }
         onClose={closeDetail}
         title={
           currentSelection?.type === 'vehicle'

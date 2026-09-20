@@ -404,6 +404,28 @@ export function OperationsPanel({
         ) : null}
       </div>
 
+      {tab === 'vehiculos' && !sourceEmpty ? (
+        <section className="shrink-0 border-b border-line bg-surface-800/55 px-3 py-2.5">
+          <h3 className="mb-2 text-2xs font-semibold uppercase tracking-wider text-ink-faint">
+            Estados de vehículos
+          </h3>
+          <div className="grid grid-cols-2 gap-x-4 gap-y-1.5">
+            {(Object.keys(ACTIVITY_LABEL) as VehicleActivityStatus[]).map((activity) => (
+              <div key={activity} className="flex min-w-0 items-center gap-2 text-2xs text-ink-muted">
+                <span
+                  className="h-2 w-2 shrink-0 rounded-full"
+                  style={{ backgroundColor: ACTIVITY_COLOR[activity] }}
+                />
+                <span className="min-w-0 flex-1 truncate">{ACTIVITY_LABEL[activity]}</span>
+                <span className="numeric rounded-full bg-surface-900 px-1.5 text-[10px] text-ink-faint shadow-card">
+                  {(snapshot?.vehicles ?? []).filter((vehicle) => vehicle.activityStatus === activity).length}
+                </span>
+              </div>
+            ))}
+          </div>
+        </section>
+      ) : null}
+
       {loading ? (
         <p role="status" className="p-4 text-xs text-ink-faint">
           Cargando la operación…

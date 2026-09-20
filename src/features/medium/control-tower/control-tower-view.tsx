@@ -1,10 +1,15 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
-import { PanelRightClose, PanelRightOpen } from 'lucide-react';
+import { PanelRightClose, PanelRightOpen, X } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { OperationalMap } from '@/components/map/operational-map';
+import { ClientPanel } from '@/components/map/client-panel';
+import { MapEntityPanel } from '@/components/map/map-entity-panel';
+import { VehiclePanel } from '@/components/map/vehicle-panel';
+import { WorkOrderPanel } from '@/components/map/work-order-panel';
+import { ErrorBoundary } from '@/components/ui/error-boundary';
 import { hasFeature } from '@/product/feature-access';
 import { OperationsPanel } from '@/features/medium/control-tower/operations-panel';
 import { useIsDesktop, useIsTabletRange } from '@/hooks/use-media-query';
@@ -48,6 +53,7 @@ export function ControlTowerView() {
   const isTabletRange = useIsTabletRange();
   const { positions } = useLiveFleet();
   const select = useMapStore((s) => s.select);
+  const currentSelection = useMapStore((s) => s.selection);
 
   const [panelWidth, setPanelWidth] = useState(DEFAULT_PANEL);
   // Igual que el sidebar: abierto por defecto, salvo en tablet, donde ya
@@ -107,6 +113,8 @@ export function ControlTowerView() {
   const { map, alerts, communes } = useControlData();
   const { data: mode } = useQuery(systemModeQuery);
   const snapshot = map.data;
+  const desktopSelection = isDesktop ? currentSelection : null;
+  const visiblePanelWidth = desktopSelection ? Math.max(panelWidth, 400) : panelWidth;
   const refreshAll = () => {
     void map.refetch();
     void alerts.refetch();
@@ -186,10 +194,10 @@ export function ControlTowerView() {
   return (
     <div ref={containerRef} className="relative flex h-full w-full overflow-hidden">
       <div className="relative min-w-0 flex-1">
-        <OperationalMap />
+        <OperationalMap detailExternal={Boolean(desktopSelection)} />
 
         {/* Alternar el panel: en el mapa cada pixel horizontal cuenta. */}
-        {isDesktop && hasOperationsPanel ? (
+        {isDesktop && hasOperationsPanel && !desktopSelection ? (
           <button
             type="button"
             onClick={togglePanel}
@@ -206,8 +214,14 @@ export function ControlTowerView() {
         ) : null}
       </div>
 
-      {/* --- Escritorio: panel lateral redimensionable --- */}
-      {isDesktop && panelOpen && hasOperationsPanel ? (
+      {/*
+        Escritorio: una sola columna lateral.
+
+        Al seleccionar una entidad, su ficha REEMPLAZA el inventario
+        operacional. Nunca se dibuja por encima de el ni del mapa; el flex
+        recalcula el ancho disponible y MapLibre recibe el resize normal.
+      */}
+      {isDesktop && (desktopSelection || (panelOpen && hasOperationsPanel)) ? (
         <>
           <div
             role="separator"
@@ -215,7 +229,7 @@ export function ControlTowerView() {
             tabIndex={0}
             aria-valuemin={MIN_PANEL}
             aria-valuemax={MAX_PANEL}
-            aria-valuenow={panelWidth}
+            aria-valuenow={visiblePanelWidth}
             onKeyDown={(event) => {
               if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
               event.preventDefault();
@@ -240,10 +254,58 @@ export function ControlTowerView() {
             className="w-1 shrink-0 cursor-col-resize bg-line transition-colors hover:bg-brand-400"
           />
           <aside
-            className={cn('h-full shrink-0 border-l border-line', !hydrated && 'invisible')}
-            style={{ width: panelWidth }}
+            className={cn(
+              'h-full shrink-0 border-l border-line bg-surface-900',
+              !hydrated && 'invisible',
+            )}
+            style={{ width: visiblePanelWidth }}
           >
-            {panel}
+            {desktopSelection ? (
+              <div className="flex h-full min-h-0 flex-col">
+                <div className="flex h-14 shrink-0 items-center justify-between border-b border-line px-4">
+                  <h2 className="text-sm font-semibold text-ink">
+                    {desktopSelection.type === 'vehicle'
+                      ? 'Ficha del vehículo'
+                      : desktopSelection.type === 'client'
+                        ? 'Ficha del cliente'
+                        : desktopSelection.type === 'workOrder'
+                          ? 'Orden de trabajo'
+                          : desktopSelection.type === 'geofence'
+                            ? 'Detalle de geocerca'
+                            : desktopSelection.type === 'route'
+                              ? 'Detalle de ruta'
+                              : 'Detalle de alerta'}
+                  </h2>
+                  <button
+                    type="button"
+                    onClick={() => select(null)}
+                    aria-label="Cerrar ficha de detalle"
+                    title="Cerrar ficha"
+                    className="flex h-8 w-8 items-center justify-center rounded-md text-ink-faint transition-colors hover:bg-surface-800 hover:text-ink"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+                <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+                  <ErrorBoundary section="la ficha seleccionada">
+                    {desktopSelection.type === 'vehicle' ? (
+                      <VehiclePanel vehicleId={desktopSelection.id} />
+                    ) : desktopSelection.type === 'client' ? (
+                      <ClientPanel clientId={desktopSelection.id} />
+                    ) : desktopSelection.type === 'workOrder' ? (
+                      <WorkOrderPanel
+                        workOrderId={desktopSelection.id}
+                        snapshot={snapshot ?? null}
+                      />
+                    ) : (
+                      <MapEntityPanel selection={desktopSelection} snapshot={snapshot ?? null} />
+                    )}
+                  </ErrorBoundary>
+                </div>
+              </div>
+            ) : (
+              panel
+            )}
           </aside>
         </>
       ) : null}
