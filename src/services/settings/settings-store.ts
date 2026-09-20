@@ -56,6 +56,7 @@ function seedFromEnv(): OperationalSettings {
       deviationTimeSeconds: env.ROUTE_DEVIATION_TIME,
       outOfCommuneToleranceSeconds: env.OUT_OF_COMMUNE_TOLERANCE_SECONDS,
       prolongedStopSeconds: env.PROLONGED_STOP_SECONDS,
+      maxLegalSpeedKmh: DEFAULT_OPERATIONAL_SETTINGS.route.maxLegalSpeedKmh,
     },
     geofence: {
       defaultRadiusMeters: env.DEFAULT_GEOFENCE_RADIUS_METERS,
@@ -78,6 +79,7 @@ interface SettingsRow {
   ruta_desvio_segundos: number;
   ruta_tolerancia_fuera_comuna_segundos: number;
   ruta_detencion_prolongada_segundos: number;
+  ruta_velocidad_maxima_legal_kmh: number | null;
   geocerca_radio_defecto_metros: number;
   geocerca_permanencia_min_segundos: number;
   geocerca_auto_confirmar_entrega: boolean;
@@ -102,6 +104,9 @@ function rowToSettings(row: SettingsRow): OperationalSettings {
       deviationTimeSeconds: row.ruta_desvio_segundos,
       outOfCommuneToleranceSeconds: row.ruta_tolerancia_fuera_comuna_segundos,
       prolongedStopSeconds: row.ruta_detencion_prolongada_segundos,
+      // Columna agregada despues: una fila sembrada por una version anterior
+      // de la plataforma no la tiene todavia.
+      maxLegalSpeedKmh: row.ruta_velocidad_maxima_legal_kmh ?? DEFAULT_OPERATIONAL_SETTINGS.route.maxLegalSpeedKmh,
     },
     geofence: {
       defaultRadiusMeters: row.geocerca_radio_defecto_metros,
@@ -125,6 +130,7 @@ function settingsToRow(settings: OperationalSettings): SettingsRow {
     ruta_desvio_segundos: settings.route.deviationTimeSeconds,
     ruta_tolerancia_fuera_comuna_segundos: settings.route.outOfCommuneToleranceSeconds,
     ruta_detencion_prolongada_segundos: settings.route.prolongedStopSeconds,
+    ruta_velocidad_maxima_legal_kmh: settings.route.maxLegalSpeedKmh,
     geocerca_radio_defecto_metros: settings.geofence.defaultRadiusMeters,
     geocerca_permanencia_min_segundos: settings.geofence.minDwellSeconds,
     geocerca_auto_confirmar_entrega: settings.geofence.autoConfirmDeliveryOnDwell,

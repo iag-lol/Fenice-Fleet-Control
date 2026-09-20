@@ -1,7 +1,20 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
-import { Building2, Filter, Maximize2, Minimize2, Navigation, Target, Truck } from 'lucide-react';
+import {
+  AlertTriangle,
+  Building2,
+  Filter,
+  Gauge,
+  Maximize2,
+  MinusCircle,
+  Minimize2,
+  Navigation,
+  Power,
+  PowerOff,
+  Target,
+  Truck,
+} from 'lucide-react';
 import dynamic from 'next/dynamic';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
@@ -12,6 +25,7 @@ import {
   scopeVehicles,
   type ScopeInput,
 } from '@/lib/engines/map-scope';
+import { containsPoint } from '@/lib/engines/geofence-engine';
 import { FocusBanner } from '@/components/map/focus-banner';
 import { ClientFiltersPanel, applyClientFilters } from '@/components/map/client-filters-panel';
 import { FleetMap, type FleetMapVehicle } from '@/components/map/fleet-map';
@@ -32,8 +46,22 @@ import { OPERATION_BOUNDS } from '@/config/map-viewport';
 import { cn } from '@/lib/cn';
 import { useMapStore } from '@/stores/map-store';
 import { mapQuery, communesQuery, systemModeQuery } from '@/hooks/use-control-data';
+import { useVehicleTrajectory, type TrajectoryEventType } from '@/hooks/use-vehicle-trajectory';
 import { operationPoints } from '@/lib/map-navigation';
+import { formatTimeWithSeconds } from '@/lib/format';
 import type { TerritoryAnalysis } from '@/types/views';
+
+const DEFAULT_MAX_LEGAL_SPEED_KMH = 60;
+
+const TRAJECTORY_EVENT_STYLE: Record<
+  TrajectoryEventType,
+  { icon: typeof Gauge; label: string; tone: string }
+> = {
+  stop: { icon: MinusCircle, label: 'Detencion', tone: 'text-status-warning' },
+  speeding: { icon: AlertTriangle, label: 'Exceso de velocidad', tone: 'text-status-dormant' },
+  ignition_on: { icon: Power, label: 'Encendido', tone: 'text-status-active' },
+  ignition_off: { icon: PowerOff, label: 'Apagado', tone: 'text-ink-faint' },
+};
 
 const CommunePanel = dynamic(() => import('@/components/map/commune-panel').then((m) => m.CommunePanel), {
   loading: () => <Skeleton className="h-48 w-full" />,
@@ -199,6 +227,69 @@ export const OperationalMap = memo(function OperationalMap() {
 
   const followedVehicle = vehicles.find((v) => v.vehicleId === following) ?? null;
 
+  /**
+   * Trayecto del dia del vehiculo seleccionado.
+   *
+   * Se calcula SIEMPRE que hay una seleccion de vehiculo, sin esperar a que
+   * el operador pida "seguir" o "centrar": es la pregunta que sigue a
+   * seleccionar un camion ("que hizo hoy"), no una accion aparte.
+   */
+  const selectedVehicleId = currentSelection?.type === 'vehicle' ? currentSelection.id : null;
+  const selectedVehiclePlate = useMemo(
+    () => (selectedVehicleId ? (vehicles.find((v) => v.vehicleId === selectedVehicleId)?.plate ?? null) : null),
+    [vehicles, selectedVehicleId],
+  );
+  const maxLegalSpeedKmh = mode?.settings.route.maxLegalSpeedKmh ?? DEFAULT_MAX_LEGAL_SPEED_KMH;
+  const {
+    trajectory: selectedTrajectory,
+    isLoading: trajectoryLoading,
+    isError: trajectoryError,
+  } = useVehicleTrajectory(selectedVehicleId, selectedVehiclePlate, maxLegalSpeedKmh);
+
+  const routesConTrayecto = useMemo(
+    () => (selectedTrajectory ? [...routesEnfocadas, selectedTrajectory.route] : routesEnfocadas),
+    [routesEnfocadas, selectedTrajectory],
+  );
+
+  const trajectoryEventPoints = useMemo(
+    () =>
+      (selectedTrajectory?.events ?? []).map((event) => ({
+        id: event.id,
+        eventType: event.type,
+        lat: event.position.lat,
+        lng: event.position.lng,
+      })),
+    [selectedTrajectory],
+  );
+
+  // El trayecto del dia manda sobre cualquier ruta resaltada mientras el
+  // vehiculo siga seleccionado: es lo que el operador vino a ver. Si deja de
+  // haber trayecto (se deselecciono, o se cancelo "seguir" sin pasar por
+  // `select(null)`) y lo resaltado era ese mismo trayecto sintetico, se
+  // limpia: de lo contrario quedaba "pegado" y el banner de enfoque
+  // intentaba mostrar su id tecnico como si fuera una ruta real.
+  const selectedTrajectoryRouteId = selectedTrajectory?.route.routeId ?? null;
+  useEffect(() => {
+    if (selectedTrajectoryRouteId) highlightRoute(selectedTrajectoryRouteId);
+    else if (highlightedRouteId?.startsWith('trayecto-')) highlightRoute(null);
+  }, [selectedTrajectoryRouteId, highlightedRouteId, highlightRoute]);
+
+  const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
+  useEffect(() => {
+    setSelectedEventId(null);
+  }, [selectedVehicleId]);
+
+  const selectedEvent = useMemo(
+    () => selectedTrajectory?.events.find((event) => event.id === selectedEventId) ?? null,
+    [selectedTrajectory, selectedEventId],
+  );
+
+  /** Geocerca (si hay alguna) donde cayo el evento elegido: responde "paso por aqui". */
+  const selectedEventGeofence = useMemo(() => {
+    if (!selectedEvent || !snapshot) return null;
+    return snapshot.geofences.find((g) => g.active && containsPoint(g, selectedEvent.position)) ?? null;
+  }, [selectedEvent, snapshot]);
+
   const openDetail = useCallback(() => setDetailOpen(true), []);
 
   // Abrir la ficha automaticamente al seleccionar desde el mapa.
@@ -295,16 +386,18 @@ export const OperationalMap = memo(function OperationalMap() {
             autoFit
             vehicles={layers.camiones ? vehiculosEnfocados : []}
             clients={clientesEnfocados}
-            routes={routesEnfocadas}
+            routes={routesConTrayecto}
             geofences={snapshot.geofences}
             alerts={snapshot.alerts}
             workOrders={pedidosEnfocados}
             communes={communeFeatures}
             heatmapPoints={heatmapPoints}
+            trajectoryEvents={trajectoryEventPoints}
             onSelectVehicle={openDetail}
             onSelectClient={openDetail}
             onSelectWorkOrder={openDetail}
             onSelectCommune={inspectCommune}
+            onSelectTrajectoryEvent={setSelectedEventId}
           />
         </ErrorBoundary>
       )}
@@ -472,7 +565,10 @@ export const OperationalMap = memo(function OperationalMap() {
                 : null
             }
             routeCode={
-              highlightedRouteId
+              // El trayecto del dia del vehiculo seleccionado tambien resalta
+              // via `highlightedRouteId`, pero no es una "ruta" que mostrar
+              // aparte: seria un chip redundante con el del propio vehiculo.
+              highlightedRouteId && highlightedRouteId !== selectedTrajectory?.route.routeId
                 ? (snapshot?.routes.find((r) => r.routeId === highlightedRouteId)?.code ??
                   highlightedRouteId)
                 : null
@@ -493,6 +589,53 @@ export const OperationalMap = memo(function OperationalMap() {
             onClearRoute={() => highlightRoute(null)}
             onClearCommune={() => scopeToCommune(null)}
           />
+          {selectedVehicleId && trajectoryLoading ? (
+            <p className="mt-1.5 text-2xs text-ink-faint">Cargando trayecto del dia...</p>
+          ) : selectedVehicleId && trajectoryError ? (
+            <p className="mt-1.5 text-2xs text-status-warning">
+              No fue posible cargar el trayecto del dia de este vehiculo.
+            </p>
+          ) : null}
+        </div>
+      ) : null}
+
+      {/*
+        --- Detalle del evento del trayecto seleccionado ---
+        Se apila ARRIBA de la barra de seguimiento (`bottom-[132px]` en vez
+        de `bottom-[70px]`): con un vehiculo seguido y un evento de su propio
+        trayecto elegido a la vez, ambas franjas conviven sin superponerse.
+      */}
+      {selectedEvent ? (
+        <div className="pointer-events-auto safe-bottom absolute inset-x-2.5 bottom-[132px] z-20 flex items-start gap-3 rounded-lg border border-line-strong bg-surface-900/97 px-3 py-2.5 shadow-panel backdrop-blur sm:inset-x-auto sm:bottom-20 sm:left-1/2 sm:w-[420px] sm:-translate-x-1/2">
+          {(() => {
+            const style = TRAJECTORY_EVENT_STYLE[selectedEvent.type];
+            const Icon = style.icon;
+            return (
+              <span className={cn('flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-surface-800', style.tone)}>
+                <Icon className="h-4 w-4" />
+              </span>
+            );
+          })()}
+
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-[13px] font-medium text-ink">
+              {TRAJECTORY_EVENT_STYLE[selectedEvent.type].label}
+              <span className="ml-2 numeric text-2xs font-normal text-ink-faint">
+                {formatTimeWithSeconds(selectedEvent.at)}
+                {selectedEvent.endedAt ? ` – ${formatTimeWithSeconds(selectedEvent.endedAt)}` : ''}
+              </span>
+            </p>
+            <p className="truncate text-2xs text-ink-muted">{selectedEvent.detail}</p>
+            <p className="mt-0.5 truncate text-2xs text-ink-faint">
+              {selectedEventGeofence
+                ? `Dentro de la geocerca "${selectedEventGeofence.name}"`
+                : 'Fuera de cualquier geocerca activa en este punto'}
+            </p>
+          </div>
+
+          <Button size="sm" variant="secondary" onClick={() => setSelectedEventId(null)}>
+            Cerrar
+          </Button>
         </div>
       ) : null}
 

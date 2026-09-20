@@ -193,13 +193,29 @@ export const useMapStore = create<MapState>((set, get) => ({
   setVehicleStatusFilter: (statuses) => set({ vehicleStatusFilter: statuses }),
 
   selection: null,
-  select: (selection) => set((state) => ({
-    selection,
-    followingVehicleId: null,
-    inspectedCommuneCode: null,
-    highlightedRouteId: selection?.type === 'route' ? selection.id : null,
-    layers: selection ? { ...state.layers, [{ vehicle: 'camiones', client: 'clientes', workOrder: 'pedidos', route: 'rutas', geofence: 'geocercas', alert: 'alertas' }[selection.type]]: true } : state.layers,
-  })),
+  select: (selection) => set((state) => {
+    // Seleccionar un vehiculo tambien enciende "rutas": es la capa que
+    // dibuja su trayecto del dia (ver `useVehicleTrajectory`), y sin ella
+    // encendida el trayecto se calculaba pero no se llegaba a ver.
+    const layersToEnable: Record<NonNullable<MapSelection>['type'], MapLayerId[]> = {
+      vehicle: ['camiones', 'rutas'],
+      client: ['clientes'],
+      workOrder: ['pedidos'],
+      route: ['rutas'],
+      geofence: ['geocercas'],
+      alert: ['alertas'],
+    };
+    const layerUpdates: Partial<Record<MapLayerId, boolean>> = {};
+    for (const layer of selection ? layersToEnable[selection.type] : []) layerUpdates[layer] = true;
+
+    return {
+      selection,
+      followingVehicleId: null,
+      inspectedCommuneCode: null,
+      highlightedRouteId: selection?.type === 'route' ? selection.id : null,
+      layers: selection ? { ...state.layers, ...layerUpdates } : state.layers,
+    };
+  }),
 
   followingVehicleId: null,
   followVehicle: (vehicleId) =>
@@ -222,9 +238,14 @@ export const useMapStore = create<MapState>((set, get) => ({
       bounds, requestedAt: Date.now(),
     } });
   },
+  // Vuelve a mostrar todo lo que el ENFOQUE pudo haber ocultado (capas,
+  // aislamiento, seleccion). Los filtros de cartera son una eleccion
+  // deliberada del operador, independiente de estar mirando un vehiculo o
+  // una comuna: "ver toda la operacion" no debe borrarlos sin que se pida
+  // explicitamente (para eso esta "Limpiar filtros" en el propio panel).
   showAll: () => set((state) => ({
     layers: { ...state.layers, camiones: true, clientes: true, rutas: true, geocercas: true, pedidos: true, alertas: true, comunas: true },
-    filters: DEFAULT_CLIENT_FILTERS, vehicleStatusFilter: [], isolate: false,
+    isolate: false,
     selection: null, followingVehicleId: null, highlightedRouteId: null,
     scopedCommuneCode: null, inspectedCommuneCode: null,
   })),

@@ -543,6 +543,7 @@ create table if not exists configuracion_operacional (
   ruta_desvio_segundos                    numeric not null default 120,
   ruta_tolerancia_fuera_comuna_segundos    numeric not null default 300,
   ruta_detencion_prolongada_segundos      numeric not null default 900,
+  ruta_velocidad_maxima_legal_kmh          numeric not null default 60,
   geocerca_radio_defecto_metros           numeric not null default 80,
   geocerca_permanencia_min_segundos       numeric not null default 60,
   geocerca_auto_confirmar_entrega         boolean not null default true,
@@ -552,6 +553,8 @@ create table if not exists configuracion_operacional (
   constraint configuracion_operacional_singleton check (id)
 );
 comment on table configuracion_operacional is 'Umbrales operacionales editables desde /configuracion. Una sola fila.';
+
+alter table configuracion_operacional add column if not exists ruta_velocidad_maxima_legal_kmh numeric not null default 60;
 
 alter table configuracion_operacional enable row level security;
 

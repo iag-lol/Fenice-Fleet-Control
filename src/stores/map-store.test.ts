@@ -13,7 +13,7 @@ describe('control tower navigation', () => {
     state.select({ type: 'vehicle', id: 'truck' });
     expect(useMapStore.getState().isolate).toBe(false);
   });
-  it('restores all entities, layers and filters with show all', () => {
+  it('restores hidden layers, isolation and selection with show all, but keeps the operator\'s portfolio filters', () => {
     const state = useMapStore.getState();
     state.setFilters({ search: 'oculto', statuses: [] });
     state.setLayer('clientes', false);
@@ -21,8 +21,10 @@ describe('control tower navigation', () => {
     state.followVehicle('truck');
     state.showAll();
     const reset = useMapStore.getState();
-    expect(reset.filters.search).toBe('');
-    expect(reset.filters.statuses).toHaveLength(3);
+    // "Ver toda la operacion" saca del aislamiento, no borra un filtro de
+    // cartera que el operador eligio a proposito.
+    expect(reset.filters.search).toBe('oculto');
+    expect(reset.filters.statuses).toHaveLength(0);
     expect(reset.layers.clientes).toBe(true);
     expect(reset.isolate).toBe(false);
     expect(reset.selection).toBeNull();

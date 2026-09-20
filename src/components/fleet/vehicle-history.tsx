@@ -2,14 +2,23 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';
-import { Download, Pause, Play, Power, PowerOff, RefreshCw, Square } from 'lucide-react';
+import { AlertTriangle, Download, Pause, Play, Power, PowerOff, RefreshCw, Square } from 'lucide-react';
 import { FleetMap } from '@/components/map/fleet-map';
 import { Button } from '@/components/ui/button';
 import { Card, CardBody, CardHeader } from '@/components/ui/card';
-import { buildReplayTimeline, findIgnitionEvents, findStops, frameAt } from '@/lib/engines/route-replay';
+import { systemModeQuery } from '@/hooks/use-control-data';
+import {
+  buildReplayTimeline,
+  findIgnitionEvents,
+  findSpeedingEvents,
+  findStops,
+  frameAt,
+} from '@/lib/engines/route-replay';
 import { formatDistance, formatTimeWithSeconds } from '@/lib/format';
 import type { Position, Vehicle } from '@/types/core';
 import type { RouteGeometry } from '@/types/views';
+
+const DEFAULT_MAX_LEGAL_SPEED_KMH = 60;
 
 interface HistoryEvent {
   at: string;
@@ -23,6 +32,8 @@ function localTime(date: Date): string {
 }
 
 export function VehicleHistory({ vehicle }: { vehicle: Vehicle }) {
+  const { data: mode } = useQuery(systemModeQuery);
+  const maxLegalSpeedKmh = mode?.settings.route.maxLegalSpeedKmh ?? DEFAULT_MAX_LEGAL_SPEED_KMH;
   const [from, setFrom] = useState(() => { const day = new Date(); day.setHours(0, 0, 0, 0); return localTime(day); });
   const [to, setTo] = useState(() => localTime(new Date()));
   const [range, setRange] = useState<{ from: string; to: string } | null>(null);
@@ -59,8 +70,16 @@ export function VehicleHistory({ vehicle }: { vehicle: Vehicle }) {
       icon: event.type === 'ignition_on' ? Power : PowerOff,
       tone: event.type === 'ignition_on' ? 'active' : 'dormant',
     }));
-    return [...stopEvents, ...ignitionEvents].sort((a, b) => Date.parse(a.at) - Date.parse(b.at));
-  }, [timeline, stops]);
+    const speedingEvents: HistoryEvent[] = findSpeedingEvents(timeline, maxLegalSpeedKmh).map((event) => ({
+      at: event.startedAt,
+      label: `Exceso de velocidad · ${event.maxSpeedKmh} km/h`,
+      icon: AlertTriangle,
+      tone: 'dormant',
+    }));
+    return [...stopEvents, ...ignitionEvents, ...speedingEvents].sort(
+      (a, b) => Date.parse(a.at) - Date.parse(b.at),
+    );
+  }, [timeline, stops, maxLegalSpeedKmh]);
   const frame = timeline ? frameAt(timeline, cursor ?? timeline.startMs) : null;
   useEffect(() => { setCursor(null); setPlaying(false); }, [data]);
   useEffect(() => {

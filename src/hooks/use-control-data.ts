@@ -2,9 +2,15 @@
 
 import { queryOptions, useQuery } from '@tanstack/react-query';
 import type { CommuneWithSummary } from '@/components/map/commune-panel';
+import type { OperationalSettings } from '@/config/operational';
 import type { SystemModeInfo } from '@/services/registry';
 import type { Alert } from '@/types/core';
 import type { MapSnapshot } from '@/types/views';
+
+/** Lo que realmente responde `/api/system/mode`: incluye los umbrales configurables. */
+export interface SystemModeResponse extends SystemModeInfo {
+  settings: OperationalSettings;
+}
 
 async function read<T>(url: string, label: string, signal: AbortSignal): Promise<T> {
   const response = await fetch(url, { signal });
@@ -32,7 +38,7 @@ export const communesQuery = queryOptions({
 });
 export const systemModeQuery = queryOptions({
   queryKey: ['system', 'mode'],
-  queryFn: ({ signal }) => read<SystemModeInfo>('/api/system/mode', 'el estado del sistema', signal),
+  queryFn: ({ signal }) => read<SystemModeResponse>('/api/system/mode', 'el estado del sistema', signal),
   staleTime: 5 * 60_000,
 });
 

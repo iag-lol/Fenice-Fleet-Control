@@ -40,6 +40,8 @@ export const operationalSettingsSchema = z.object({
     outOfCommuneToleranceSeconds: z.number().min(30).max(7200),
     /** Segundos detenido fuera de una geocerca para alertar. */
     prolongedStopSeconds: z.number().min(60).max(14_400),
+    /** Velocidad maxima legal: por encima, el historial GPS marca exceso. */
+    maxLegalSpeedKmh: z.number().min(20).max(150),
   }),
   geofence: z.object({
     /** Radio por defecto de la geocerca generada por direccion de despacho. */
@@ -71,6 +73,7 @@ export const DEFAULT_OPERATIONAL_SETTINGS: OperationalSettings = {
     deviationTimeSeconds: 120,
     outOfCommuneToleranceSeconds: 300,
     prolongedStopSeconds: 900,
+    maxLegalSpeedKmh: 60,
   },
   geofence: {
     defaultRadiusMeters: 80,

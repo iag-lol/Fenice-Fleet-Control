@@ -248,3 +248,63 @@ export function findIgnitionEvents(timeline: ReplayTimeline): ReplayIgnitionEven
 
   return events;
 }
+
+export interface ReplaySpeedingEvent {
+  startedAt: string;
+  endedAt: string;
+  durationSeconds: number;
+  maxSpeedKmh: number;
+  position: LatLng;
+}
+
+/**
+ * Episodios de exceso sobre la velocidad maxima legal configurada.
+ *
+ * Se agrupan las muestras consecutivas por encima del limite en un solo
+ * episodio (con su velocidad maxima), no una alerta por cada muestra: un
+ * tramo acelerado de dos minutos no son veinte eventos identicos. Se descarta
+ * un episodio de menos de `minSeconds`: una sola lectura de velocidad ruidosa
+ * (comun en equipos GPS de bajo costo) no deberia leerse como una infraccion.
+ */
+export function findSpeedingEvents(
+  timeline: ReplayTimeline,
+  limitKmh: number,
+  minSeconds = 10,
+): ReplaySpeedingEvent[] {
+  const events: ReplaySpeedingEvent[] = [];
+  const { samples } = timeline;
+  let anchor: number | null = null;
+  let maxSpeed = 0;
+
+  for (let i = 0; i < samples.length; i += 1) {
+    const sample = samples[i]!;
+    const isSpeeding = sample.speed > limitKmh;
+
+    if (isSpeeding) {
+      if (anchor === null) anchor = i;
+      maxSpeed = Math.max(maxSpeed, sample.speed);
+    }
+
+    const isLast = i === samples.length - 1;
+    if (anchor !== null && (!isSpeeding || isLast)) {
+      const endIndex = isSpeeding && isLast ? i : i - 1;
+      const from = samples[anchor]!;
+      const to = samples[Math.max(anchor, endIndex)]!;
+      const seconds = (Date.parse(to.timestamp) - Date.parse(from.timestamp)) / 1000;
+
+      if (seconds >= minSeconds) {
+        events.push({
+          startedAt: from.timestamp,
+          endedAt: to.timestamp,
+          durationSeconds: Math.round(seconds),
+          maxSpeedKmh: Math.round(maxSpeed),
+          position: { lat: from.lat, lng: from.lng },
+        });
+      }
+      anchor = null;
+      maxSpeed = 0;
+    }
+  }
+
+  return events;
+}

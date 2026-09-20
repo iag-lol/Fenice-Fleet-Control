@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { buildReplayTimeline, findIgnitionEvents, findStops, frameAt } from './route-replay';
+import { buildReplayTimeline, findIgnitionEvents, findSpeedingEvents, findStops, frameAt } from './route-replay';
 import type { DeviceId, IgnitionState, Position, VehicleId } from '@/types/core';
 
 const BASE = Date.parse('2026-08-27T12:00:00.000Z');
@@ -177,5 +177,40 @@ describe('reproduccion de ruta', () => {
     const eventos = findIgnitionEvents(timeline);
     expect(eventos).toHaveLength(1);
     expect(eventos[0]?.type).toBe('ignition_on');
+  });
+
+  it('agrupa el exceso de velocidad continuo en un solo episodio con su maximo', () => {
+    const timeline = buildReplayTimeline([
+      pos(0, -33.45, -70.66, 40),
+      pos(1, -33.449, -70.66, 75), // supera 60 km/h
+      pos(2, -33.448, -70.66, 82), // maximo del episodio
+      pos(3, -33.447, -70.66, 65),
+      pos(4, -33.446, -70.66, 40), // vuelve a la normalidad
+    ])!;
+
+    const eventos = findSpeedingEvents(timeline, 60);
+    expect(eventos).toHaveLength(1);
+    expect(eventos[0]).toMatchObject({ maxSpeedKmh: 82, durationSeconds: 2 * 60 });
+  });
+
+  it('descarta un pico de velocidad demasiado breve para ser real', () => {
+    const timeline = buildReplayTimeline([
+      pos(0, -33.45, -70.66, 40),
+      pos(0.1, -33.4499, -70.66, 90), // una sola muestra ruidosa
+      pos(0.2, -33.4498, -70.66, 40),
+      pos(10, -33.44, -70.65, 40),
+    ])!;
+
+    expect(findSpeedingEvents(timeline, 60, 10)).toHaveLength(0);
+  });
+
+  it('sin exceder el limite legal, no hay episodios', () => {
+    const timeline = buildReplayTimeline([
+      pos(0, -33.45, -70.66, 40),
+      pos(5, -33.44, -70.65, 55),
+      pos(10, -33.43, -70.64, 30),
+    ])!;
+
+    expect(findSpeedingEvents(timeline, 60)).toHaveLength(0);
   });
 });

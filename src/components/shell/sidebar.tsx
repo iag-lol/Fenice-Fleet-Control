@@ -22,19 +22,26 @@ import { cn } from '@/lib/cn';
  * `useIsTabletRange`): el sidebar completo (236px) le restaba casi un tercio
  * del ancho al mapa o a las tablas en esa franja. Un usuario que expande o
  * colapsa a mano fija su eleccion para siempre, en cualquier ancho.
+ *
+ * En la torre de control queda colapsado siempre, sin excepcion ni boton
+ * para expandirlo: es la pantalla que mas depende del ancho disponible
+ * (mapa, panel operativo y sus propios controles flotantes), y ahi el
+ * espacio del sidebar completo pesa mas que en cualquier otra.
  */
 export function Sidebar() {
   const pathname = usePathname();
+  const isControlTower = pathname?.startsWith('/control') ?? false;
   const isTabletRange = useIsTabletRange();
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsedPreference, setCollapsedPreference] = useState(false);
   const [hasStoredPreference, setHasStoredPreference] = useState(false);
   const [hydrated, setHydrated] = useState(false);
+  const collapsed = isControlTower || collapsedPreference;
 
   useEffect(() => {
     try {
       const stored = window.localStorage.getItem('fenice.sidebar.collapsed');
       if (stored !== null) {
-        setCollapsed(stored === '1');
+        setCollapsedPreference(stored === '1');
         setHasStoredPreference(true);
       }
     } catch {
@@ -44,11 +51,11 @@ export function Sidebar() {
   }, []);
 
   useEffect(() => {
-    if (!hasStoredPreference) setCollapsed(isTabletRange);
+    if (!hasStoredPreference) setCollapsedPreference(isTabletRange);
   }, [isTabletRange, hasStoredPreference]);
 
   const toggle = (): void => {
-    setCollapsed((current) => {
+    setCollapsedPreference((current) => {
       const next = !current;
       setHasStoredPreference(true);
       try {
@@ -136,22 +143,25 @@ export function Sidebar() {
           {!collapsed ? <span className="truncate">Seguimiento publico</span> : null}
         </Link>
 
-        <button
-          type="button"
-          onClick={toggle}
-          aria-label={collapsed ? 'Expandir menu' : 'Colapsar menu'}
-          className={cn(
-            'flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-[13px] text-ink-faint transition-colors hover:bg-surface-800 hover:text-ink',
-            collapsed && 'justify-center px-0',
-          )}
-        >
-          {collapsed ? (
-            <PanelLeftOpen className="h-4 w-4 shrink-0" />
-          ) : (
-            <PanelLeftClose className="h-4 w-4 shrink-0" />
-          )}
-          {!collapsed ? <span>Colapsar</span> : null}
-        </button>
+        {/* En la torre de control el colapso es fijo: no hay nada que alternar. */}
+        {isControlTower ? null : (
+          <button
+            type="button"
+            onClick={toggle}
+            aria-label={collapsed ? 'Expandir menu' : 'Colapsar menu'}
+            className={cn(
+              'flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-[13px] text-ink-faint transition-colors hover:bg-surface-800 hover:text-ink',
+              collapsed && 'justify-center px-0',
+            )}
+          >
+            {collapsed ? (
+              <PanelLeftOpen className="h-4 w-4 shrink-0" />
+            ) : (
+              <PanelLeftClose className="h-4 w-4 shrink-0" />
+            )}
+            {!collapsed ? <span>Colapsar</span> : null}
+          </button>
+        )}
 
         <a
           href="https://zyteron.cl"

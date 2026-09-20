@@ -32,6 +32,7 @@ export const SOURCE = {
   workOrders: 'src-work-orders',
   communes: 'src-communes',
   followTrail: 'src-follow-trail',
+  trajectoryEvents: 'src-trajectory-events',
 } as const;
 
 export const LAYER = {
@@ -57,6 +58,8 @@ export const LAYER = {
   vehicles: 'lyr-vehicles',
   vehicleLabels: 'lyr-vehicle-labels',
   followTrail: 'lyr-follow-trail',
+  trajectoryEvents: 'lyr-trajectory-events',
+  trajectoryEventLabels: 'lyr-trajectory-event-labels',
 } as const;
 
 /**
@@ -402,6 +405,60 @@ export function registerLayers(map: MapLibreMap): void {
     paint: { 'line-color': '#0e7490', 'line-width': 3.5, 'line-opacity': 0.8 },
   });
 
+  // --- Eventos del trayecto del dia (vehiculo seleccionado) ----------------
+  //
+  // Detenciones, exceso de velocidad y encendido/apagado, todos en una sola
+  // capa clasificada por color: son la respuesta a "que paso realmente en
+  // esta ruta", y solo tienen sentido junto a la linea del trayecto que
+  // dibuja `updateRoutes`.
+  map.addSource(SOURCE.trajectoryEvents, { type: 'geojson', data: EMPTY });
+  map.addLayer({
+    id: LAYER.trajectoryEvents,
+    type: 'circle',
+    source: SOURCE.trajectoryEvents,
+    paint: {
+      'circle-radius': ['interpolate', ['linear'], ['zoom'], 10, 6, 15, 10],
+      'circle-color': [
+        'match',
+        ['get', 'eventType'],
+        'speeding',
+        '#dc2626',
+        'stop',
+        '#b45309',
+        'ignition_on',
+        '#15803d',
+        '#475569',
+      ],
+      'circle-stroke-width': 2,
+      'circle-stroke-color': '#ffffff',
+    },
+  });
+  map.addLayer({
+    id: LAYER.trajectoryEventLabels,
+    type: 'symbol',
+    source: SOURCE.trajectoryEvents,
+    layout: {
+      // Un caracter por tipo, igual que la secuencia de paradas de ruta:
+      // no hace falta arte nuevo para que se distingan de un vistazo.
+      'text-field': [
+        'match',
+        ['get', 'eventType'],
+        'speeding',
+        'V',
+        'stop',
+        'P',
+        'ignition_on',
+        'E',
+        'A',
+      ],
+      'text-size': 10,
+      'text-allow-overlap': true,
+      'text-ignore-placement': true,
+      'text-font': [BOLD_FONT],
+    },
+    paint: { 'text-color': '#ffffff' },
+  });
+
   // --- Vehiculos (siempre en el nivel superior) ----------------------------
   map.addSource(SOURCE.vehicles, { type: 'geojson', data: EMPTY });
 
@@ -632,6 +689,25 @@ export function updateRoutes(
   setData(map, SOURCE.routesPlanned, planned);
   setData(map, SOURCE.routesExecuted, executed);
   setData(map, SOURCE.routeStops, stops);
+}
+
+export interface TrajectoryEventInput {
+  id: string;
+  eventType: 'stop' | 'speeding' | 'ignition_on' | 'ignition_off';
+  lat: number;
+  lng: number;
+}
+
+export function updateTrajectoryEvents(map: MapLibreMap, events: TrajectoryEventInput[]): void {
+  setData(map, SOURCE.trajectoryEvents, {
+    type: 'FeatureCollection',
+    features: events.filter(isUsableCoordinate).map((event) => ({
+      type: 'Feature',
+      id: event.id,
+      geometry: { type: 'Point', coordinates: [event.lng, event.lat] },
+      properties: { trajectoryEventId: event.id, eventType: event.eventType },
+    })),
+  });
 }
 
 export function updateGeofences(

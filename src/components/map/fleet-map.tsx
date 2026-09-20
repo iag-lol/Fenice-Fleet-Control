@@ -21,9 +21,11 @@ import {
   updateGeofences,
   updateHeatmap,
   updateRoutes,
+  updateTrajectoryEvents,
   updateVehicles,
   updateWorkOrders,
   type CommuneFeatureInput,
+  type TrajectoryEventInput,
   type VehicleFeatureInput,
 } from '@/components/map/map-layers';
 import { resolveMapStyle } from '@/components/map/map-style';
@@ -84,9 +86,12 @@ export interface FleetMapProps {
   workOrders: WorkOrderMapPoint[];
   communes: CommuneFeatureInput[];
   heatmapPoints: HeatmapPoint[];
+  /** Detenciones, exceso de velocidad y encendido/apagado del trayecto del vehiculo seleccionado. */
+  trajectoryEvents?: TrajectoryEventInput[];
   onSelectVehicle?: (vehicleId: string) => void;
   onSelectClient?: (clientId: string) => void;
   onSelectWorkOrder?: (workOrderId: string) => void;
+  onSelectTrajectoryEvent?: (eventId: string) => void;
   onSelectCommune?: (communeCode: string) => void;
   className?: string;
   /** Oculta los controles nativos cuando el contenedor aporta los suyos. */
@@ -170,10 +175,12 @@ export function FleetMap({
   workOrders,
   communes,
   heatmapPoints,
+  trajectoryEvents = [],
   onSelectVehicle,
   onSelectClient,
   onSelectWorkOrder,
   onSelectCommune,
+  onSelectTrajectoryEvent,
   className,
   minimalControls,
   layerOverride,
@@ -322,6 +329,8 @@ export function FleetMap({
       LAYER.routeStops,
       LAYER.routeStopLabels,
       LAYER.alerts,
+      LAYER.trajectoryEvents,
+      LAYER.trajectoryEventLabels,
       LAYER.geofenceLine,
       LAYER.geofenceLabel,
       LAYER.routeExecuted,
@@ -383,6 +392,8 @@ export function FleetMap({
         select({ type: 'geofence', id: props['geofenceId'] });
       } else if (typeof props['routeId'] === 'string') {
         select({ type: 'route', id: props['routeId'] });
+      } else if (typeof props['trajectoryEventId'] === 'string') {
+        onSelectTrajectoryEvent?.(props['trajectoryEventId']);
       }
     };
     let hoveredCommune: string | number | null = null;
@@ -418,7 +429,15 @@ export function FleetMap({
       map.off('mousemove', onMove);
       map.getCanvas().removeEventListener('mouseleave', onLeave);
     };
-  }, [ready, select, onSelectVehicle, onSelectClient, onSelectWorkOrder, onSelectCommune]);
+  }, [
+    ready,
+    select,
+    onSelectVehicle,
+    onSelectClient,
+    onSelectWorkOrder,
+    onSelectCommune,
+    onSelectTrajectoryEvent,
+  ]);
 
   // --- Animacion de vehiculos ----------------------------------------------
   /**
@@ -620,6 +639,12 @@ export function FleetMap({
     if (!map || !ready) return;
     updateWorkOrders(map, workOrders);
   }, [ready, workOrders]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !ready) return;
+    updateTrajectoryEvents(map, trajectoryEvents);
+  }, [ready, trajectoryEvents]);
 
   useEffect(() => {
     const map = mapRef.current;

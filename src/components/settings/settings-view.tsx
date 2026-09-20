@@ -419,6 +419,19 @@ export function SettingsView() {
                   })
                 }
               />
+              <NumberField
+                label="Velocidad maxima legal"
+                suffix="km/h"
+                min={20}
+                max={150}
+                value={draft.route.maxLegalSpeedKmh}
+                onChange={(event) =>
+                  update('route', {
+                    maxLegalSpeedKmh: numberOr(event.target.value, draft.route.maxLegalSpeedKmh),
+                  })
+                }
+                hint="Por encima de esta velocidad, el historial GPS marca exceso."
+              />
             </div>
 
             <p className="rounded-md border border-line bg-surface-900 px-3 py-2 text-2xs leading-relaxed text-ink-faint">

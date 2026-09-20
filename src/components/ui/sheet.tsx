@@ -14,7 +14,17 @@ export interface SheetProps {
   /** Lado en escritorio. En movil siempre se comporta como bottom sheet. */
   side?: 'right' | 'left';
   className?: string;
-  /** Deja el mapa visible detras: no oscurece la pantalla completa. */
+  /**
+   * Deja el mapa visible detras: no oscurece la pantalla completa.
+   *
+   * En escritorio/tablet (>= `sm`) implica ademas que el fondo NO es modal:
+   * el velo no se pinta y no intercepta el puntero, asi que el mapa sigue
+   * respondiendo al arrastre, el zoom y los clics mientras el panel esta
+   * abierto. Un velo de pantalla completa (aunque tenue) volvia el mapa
+   * inutilizable con cualquier ficha abierta: se podia VER pero no tocar.
+   * En movil se mantiene como hoja modal de toda la pantalla, que es el
+   * patron nativo.
+   */
   transparentOverlay?: boolean;
 }
 
@@ -60,9 +70,12 @@ export function Sheet({
         type="button"
         aria-label="Cerrar panel"
         onClick={onClose}
+        tabIndex={transparentOverlay ? -1 : 0}
         className={cn(
           'absolute inset-0 animate-fade-in',
-          transparentOverlay ? 'bg-[rgba(15,28,46,0.18)]' : 'bg-overlay backdrop-blur-[2px]',
+          transparentOverlay
+            ? 'bg-[rgba(15,28,46,0.18)] sm:pointer-events-none sm:bg-transparent'
+            : 'bg-overlay backdrop-blur-[2px]',
         )}
       />
 
