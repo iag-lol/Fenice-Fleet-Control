@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { EstimatedRoutingProvider } from '@/services/eta/eta-service';
+import { EstimatedRoutingProvider, planDrivingRoute } from '@/services/eta/eta-service';
 import { destinationPoint } from '@/lib/geo';
 import type { LatLng } from '@/types/core';
 
@@ -149,5 +149,32 @@ describe('EstimatedRoutingProvider', () => {
 
     expect(result.minutes).not.toBeNull();
     expect(result.minutes!).toBeLessThan(60);
+  });
+});
+
+describe('planDrivingRoute', () => {
+  // Sin ROUTING_PROVIDER=osrm configurado (no lo esta en las pruebas), debe
+  // degradar a conectar las paradas en linea recta, nunca inventar una curva.
+  it('conecta las paradas en linea recta cuando no hay proveedor de ruteo configurado', async () => {
+    const waypoints: LatLng[] = [
+      { lat: -33.45, lng: -70.7 },
+      { lat: -33.45, lng: -70.68 },
+      { lat: -33.45, lng: -70.6 },
+    ];
+
+    const result = await planDrivingRoute(waypoints);
+
+    expect(result.source).toBe('direct');
+    expect(result.path).toEqual(waypoints);
+    expect(result.distanceKm).toBeGreaterThan(0);
+    expect(result.durationMinutes).toBeGreaterThan(0);
+  });
+
+  it('no calcula distancia ni duracion con menos de dos paradas', async () => {
+    const result = await planDrivingRoute([{ lat: -33.45, lng: -70.7 }]);
+
+    expect(result.source).toBe('direct');
+    expect(result.distanceKm).toBe(0);
+    expect(result.durationMinutes).toBe(0);
   });
 });

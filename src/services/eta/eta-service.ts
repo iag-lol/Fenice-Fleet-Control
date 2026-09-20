@@ -197,3 +197,90 @@ export async function estimateEta(request: EtaRequest): Promise<EtaResult> {
   if (result) return result;
   return new EstimatedRoutingProvider().estimate(request);
 }
+
+export interface RoutePlanResult {
+  /** Secuencia de puntos a dibujar en el mapa. */
+  path: LatLng[];
+  distanceKm: number;
+  durationMinutes: number;
+  /**
+   * `routing_provider`: geometria real por calles (OSRM).
+   * `direct`: sin proveedor de ruteo configurado; son las MISMAS paradas
+   * recibidas, sin ninguna curva agregada.
+   */
+  source: 'routing_provider' | 'direct';
+}
+
+/** Factor de sinuosidad urbana, igual al usado por el estimador de ETA. */
+const URBAN_DETOUR_FACTOR = 1.35;
+/** Velocidad urbana asumida para la duracion cuando no hay proveedor real. */
+const DIRECT_ESTIMATE_SPEED_KMH = 30;
+
+/**
+ * Consulta a OSRM el trazado real (por calles) a traves de TODAS las
+ * paradas, en el orden en que se entregan. OSRM soporta rutas multi-parada de
+ * forma nativa: no es necesario pedir un tramo por cada par de puntos.
+ */
+async function fetchOsrmFullRoute(waypoints: LatLng[], baseUrl: string): Promise<RoutePlanResult | null> {
+  const coordinates = waypoints.map((p) => `${p.lng},${p.lat}`).join(';');
+  const url = `${baseUrl.replace(/\/+$/, '')}/route/v1/driving/${coordinates}?overview=full&geometries=geojson&continue_straight=true`;
+
+  try {
+    const response = await fetch(url, { cache: 'no-store', signal: AbortSignal.timeout(8_000) });
+    if (!response.ok) return null;
+
+    const payload = (await response.json()) as {
+      code?: string;
+      routes?: { distance: number; duration: number; geometry?: { coordinates: [number, number][] } }[];
+    };
+    const route = payload.routes?.[0];
+    if (payload.code !== 'Ok' || !route?.geometry?.coordinates) return null;
+
+    const path = route.geometry.coordinates.map(([lng, lat]) => ({ lat: lat!, lng: lng! }));
+    if (path.length < 2) return null;
+
+    return {
+      path,
+      distanceKm: Math.round((route.distance / 1000) * 10) / 10,
+      durationMinutes: Math.max(1, Math.round(route.duration / 60)),
+      source: 'routing_provider',
+    };
+  } catch {
+    // Un proveedor de routing caido no puede dejar la ruta sin trazado.
+    return null;
+  }
+}
+
+/**
+ * Trazado planificado real a traves de una secuencia ORDENADA de paradas.
+ *
+ * Es la contraparte de `estimateEta` para la GEOMETRIA de una ruta completa
+ * (no solo el tiempo entre dos puntos): lo que el mapa dibuja como "corredor
+ * planificado" cuando una ruta tiene varias paradas.
+ *
+ * Solo devuelve un trazado por calles reales si hay un proveedor de ruteo
+ * configurado (`ROUTING_PROVIDER=osrm` + `OSRM_BASE_URL`). Sin eso, NO
+ * inventa una curva que aparente ser vial: devuelve las mismas paradas
+ * conectadas en linea recta (`source: 'direct'`), para que quien lo consuma
+ * sepa que no es un trazado real y pueda decidir que hacer con eso.
+ */
+export async function planDrivingRoute(waypoints: LatLng[]): Promise<RoutePlanResult> {
+  if (waypoints.length < 2) {
+    return { path: waypoints, distanceKm: 0, durationMinutes: 0, source: 'direct' };
+  }
+
+  const env = getServerEnv();
+  if (env.ROUTING_PROVIDER === 'osrm' && env.OSRM_BASE_URL) {
+    const real = await fetchOsrmFullRoute(waypoints, env.OSRM_BASE_URL);
+    if (real) return real;
+  }
+
+  let meters = 0;
+  for (let i = 0; i < waypoints.length - 1; i += 1) {
+    meters += haversineMeters(waypoints[i]!, waypoints[i + 1]!) * URBAN_DETOUR_FACTOR;
+  }
+  const distanceKm = Math.round((meters / 1000) * 10) / 10;
+  const durationMinutes = Math.max(1, Math.round((distanceKm / DIRECT_ESTIMATE_SPEED_KMH) * 60));
+
+  return { path: waypoints, distanceKm, durationMinutes, source: 'direct' };
+}
