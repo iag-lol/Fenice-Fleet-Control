@@ -12,7 +12,11 @@ import { WorkOrderPanel } from '@/components/map/work-order-panel';
 import { ErrorBoundary } from '@/components/ui/error-boundary';
 import { hasFeature } from '@/product/feature-access';
 import { OperationsPanel } from '@/features/medium/control-tower/operations-panel';
-import { useIsDesktop, useIsTabletRange } from '@/hooks/use-media-query';
+import {
+  useIsDesktop,
+  useIsPortraitTablet,
+  useIsTabletRange,
+} from '@/hooks/use-media-query';
 import { useLiveFleet } from '@/hooks/use-live-fleet';
 import { cn } from '@/lib/cn';
 import { useMapStore } from '@/stores/map-store';
@@ -41,7 +45,9 @@ export function ControlTowerView() {
   // El panel operativo acompaña al mapa en todos los planes.
   const hasOperationsPanel = hasFeature('control-tower');
   const isDesktop = useIsDesktop();
+  const isPortraitTablet = useIsPortraitTablet();
   const isTabletRange = useIsTabletRange();
+  const usesMobileLayout = !isDesktop || isPortraitTablet;
   const { positions, payload: livePayload } = useLiveFleet();
   const select = useMapStore((s) => s.select);
   const currentSelection = useMapStore((s) => s.selection);
@@ -96,19 +102,19 @@ export function ControlTowerView() {
   }, [isTabletRange, hasStoredPanelPreference]);
 
   useEffect(() => {
-    if (isDesktop || !mobilePanelOpen) return;
+    if (!usesMobileLayout || !mobilePanelOpen) return;
     const onKeyDown = (event: KeyboardEvent): void => {
       if (event.key === 'Escape') setMobilePanelOpen(false);
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [isDesktop, mobilePanelOpen]);
+  }, [usesMobileLayout, mobilePanelOpen]);
 
   // Al elegir una entidad desde el inventario movil, vuelve al mapa para que
   // el encuadre y la ficha seleccionada sean visibles de inmediato.
   useEffect(() => {
-    if (!isDesktop && currentSelection) setMobilePanelOpen(false);
-  }, [currentSelection, isDesktop]);
+    if (usesMobileLayout && currentSelection) setMobilePanelOpen(false);
+  }, [currentSelection, usesMobileLayout]);
 
   const togglePanel = useCallback(() => {
     setPanelOpen((current) => {
@@ -132,7 +138,7 @@ export function ControlTowerView() {
         : undefined,
     [map.data, livePayload?.vehicles],
   );
-  const desktopSelection = isDesktop ? currentSelection : null;
+  const desktopSelection = usesMobileLayout ? null : currentSelection;
   const visiblePanelWidth = desktopSelection ? Math.max(panelWidth, 400) : panelWidth;
   const refreshAll = () => {
     void map.refetch();
@@ -217,7 +223,7 @@ export function ControlTowerView() {
         <OperationalMap detailExternal={Boolean(desktopSelection)} />
 
         {/* Alternar el panel: en el mapa cada pixel horizontal cuenta. */}
-        {isDesktop && hasOperationsPanel && !desktopSelection ? (
+        {!usesMobileLayout && hasOperationsPanel && !desktopSelection ? (
           <button
             type="button"
             onClick={togglePanel}
@@ -241,7 +247,7 @@ export function ControlTowerView() {
         operacional. Nunca se dibuja por encima de el ni del mapa; el flex
         recalcula el ancho disponible y MapLibre recibe el resize normal.
       */}
-      {isDesktop && (desktopSelection || (panelOpen && hasOperationsPanel)) ? (
+      {!usesMobileLayout && (desktopSelection || (panelOpen && hasOperationsPanel)) ? (
         <>
           <div
             role="separator"
@@ -332,12 +338,12 @@ export function ControlTowerView() {
 
       {/* En movil no queda ninguna hoja semivisible sobre el mapa. El centro
           operacional se abre a pantalla completa desde un unico control. */}
-      {!isDesktop && hasOperationsPanel && !mobilePanelOpen ? (
+      {usesMobileLayout && hasOperationsPanel && !mobilePanelOpen ? (
         <button
           type="button"
           onClick={() => setMobilePanelOpen(true)}
           aria-label="Abrir centro operacional"
-          className="absolute bottom-[calc(66px+env(safe-area-inset-bottom,0px))] left-1/2 z-30 flex min-h-11 -translate-x-1/2 items-center gap-2 rounded-full border border-white/20 bg-[#0d2430] px-4 text-xs font-semibold text-white shadow-panel transition-transform active:scale-[0.98] md:hidden"
+          className="mobile-layout-flex absolute bottom-[calc(66px+env(safe-area-inset-bottom,0px))] left-1/2 z-30 flex min-h-11 -translate-x-1/2 items-center gap-2 rounded-full border border-white/20 bg-[#0d2430] px-4 text-xs font-semibold text-white shadow-panel transition-transform active:scale-[0.98] md:hidden"
         >
           <span className="flex h-7 w-7 items-center justify-center rounded-full bg-brand-400/20 text-brand-300">
             <ListFilter className="h-4 w-4" />
@@ -349,9 +355,9 @@ export function ControlTowerView() {
         </button>
       ) : null}
 
-      {!isDesktop && hasOperationsPanel && mobilePanelOpen ? (
+      {usesMobileLayout && hasOperationsPanel && mobilePanelOpen ? (
         <section
-          className="fixed inset-0 z-[70] flex min-h-0 flex-col bg-surface-950 animate-fade-in md:hidden"
+          className="mobile-layout-flex fixed inset-0 z-[70] flex min-h-0 flex-col bg-surface-950 animate-fade-in md:hidden"
           role="dialog"
           aria-modal="true"
           aria-label="Centro operacional"

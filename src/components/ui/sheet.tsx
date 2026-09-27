@@ -67,7 +67,7 @@ export function Sheet({
   return (
     <div
       className={cn(
-        'fixed inset-0 z-50 flex',
+        'app-sheet-root fixed inset-0 z-50 flex',
         // Las fichas del mapa viven bajo el header de escritorio. Asi la
         // busqueda, el reloj y el estado GPS siguen visibles y utilizables.
         transparentOverlay && 'sm:top-14',
@@ -87,7 +87,7 @@ export function Sheet({
         onClick={onClose}
         tabIndex={transparentOverlay ? -1 : 0}
         className={cn(
-          'absolute inset-0 animate-fade-in',
+          'app-sheet-overlay absolute inset-0 animate-fade-in',
           transparentOverlay
             ? 'bg-[rgba(15,28,46,0.18)] sm:pointer-events-none sm:bg-transparent'
             : 'bg-overlay backdrop-blur-[2px]',
@@ -96,7 +96,7 @@ export function Sheet({
 
       <div
         className={cn(
-          'pointer-events-auto relative z-10 flex w-full flex-col overflow-hidden border-line bg-surface-900 shadow-panel',
+          'app-sheet-panel pointer-events-auto relative z-10 flex w-full flex-col overflow-hidden border-line bg-surface-900 shadow-panel',
           // Movil: hoja inferior con esquinas superiores redondeadas.
           'mt-auto max-h-[88vh] animate-sheet-up rounded-t-xl border-t safe-bottom',
           // Escritorio: panel lateral a altura completa.
@@ -108,7 +108,7 @@ export function Sheet({
         )}
       >
         {/* Asa de arrastre: senal visual del gesto en movil. */}
-        <div className="flex justify-center pt-2 sm:hidden">
+        <div className="app-sheet-handle flex justify-center pt-2 sm:hidden">
           <span className="h-1 w-10 rounded-full bg-line-strong" aria-hidden />
         </div>
 

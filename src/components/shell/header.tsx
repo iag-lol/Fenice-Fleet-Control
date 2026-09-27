@@ -77,7 +77,7 @@ export function Header() {
           </button>
         ) : null}
 
-        <span className="md:hidden">
+        <span className="mobile-layout-inline md:hidden">
           <BrandMark className="h-7 w-7" />
         </span>
 
@@ -92,7 +92,7 @@ export function Header() {
 
         <GlobalSearch
           className={cn(
-            'mx-auto hidden w-full max-w-2xl sm:block',
+            'header-desktop-search mx-auto hidden w-full max-w-2xl sm:block',
             isControlTower && 'lg:max-w-4xl',
           )}
         />
@@ -106,7 +106,7 @@ export function Header() {
       </div>
 
       {/* En movil el buscador ocupa su propia fila: comprimirlo lo haria inusable. */}
-      <div className="border-t border-line px-3 py-2 sm:hidden">
+      <div className="header-mobile-search border-t border-line px-3 py-2 sm:hidden">
         <GlobalSearch />
       </div>
     </header>

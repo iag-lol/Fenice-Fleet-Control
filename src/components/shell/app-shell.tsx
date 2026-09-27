@@ -31,7 +31,7 @@ export function AppShell({ children, fullBleed }: AppShellProps) {
 
         <main
           className={cn(
-            'min-w-0 flex-1',
+            'app-shell-main min-w-0 flex-1',
             fullBleed
               ? 'relative overflow-hidden'
               : 'overflow-y-auto px-3 pb-20 pt-3 sm:px-4 sm:pb-5 lg:px-5 lg:pt-4',

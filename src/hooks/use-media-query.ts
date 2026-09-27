@@ -29,6 +29,19 @@ export function useIsDesktop(): boolean {
 }
 
 /**
+ * Tablet en orientacion vertical.
+ *
+ * En este formato el alto disponible no compensa perder ancho con barras y
+ * fichas laterales, por lo que la aplicacion adopta la navegacion movil.
+ */
+export const PORTRAIT_TABLET_QUERY =
+  '(min-width: 768px) and (max-width: 1279px) and (orientation: portrait)';
+
+export function useIsPortraitTablet(): boolean {
+  return useMediaQuery(PORTRAIT_TABLET_QUERY);
+}
+
+/**
  * Rango de tablet/portatil compacto: 768-1279px por ancho, O cualquier ancho >=768px con
  * puntero "coarse" (tactil).
  *

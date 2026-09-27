@@ -33,7 +33,7 @@ export function MobileNav() {
       type="button"
       onClick={() => setOpen(true)}
       aria-label="Abrir menu"
-      className="tap flex items-center justify-center rounded-md text-ink-muted transition-colors hover:bg-surface-800 hover:text-ink md:hidden"
+      className="mobile-layout-flex tap flex items-center justify-center rounded-md text-ink-muted transition-colors hover:bg-surface-800 hover:text-ink md:hidden"
     >
       <Menu className="h-5 w-5" />
     </button>
@@ -64,7 +64,7 @@ export function MobileMenuSheet() {
 
   return (
     <div
-      className="fixed inset-0 z-[60] md:hidden"
+      className="mobile-layout-block fixed inset-0 z-[60] md:hidden"
       role="dialog"
       aria-modal="true"
       aria-label="Menu principal"
@@ -170,7 +170,7 @@ export function MobileTabBar() {
 
   return (
     <nav
-      className="safe-bottom fixed inset-x-0 bottom-0 z-40 border-t border-line bg-surface-900/95 backdrop-blur-sm md:hidden"
+      className="mobile-layout-block safe-bottom fixed inset-x-0 bottom-0 z-40 border-t border-line bg-surface-900/95 backdrop-blur-sm md:hidden"
       aria-label="Accesos rapidos"
     >
       <ul className="grid grid-cols-4">
