@@ -31,7 +31,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
         value={value}
         className={cn(
           fieldBase,
-          'h-11 px-3 text-sm sm:h-9 sm:text-[13px]',
+          'h-11 px-3 text-sm sm:h-8 sm:text-[13px]',
           icon && 'pl-9',
           showClear && 'pr-9',
           className,
@@ -69,7 +69,7 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(function Select
       ref={ref}
       className={cn(
         fieldBase,
-        'h-11 cursor-pointer appearance-none bg-[length:14px] bg-[right_0.6rem_center] bg-no-repeat px-3 pr-8 text-sm sm:h-9 sm:text-[13px]',
+        'h-11 cursor-pointer appearance-none bg-[length:14px] bg-[right_0.6rem_center] bg-no-repeat px-3 pr-8 text-sm sm:h-8 sm:text-[13px]',
         className,
       )}
       style={{
@@ -101,7 +101,7 @@ export function NumberField({ label, hint, suffix, className, ...props }: Number
       <div className="relative">
         <input
           type="number"
-          className={cn(fieldBase, 'h-11 px-3 text-sm numeric sm:h-9', suffix && 'pr-14', className)}
+          className={cn(fieldBase, 'h-11 px-3 text-sm numeric sm:h-8', suffix && 'pr-14', className)}
           {...props}
         />
         {suffix ? (

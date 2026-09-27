@@ -2,7 +2,7 @@
 
 import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
-import { ChevronLeft } from 'lucide-react';
+import { PanelLeft } from 'lucide-react';
 
 import { AlertsBell } from '@/components/shell/alerts-bell';
 import { GlobalSearch } from '@/components/shell/global-search';
@@ -11,6 +11,7 @@ import { ALL_NAV_ITEMS, isActivePath } from '@/components/shell/navigation';
 import { MobileNav } from '@/components/shell/mobile-nav';
 import { BrandMark } from '@/components/shell/brand';
 import { UserMenu } from '@/components/shell/user-menu';
+import { useIsTabletRange } from '@/hooks/use-media-query';
 import { formatTimeWithSeconds } from '@/lib/format';
 import { cn } from '@/lib/cn';
 
@@ -57,21 +58,22 @@ export function Header() {
   const title = useContextTitle();
   const pathname = usePathname();
   const isControlTower = pathname?.startsWith('/control') ?? false;
+  const isTabletRange = useIsTabletRange();
 
   return (
-    <header className="safe-top sticky top-0 z-30 border-b border-line bg-surface-900/95 backdrop-blur">
-      <div className="flex h-14 items-center gap-2 px-3 sm:gap-3 sm:px-4">
+    <header className="safe-top sticky top-0 z-30 border-b border-line bg-surface-900/90 shadow-[0_1px_8px_rgba(20,35,46,0.025)] backdrop-blur-xl">
+      <div className="flex h-[52px] items-center gap-2 px-3 sm:px-3.5">
         <MobileNav />
 
-        {isControlTower ? (
+        {!isTabletRange ? (
           <button
             type="button"
             onClick={() => window.dispatchEvent(new Event('fenice:toggle-sidebar'))}
             aria-label="Expandir o colapsar menu lateral"
             title="Expandir o colapsar menu lateral"
-            className="hidden h-8 w-8 shrink-0 items-center justify-center rounded-md border border-line bg-surface-900 text-ink-faint shadow-card transition-colors hover:border-brand-500 hover:text-ink md:flex"
+            className="hidden h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-line bg-surface-900 text-ink-faint shadow-card transition-colors hover:border-brand-400 hover:text-brand-700 md:flex"
           >
-            <ChevronLeft className="h-4 w-4" />
+            <PanelLeft className="h-4 w-4" />
           </button>
         ) : null}
 
@@ -81,7 +83,7 @@ export function Header() {
 
         <h1
           className={cn(
-            'hidden min-w-0 shrink-0 truncate text-sm font-semibold text-ink md:block lg:w-[200px]',
+            'hidden min-w-0 max-w-[150px] shrink-0 truncate text-[13px] font-semibold text-ink xl:block',
             isControlTower && 'md:hidden',
           )}
         >
@@ -90,8 +92,8 @@ export function Header() {
 
         <GlobalSearch
           className={cn(
-            'mx-auto hidden w-full max-w-xl sm:block',
-            isControlTower && 'lg:max-w-3xl',
+            'mx-auto hidden w-full max-w-2xl sm:block',
+            isControlTower && 'lg:max-w-4xl',
           )}
         />
 

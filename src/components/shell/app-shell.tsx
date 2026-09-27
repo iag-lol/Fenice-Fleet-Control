@@ -23,10 +23,10 @@ export function AppShell({ children, fullBleed }: AppShellProps) {
   useAppHeight();
 
   return (
-    <div className="flex h-app overflow-hidden bg-surface-950">
+    <div className="flex h-app overflow-hidden bg-surface-950 bg-[radial-gradient(circle_at_top_right,rgba(13,144,174,0.055),transparent_32rem)]">
       <Sidebar />
 
-      <div className="flex min-w-0 flex-1 flex-col">
+      <div className="relative flex min-w-0 flex-1 flex-col">
         <Header />
 
         <main
@@ -34,11 +34,15 @@ export function AppShell({ children, fullBleed }: AppShellProps) {
             'min-w-0 flex-1',
             fullBleed
               ? 'relative overflow-hidden'
-              : 'overflow-y-auto px-3 pb-20 pt-4 sm:px-4 sm:pb-6 lg:px-6',
+              : 'overflow-y-auto px-3 pb-20 pt-3 sm:px-4 sm:pb-5 lg:px-5 lg:pt-4',
           )}
         >
-          {children}
+          {fullBleed ? children : <div className="mx-auto w-full max-w-[1600px]">{children}</div>}
         </main>
+
+        {/* Se ancla al area de contenido, no al viewport completo: asi nunca
+            invade el sidebar cuando aparece en escritorio o tablet. */}
+        <PwaProvider />
       </div>
 
       <MobileTabBar />
@@ -48,7 +52,6 @@ export function AppShell({ children, fullBleed }: AppShellProps) {
           sistema operativo. Se montan aqui para que lleguen en cualquier
           pantalla, no solo en el centro de alertas. */}
       <AlertToasts />
-      <PwaProvider />
     </div>
   );
 }

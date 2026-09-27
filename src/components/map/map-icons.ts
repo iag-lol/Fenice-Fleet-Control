@@ -108,14 +108,13 @@ function drawWorkOrderPin(color: string, size = 34): ImageData {
   return ctx.getImageData(0, 0, canvas.width, canvas.height);
 }
 
-/**
- * Pin de cliente: gota clasica de mapa, anclada por la punta.
- *
- * Se usa forma de pin y no un circulo para que el cliente se distinga de un
- * vistazo del vehiculo (disco con flecha) y de la parada de ruta (circulo
- * numerado), incluso cuando los tres coinciden en la misma manzana.
- */
-function drawClientPin(color: string, width = 30, height = 40): ImageData {
+/** Pin de cliente: marcador propio con fachada comercial en su interior. */
+function drawClientPin(
+  color: string,
+  width = 34,
+  height = 44,
+  selected = false,
+): ImageData {
   const canvas = document.createElement('canvas');
   canvas.width = width * DPR;
   canvas.height = height * DPR;
@@ -126,20 +125,20 @@ function drawClientPin(color: string, width = 30, height = 40): ImageData {
   ctx.scale(DPR, DPR);
 
   const cx = width / 2;
-  const headRadius = 10;
-  const cy = headRadius + 2;
-  const tipY = height - 3;
+  const headRadius = selected ? 13 : 11.5;
+  const cy = headRadius + 3;
+  const tipY = height - 2.5;
 
   ctx.save();
-  ctx.shadowColor = 'rgba(15, 28, 46, 0.35)';
-  ctx.shadowBlur = 4;
-  ctx.shadowOffsetY = 1.5;
+  ctx.shadowColor = selected ? 'rgba(13, 144, 174, 0.45)' : 'rgba(15, 28, 46, 0.32)';
+  ctx.shadowBlur = selected ? 8 : 5;
+  ctx.shadowOffsetY = 2;
 
-  // Cuerpo de la gota: circulo superior que se cierra en punta hacia abajo.
+  // Silueta más geométrica que la gota genérica anterior.
   ctx.beginPath();
-  ctx.arc(cx, cy, headRadius, Math.PI * 0.82, Math.PI * 0.18, false);
-  ctx.quadraticCurveTo(cx + headRadius * 0.62, cy + headRadius * 1.1, cx, tipY);
-  ctx.quadraticCurveTo(cx - headRadius * 0.62, cy + headRadius * 1.1, cx - headRadius * 0.79, cy + headRadius * 0.6);
+  ctx.arc(cx, cy, headRadius, Math.PI * 0.84, Math.PI * 0.16, false);
+  ctx.quadraticCurveTo(cx + headRadius * 0.66, cy + headRadius * 1.08, cx, tipY);
+  ctx.quadraticCurveTo(cx - headRadius * 0.66, cy + headRadius * 1.08, cx - headRadius * 0.82, cy + headRadius * 0.55);
   ctx.closePath();
 
   ctx.fillStyle = color;
@@ -147,15 +146,118 @@ function drawClientPin(color: string, width = 30, height = 40): ImageData {
   ctx.restore();
 
   // Contorno blanco: separa pines contiguos del mismo estado.
-  ctx.lineWidth = 2;
+  ctx.lineWidth = selected ? 3 : 2.25;
   ctx.strokeStyle = '#ffffff';
   ctx.stroke();
 
-  // Ojo interior.
+  // Medallon interior.
   ctx.beginPath();
-  ctx.arc(cx, cy, 3.6, 0, Math.PI * 2);
+  ctx.arc(cx, cy, headRadius * 0.62, 0, Math.PI * 2);
   ctx.fillStyle = '#ffffff';
   ctx.fill();
+
+  // Fachada comercial: toldo, cuerpo y puerta.
+  const scale = selected ? 1.08 : 1;
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.scale(scale, scale);
+  ctx.strokeStyle = color;
+  ctx.fillStyle = color;
+  ctx.lineWidth = 1.35;
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  ctx.beginPath();
+  ctx.moveTo(-4.7, -2.8);
+  ctx.lineTo(4.7, -2.8);
+  ctx.lineTo(3.8, 0);
+  ctx.lineTo(-3.8, 0);
+  ctx.closePath();
+  ctx.fill();
+  ctx.strokeRect(-3.7, 0.4, 7.4, 5);
+  ctx.fillRect(-0.9, 2.2, 1.8, 3.2);
+  ctx.restore();
+
+  return ctx.getImageData(0, 0, canvas.width, canvas.height);
+}
+
+type GeofencePinKind = 'central' | 'carga' | 'restringida' | 'zona';
+
+/** Marcador de geocerca: aro territorial y pictograma según su función. */
+function drawGeofencePin(kind: GeofencePinKind, color: string, size = 44): ImageData {
+  const canvas = document.createElement('canvas');
+  canvas.width = size * DPR;
+  canvas.height = size * DPR;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('No fue posible dibujar el marcador de geocerca.');
+  ctx.scale(DPR, DPR);
+
+  const center = size / 2;
+  ctx.save();
+  ctx.shadowColor = 'rgba(15, 28, 46, 0.28)';
+  ctx.shadowBlur = 7;
+  ctx.shadowOffsetY = 2;
+  ctx.beginPath();
+  ctx.arc(center, center, 15, 0, Math.PI * 2);
+  ctx.fillStyle = '#ffffff';
+  ctx.fill();
+  ctx.restore();
+
+  ctx.beginPath();
+  ctx.arc(center, center, 12.2, 0, Math.PI * 2);
+  ctx.fillStyle = color;
+  ctx.fill();
+  ctx.lineWidth = 1.5;
+  ctx.strokeStyle = 'rgba(255,255,255,.8)';
+  ctx.stroke();
+
+  ctx.save();
+  ctx.translate(center, center);
+  ctx.strokeStyle = '#ffffff';
+  ctx.fillStyle = '#ffffff';
+  ctx.lineWidth = 1.8;
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+
+  if (kind === 'central') {
+    // Casa: identifica inmediatamente la central operacional.
+    ctx.beginPath();
+    ctx.moveTo(-6.5, -1);
+    ctx.lineTo(0, -6.5);
+    ctx.lineTo(6.5, -1);
+    ctx.stroke();
+    ctx.strokeRect(-5, -1, 10, 7);
+    ctx.fillRect(-1.2, 2, 2.4, 4);
+  } else if (kind === 'carga') {
+    ctx.strokeRect(-5, -6, 7, 12);
+    ctx.beginPath();
+    ctx.moveTo(2, -3);
+    ctx.quadraticCurveTo(7, -2, 5.5, 4.5);
+    ctx.stroke();
+    ctx.fillRect(-3.5, -3.5, 4, 3);
+  } else if (kind === 'restringida') {
+    ctx.beginPath();
+    ctx.moveTo(0, -7);
+    ctx.lineTo(6, -4);
+    ctx.lineTo(5, 3);
+    ctx.quadraticCurveTo(0, 8, -5, 3);
+    ctx.lineTo(-6, -4);
+    ctx.closePath();
+    ctx.stroke();
+    ctx.fillRect(-0.9, -3.5, 1.8, 6);
+    ctx.beginPath(); ctx.arc(0, 5, 1, 0, Math.PI * 2); ctx.fill();
+  } else {
+    ctx.beginPath();
+    ctx.moveTo(0, -7);
+    ctx.lineTo(6, -3.5);
+    ctx.lineTo(6, 3.5);
+    ctx.lineTo(0, 7);
+    ctx.lineTo(-6, 3.5);
+    ctx.lineTo(-6, -3.5);
+    ctx.closePath();
+    ctx.stroke();
+    ctx.beginPath(); ctx.arc(0, 0, 2.2, 0, Math.PI * 2); ctx.fill();
+  }
+  ctx.restore();
 
   return ctx.getImageData(0, 0, canvas.width, canvas.height);
 }
@@ -201,8 +303,18 @@ export function registerMapIcons(map: MapLibreMap): void {
     // Variante destacada para el cliente seleccionado.
     const selectedId = `client-pin-${status}-selected`;
     if (!map.hasImage(selectedId)) {
-      map.addImage(selectedId, drawClientPin(color, 38, 50), { pixelRatio: DPR });
+      map.addImage(selectedId, drawClientPin(color, 42, 52, true), { pixelRatio: DPR });
     }
+  }
+
+  const geofencePins: [string, GeofencePinKind, string][] = [
+    ['geofence-pin-central', 'central', '#0d90ae'],
+    ['geofence-pin-carga', 'carga', '#b45309'],
+    ['geofence-pin-restringida', 'restringida', '#dc2626'],
+    ['geofence-pin-zona', 'zona', '#475569'],
+  ];
+  for (const [id, kind, color] of geofencePins) {
+    if (!map.hasImage(id)) map.addImage(id, drawGeofencePin(kind, color), { pixelRatio: DPR });
   }
 
   if (!map.hasImage('work-order-pin')) {

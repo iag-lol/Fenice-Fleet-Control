@@ -332,6 +332,7 @@ export function FleetMap({
       LAYER.trajectoryEvents,
       LAYER.trajectoryEventLabels,
       LAYER.geofenceLine,
+      LAYER.geofenceMarkers,
       LAYER.geofenceLabel,
       LAYER.routeExecuted,
       LAYER.routePlanned,
@@ -718,7 +719,7 @@ export function FleetMap({
     );
     setLayerVisibility(
       map,
-      [LAYER.geofenceFill, LAYER.geofenceLine, LAYER.geofenceLabel],
+      [LAYER.geofenceFill, LAYER.geofenceLine, LAYER.geofenceMarkers, LAYER.geofenceLabel],
       effectiveLayers.geocercas,
     );
     setLayerVisibility(map, [LAYER.heatmap], effectiveLayers.calor);

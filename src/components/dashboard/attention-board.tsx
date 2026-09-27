@@ -39,7 +39,7 @@ const ICONO_POR_ID: Record<string, ReactNode> = {
 export function AttentionBoard({ items }: { items: AttentionItem[] }) {
   if (items.length === 0) {
     return (
-      <div className="flex items-center gap-3 rounded-xl border border-status-active/30 bg-status-active/5 px-4 py-3.5">
+      <div className="flex items-center gap-3 rounded-[10px] border border-status-active/30 bg-status-active/5 px-3.5 py-3">
         <CheckCircle2 className="h-5 w-5 shrink-0 text-status-active" />
         <div>
           <p className="text-sm font-semibold text-ink">La operacion esta en orden</p>
@@ -60,21 +60,21 @@ export function AttentionBoard({ items }: { items: AttentionItem[] }) {
             <Link
               prefetch={false}
               href={item.href}
-              className={`group flex h-full items-start gap-3 rounded-xl border px-3.5 py-3 transition-colors hover:border-brand-500 ${estilo.borde}`}
+              className={`group flex h-full items-start gap-2.5 rounded-[10px] border px-3 py-2.5 transition-colors hover:border-brand-500 ${estilo.borde}`}
             >
               <span
-                className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${estilo.chip}`}
+                className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md ${estilo.chip}`}
               >
                 {ICONO_POR_ID[item.id] ?? estilo.icono}
               </span>
 
               <div className="min-w-0 flex-1">
                 <p className="text-sm leading-snug text-ink">
-                  <span className="numeric text-lg font-bold">{formatNumber(item.count)}</span>{' '}
+                  <span className="numeric text-base font-bold">{formatNumber(item.count)}</span>{' '}
                   <span className="font-medium">{item.title}</span>
                 </p>
                 <p className="mt-0.5 text-xs leading-snug text-ink-muted">{item.detail}</p>
-                <span className="mt-1.5 inline-flex items-center gap-1 text-2xs font-semibold text-brand-700">
+                <span className="mt-1 inline-flex items-center gap-1 text-2xs font-semibold text-brand-700">
                   {item.actionLabel}
                   <ArrowRight className="h-3 w-3 transition-transform group-hover:translate-x-0.5" />
                 </span>

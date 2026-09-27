@@ -29,16 +29,15 @@ export function useIsDesktop(): boolean {
 }
 
 /**
- * Rango de tablet: 768-1023px por ancho, O cualquier ancho >=768px con
+ * Rango de tablet/portatil compacto: 768-1279px por ancho, O cualquier ancho >=768px con
  * puntero "coarse" (tactil).
  *
- * Un iPad en horizontal supera los 1023px logicos (1024 a 1366px segun el
- * modelo), pero sigue siendo una pantalla tactil pequeña: sin el segundo
- * termino, se trataba como escritorio y el sidebar y el panel operativo se
- * abrian expandidos a la vez, sin dejarle espacio real al mapa.
+ * El limite incluye 1024px y otros anchos habituales de tablet incluso cuando
+ * las herramientas del navegador informan un puntero fino. Los iPad grandes
+ * en horizontal quedan cubiertos ademas por el segundo termino tactil.
  */
 export const TABLET_RANGE_QUERY =
-  '(min-width: 768px) and (max-width: 1023px), (pointer: coarse) and (min-width: 768px)';
+  '(min-width: 768px) and (max-width: 1279px), (pointer: coarse) and (min-width: 768px)';
 
 export function useIsTabletRange(): boolean {
   return useMediaQuery(TABLET_RANGE_QUERY);

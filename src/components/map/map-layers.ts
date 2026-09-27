@@ -42,6 +42,7 @@ export const LAYER = {
   heatmap: 'lyr-heatmap',
   geofenceFill: 'lyr-geofence-fill',
   geofenceLine: 'lyr-geofence-line',
+  geofenceMarkers: 'lyr-geofence-markers',
   geofenceLabel: 'lyr-geofence-label',
   traffic: 'lyr-traffic',
   routePlanned: 'lyr-route-planned',
@@ -217,7 +218,7 @@ export function registerLayers(map: MapLibreMap): void {
     layout: { visibility: 'none' },
     paint: {
       'fill-color': ['case', ['get', 'active'], ['get', 'color'], '#64748b'],
-      'fill-opacity': ['case', ['get', 'selected'], 0.24, ['get', 'active'], 0.1, 0.035],
+      'fill-opacity': ['case', ['get', 'selected'], 0.2, ['get', 'active'], 0.075, 0.025],
     },
   });
   map.addLayer({
@@ -227,9 +228,48 @@ export function registerLayers(map: MapLibreMap): void {
     layout: { visibility: 'none' },
     paint: {
       'line-color': ['case', ['get', 'active'], ['get', 'color'], '#64748b'],
-      'line-width': ['case', ['get', 'selected'], 3.5, 1.8],
+      'line-width': ['case', ['get', 'selected'], 4, ['get', 'active'], 2.2, 1.5],
       'line-opacity': ['case', ['get', 'selected'], 1, ['get', 'active'], 0.85, 0.5],
-      'line-dasharray': [2, 2],
+    },
+  });
+  map.addLayer({
+    id: LAYER.geofenceMarkers,
+    type: 'symbol',
+    source: SOURCE.geofences,
+    layout: {
+      visibility: 'none',
+      'icon-image': [
+        'match',
+        ['get', 'kind'],
+        'centro_operacional',
+        'geofence-pin-central',
+        'carga',
+        'geofence-pin-carga',
+        'descarga',
+        'geofence-pin-carga',
+        'zona_restringida',
+        'geofence-pin-restringida',
+        'geofence-pin-zona',
+      ],
+      'icon-size': [
+        'interpolate',
+        ['linear'],
+        ['zoom'],
+        9,
+        ['case', ['get', 'selected'], 0.82, 0.62],
+        14,
+        ['case', ['get', 'selected'], 1.12, 0.86],
+      ],
+      'icon-allow-overlap': true,
+      'icon-ignore-placement': true,
+      'symbol-sort-key': [
+        'case',
+        ['get', 'selected'],
+        0,
+        ['==', ['get', 'kind'], 'centro_operacional'],
+        1,
+        2,
+      ],
     },
   });
   map.addLayer({
@@ -241,6 +281,8 @@ export function registerLayers(map: MapLibreMap): void {
       'text-field': ['get', 'name'],
       'text-font': [REGULAR_FONT],
       'text-size': ['interpolate', ['linear'], ['zoom'], 10, 10, 14, 12, 17, 14],
+      'text-anchor': 'top',
+      'text-offset': [0, 1.7],
       'text-allow-overlap': false,
       'text-padding': 4,
       'text-max-width': 10,
@@ -248,7 +290,7 @@ export function registerLayers(map: MapLibreMap): void {
     paint: {
       'text-color': ['case', ['get', 'active'], ['get', 'color'], '#64748b'],
       'text-halo-color': '#ffffff',
-      'text-halo-width': 1.6,
+      'text-halo-width': 2,
     },
   });
 

@@ -90,6 +90,7 @@ const TABS: { id: PanelTab; label: string; icon: typeof Truck }[] = [
 ];
 
 export interface OperationsPanelProps {
+  hideHeader?: boolean;
   snapshot: MapSnapshot | null;
   communes: CommuneWithSummary[];
   loading: boolean;
@@ -104,6 +105,7 @@ export interface OperationsPanelProps {
 }
 
 export function OperationsPanel({
+  hideHeader = false,
   snapshot,
   communes,
   loading,
@@ -290,26 +292,28 @@ export function OperationsPanel({
 
   return (
     <div className="flex h-full min-w-0 flex-col bg-surface-900">
-      <div className="flex shrink-0 items-center justify-between gap-2 border-b border-line px-3 py-2">
-        <div className="min-w-0">
-          <h2 className="text-sm font-semibold text-ink">Operación y territorio</h2>
-          <p className="hidden truncate text-2xs text-ink-faint md:block">
-            {snapshot
-              ? `Actualizado ${formatTime(snapshot.generatedAt)}`
-              : 'Conectando con la operación…'}
-          </p>
+      {!hideHeader ? (
+        <div className="flex shrink-0 items-center justify-between gap-2 border-b border-line px-3 py-2">
+          <div className="min-w-0">
+            <h2 className="text-sm font-semibold text-ink">Operación y territorio</h2>
+            <p className="hidden truncate text-2xs text-ink-faint md:block">
+              {snapshot
+                ? `Actualizado ${formatTime(snapshot.generatedAt)}`
+                : 'Conectando con la operación…'}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onRefresh}
+            disabled={refreshing}
+            aria-label="Actualizar torre de control"
+            title="Actualizar datos"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md border border-line text-brand-700 disabled:opacity-50"
+          >
+            <RefreshCw className={cn('h-4 w-4', refreshing && 'animate-spin')} />
+          </button>
         </div>
-        <button
-          type="button"
-          onClick={onRefresh}
-          disabled={refreshing}
-          aria-label="Actualizar torre de control"
-          title="Actualizar datos"
-          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md border border-line text-brand-700 disabled:opacity-50"
-        >
-          <RefreshCw className={cn('h-4 w-4', refreshing && 'animate-spin')} />
-        </button>
-      </div>
+      ) : null}
       {error ? (
         <div
           role="alert"
@@ -322,7 +326,7 @@ export function OperationsPanel({
         </div>
       ) : null}
       <div
-        className="flex shrink-0 snap-x snap-mandatory overflow-x-auto border-b border-line md:grid md:grid-cols-4"
+        className="grid shrink-0 grid-cols-4 gap-1.5 border-b border-line bg-surface-800/70 p-2"
         aria-label="Secciones de la operación"
       >
         {TABS.map((entry) => {
@@ -340,17 +344,17 @@ export function OperationsPanel({
               }}
               aria-pressed={active}
               className={cn(
-                'flex min-h-11 min-w-0 shrink-0 snap-start items-center justify-center gap-1 border-b-2 px-2 transition-colors md:px-1',
+                'relative flex min-h-[48px] min-w-0 flex-col items-center justify-center gap-0.5 rounded-lg border px-1 transition-all',
                 active
-                  ? 'border-brand-600 text-brand-700'
-                  : 'border-transparent text-ink-faint hover:text-ink',
+                  ? 'border-line bg-surface-900 text-brand-700 shadow-card'
+                  : 'border-transparent text-ink-faint hover:bg-surface-900/70 hover:text-ink',
               )}
             >
-              <Icon className="h-3.5 w-3.5 shrink-0 md:hidden" />
-              <span className="text-2xs font-medium">{entry.label}</span>
+              <Icon className="h-3.5 w-3.5 shrink-0" />
+              <span className="max-w-full truncate text-[10px] font-medium">{entry.label}</span>
               <span
                 className={cn(
-                  'numeric shrink-0 rounded px-1 text-[10px] font-semibold',
+                  'numeric absolute ml-9 mt-[-28px] shrink-0 rounded-full px-1 text-[9px] font-semibold',
                   active ? 'bg-brand-500/15 text-brand-700' : 'bg-surface-750 text-ink-faint',
                 )}
               >

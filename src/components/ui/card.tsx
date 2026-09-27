@@ -5,7 +5,7 @@ import { cn } from '@/lib/cn';
 export function Card({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
   return (
     <div
-      className={cn('rounded-lg border border-line bg-surface-850 shadow-card', className)}
+      className={cn('rounded-[10px] border border-line bg-surface-850 shadow-card', className)}
       {...props}
     />
   );
@@ -21,7 +21,7 @@ interface CardHeaderProps extends Omit<HTMLAttributes<HTMLDivElement>, 'title'> 
 export function CardHeader({ title, description, action, icon, className, ...props }: CardHeaderProps) {
   return (
     <div
-      className={cn('flex items-start justify-between gap-3 border-b border-line px-4 py-3', className)}
+      className={cn('flex items-start justify-between gap-3 border-b border-line px-3.5 py-2.5', className)}
       {...props}
     >
       <div className="flex min-w-0 items-start gap-2.5">
@@ -39,11 +39,11 @@ export function CardHeader({ title, description, action, icon, className, ...pro
 }
 
 export function CardBody({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
-  return <div className={cn('p-4', className)} {...props} />;
+  return <div className={cn('p-3.5', className)} {...props} />;
 }
 
 export function CardFooter({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
   return (
-    <div className={cn('border-t border-line px-4 py-3', className)} {...props} />
+    <div className={cn('border-t border-line px-3.5 py-2.5', className)} {...props} />
   );
 }

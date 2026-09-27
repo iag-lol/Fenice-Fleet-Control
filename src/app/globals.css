@@ -12,23 +12,23 @@
  */
 
 :root {
-  --font-sans: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --font-sans: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 
   /* Superficies, de la mas clara (fondo de pagina) a la mas contrastada. */
-  --surface-950: #eef2f7;
+  --surface-950: #f2f5f7;
   --surface-900: #ffffff;
   --surface-850: #ffffff;
-  --surface-800: #f4f7fa;
-  --surface-750: #e9eef5;
-  --surface-700: #dbe3ec;
+  --surface-800: #f7f9fa;
+  --surface-750: #edf1f4;
+  --surface-700: #dde5ea;
 
-  --line: #e2e8f0;
-  --line-strong: #cbd5e1;
+  --line: #e4e9ed;
+  --line-strong: #cdd6dd;
 
   /* Texto: principal, secundario y terciario. */
-  --ink: #0f1c2e;
-  --ink-muted: #475569;
-  --ink-faint: #5b6a7e;
+  --ink: #14232e;
+  --ink-muted: #52616c;
+  --ink-faint: #6b7a85;
 
   --brand-300: #4fc7de;
   --brand-400: #22aecb;
@@ -46,9 +46,9 @@
   --overlay: rgba(15, 28, 46, 0.45);
 
   /* Elevacion: en tema claro la jerarquia la da la sombra, no el borde. */
-  --shadow-card: 0 1px 2px rgba(15, 28, 46, 0.04), 0 1px 3px rgba(15, 28, 46, 0.06);
-  --shadow-float: 0 4px 12px rgba(15, 28, 46, 0.08), 0 2px 4px rgba(15, 28, 46, 0.05);
-  --shadow-panel: 0 10px 30px rgba(15, 28, 46, 0.14), 0 3px 8px rgba(15, 28, 46, 0.08);
+  --shadow-card: 0 1px 2px rgba(20, 35, 46, 0.035), 0 4px 12px rgba(20, 35, 46, 0.035);
+  --shadow-float: 0 6px 18px rgba(20, 35, 46, 0.09), 0 2px 5px rgba(20, 35, 46, 0.04);
+  --shadow-panel: 0 18px 45px rgba(20, 35, 46, 0.16), 0 4px 12px rgba(20, 35, 46, 0.07);
 
   /* Altura real del viewport en movil, corregida por el shell. */
   --app-vh: 100vh;
@@ -72,6 +72,11 @@ body {
   text-rendering: optimizeLegibility;
   /* Ningun layout debe generar scroll horizontal, en ningun ancho. */
   overflow-x: hidden;
+}
+
+::selection {
+  background: rgba(13, 144, 174, 0.18);
+  color: var(--ink);
 }
 
 /* --- Scrollbars discretos, coherentes con la superficie ------------------ */
@@ -162,12 +167,12 @@ body {
 
 @layer components {
   .panel {
-    @apply rounded-lg border border-line bg-surface-850;
+    @apply rounded-[10px] border border-line bg-surface-850;
     box-shadow: var(--shadow-card);
   }
 
   .panel-header {
-    @apply flex items-center justify-between gap-3 border-b border-line px-4 py-3;
+    @apply flex items-center justify-between gap-3 border-b border-line px-3.5 py-2.5;
   }
 
   .field-label {

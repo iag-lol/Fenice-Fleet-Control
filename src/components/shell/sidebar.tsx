@@ -60,17 +60,17 @@ function SidebarUserCard({ collapsed }: { collapsed: boolean }) {
     <div
       title={collapsed ? `${name} · ${roleLabel}` : undefined}
       className={cn(
-        'mt-1 flex items-center gap-2.5 rounded-md border border-line bg-surface-800/60 px-2.5 py-2',
+        'mt-1 flex items-center gap-2.5 rounded-lg border border-white/10 bg-white/[0.055] px-2.5 py-2',
         collapsed && 'justify-center px-0',
       )}
     >
-      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-brand-500/15 text-2xs font-semibold text-brand-700">
+      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-brand-300/15 text-2xs font-semibold text-brand-300">
         {initialsOf(name)}
       </span>
       {!collapsed ? (
         <span className="min-w-0 flex-1">
-          <span className="block truncate text-[13px] font-medium text-ink">{name}</span>
-          <span className="block truncate text-2xs text-ink-faint">{roleLabel}</span>
+          <span className="block truncate text-[13px] font-medium text-white">{name}</span>
+          <span className="block truncate text-2xs text-slate-400">{roleLabel}</span>
         </span>
       ) : null}
     </div>
@@ -84,10 +84,9 @@ function SidebarUserCard({ collapsed }: { collapsed: boolean }) {
  * cuenta, y el operador que ya conoce la navegacion no necesita las etiquetas.
  * La preferencia se recuerda entre sesiones.
  *
- * Sin preferencia guardada, el ancho se adapta solo en tablet (ver
- * `useIsTabletRange`): el sidebar completo (236px) le restaba casi un tercio
- * del ancho al mapa o a las tablas en esa franja. Un usuario que expande o
- * colapsa a mano fija su eleccion para siempre, en cualquier ancho.
+ * En tablet siempre permanece colapsado, incluso si existe una preferencia
+ * guardada de escritorio. Asi el mapa y las tablas conservan el area util y
+ * una preferencia antigua nunca vuelve a abrir el panel en una pantalla tactil.
  *
  * En la torre de control parte expandido para que los grupos de navegacion
  * sean reconocibles, pero se puede colapsar desde el header o desde el pie.
@@ -97,16 +96,14 @@ export function Sidebar() {
   const isControlTower = pathname?.startsWith('/control') ?? false;
   const isTabletRange = useIsTabletRange();
   const [collapsedPreference, setCollapsedPreference] = useState(false);
-  const [hasStoredPreference, setHasStoredPreference] = useState(false);
   const [hydrated, setHydrated] = useState(false);
-  const collapsed = collapsedPreference;
+  const collapsed = isTabletRange || collapsedPreference;
 
   useEffect(() => {
     try {
       const stored = window.localStorage.getItem('fenice.sidebar.collapsed');
       if (stored !== null) {
         setCollapsedPreference(stored === '1');
-        setHasStoredPreference(true);
       }
     } catch {
       // Almacenamiento no disponible: se usa el valor por defecto.
@@ -114,14 +111,10 @@ export function Sidebar() {
     setHydrated(true);
   }, []);
 
-  useEffect(() => {
-    if (!hasStoredPreference) setCollapsedPreference(isTabletRange);
-  }, [isTabletRange, hasStoredPreference]);
-
   const toggle = useCallback((): void => {
+    if (isTabletRange) return;
     setCollapsedPreference((current) => {
       const next = !current;
-      setHasStoredPreference(true);
       try {
         window.localStorage.setItem('fenice.sidebar.collapsed', next ? '1' : '0');
       } catch {
@@ -129,7 +122,7 @@ export function Sidebar() {
       }
       return next;
     });
-  }, []);
+  }, [isTabletRange]);
 
   useEffect(() => {
     const onHeaderToggle = (): void => toggle();
@@ -140,26 +133,26 @@ export function Sidebar() {
   return (
     <aside
       className={cn(
-        'hidden h-app shrink-0 flex-col border-r border-line bg-surface-900 transition-[width] duration-200 md:flex',
-        collapsed ? 'w-[68px]' : isControlTower ? 'w-[204px]' : 'w-[236px]',
+        'hidden h-app shrink-0 flex-col border-r border-white/10 bg-[#0d2430] text-white shadow-[4px_0_18px_rgba(20,35,46,0.06)] transition-[width] duration-200 md:flex',
+        collapsed ? 'w-[60px]' : isControlTower ? 'w-[196px]' : 'w-[218px]',
         !hydrated && 'invisible',
       )}
     >
-      <div className={cn('flex h-14 items-center border-b border-line px-3', collapsed && 'justify-center px-2')}>
+      <div className={cn('flex h-[52px] items-center border-b border-white/10 px-3', collapsed && 'justify-center px-2')}>
         <Link href="/" className="min-w-0 rounded" aria-label="Fenice Fleet Control - inicio">
-          <BrandLockup compact={collapsed} />
+          <BrandLockup compact={collapsed} inverted />
         </Link>
       </div>
 
-      <nav className="flex-1 overflow-y-auto px-2 py-3" aria-label="Navegacion principal">
+      <nav className="flex-1 overflow-y-auto px-2 py-2.5" aria-label="Navegacion principal">
         {getVisibleNavGroups().map((group) => (
           <div key={group.label} className="mb-4 last:mb-0">
             {!collapsed ? (
-              <p className="mb-1.5 px-2 text-2xs font-semibold uppercase tracking-wider text-ink-faint">
+              <p className="mb-1 px-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500">
                 {group.label}
               </p>
             ) : (
-              <div className="mx-2 mb-2 border-t border-line first:border-t-0" aria-hidden />
+              <div className="mx-2 mb-2 border-t border-white/10 first:border-t-0" aria-hidden />
             )}
 
             <ul className="space-y-0.5">
@@ -174,14 +167,14 @@ export function Sidebar() {
                       title={collapsed ? item.label : undefined}
                       aria-current={active ? 'page' : undefined}
                       className={cn(
-                        'group flex items-center gap-2.5 rounded-md px-2.5 py-2 text-[13px] transition-colors',
+                        'group relative flex items-center gap-2.5 rounded-lg px-2.5 py-[7px] text-[13px] transition-colors',
                         collapsed && 'justify-center px-0',
                         active
-                          ? 'bg-brand-500/15 font-medium text-brand-700'
-                          : 'text-ink-muted hover:bg-surface-800 hover:text-ink',
+                          ? 'bg-white/10 font-medium text-white shadow-[inset_0_0_0_1px_rgba(255,255,255,0.035)]'
+                          : 'text-slate-400 hover:bg-white/[0.065] hover:text-white',
                       )}
                     >
-                      <Icon className={cn('h-4 w-4 shrink-0', active && 'text-brand-700')} />
+                      <Icon className={cn('h-4 w-4 shrink-0', active && 'text-brand-300')} />
                       {!collapsed ? <span className="truncate">{item.label}</span> : null}
                       {!collapsed && item.featureId ? (
                         <span className="ml-auto shrink-0">
@@ -189,7 +182,7 @@ export function Sidebar() {
                         </span>
                       ) : null}
                       {active && !collapsed && !item.featureId ? (
-                        <span className="ml-auto h-1.5 w-1.5 rounded-full bg-brand-400" aria-hidden />
+                        <span className="ml-auto h-1.5 w-1.5 rounded-full bg-brand-300" aria-hidden />
                       ) : null}
                     </Link>
                   </li>
@@ -200,12 +193,12 @@ export function Sidebar() {
         ))}
       </nav>
 
-      <div className="border-t border-line p-2">
+      <div className="border-t border-white/10 p-2">
         <Link
           href="/seguimiento"
           title="Seguimiento publico"
           className={cn(
-            'mb-1 flex items-center gap-2.5 rounded-md px-2.5 py-2 text-[13px] text-ink-muted transition-colors hover:bg-surface-800 hover:text-ink',
+            'mb-1 flex items-center gap-2.5 rounded-lg px-2.5 py-[7px] text-[13px] text-slate-400 transition-colors hover:bg-white/[0.065] hover:text-white',
             collapsed && 'justify-center px-0',
           )}
         >
@@ -219,7 +212,7 @@ export function Sidebar() {
           rel="noopener noreferrer"
           title="¿Necesitas ayuda?"
           className={cn(
-            'mb-1 flex items-center gap-2.5 rounded-md px-2.5 py-2 text-[13px] text-ink-muted transition-colors hover:bg-surface-800 hover:text-ink',
+            'mb-1 flex items-center gap-2.5 rounded-lg px-2.5 py-[7px] text-[13px] text-slate-400 transition-colors hover:bg-white/[0.065] hover:text-white',
             collapsed && 'justify-center px-0',
           )}
         >
@@ -227,22 +220,24 @@ export function Sidebar() {
           {!collapsed ? <span className="truncate">¿Necesitas ayuda?</span> : null}
         </a>
 
-        <button
-          type="button"
-          onClick={toggle}
-          aria-label={collapsed ? 'Expandir menu' : 'Colapsar menu'}
-          className={cn(
-            'flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-[13px] text-ink-faint transition-colors hover:bg-surface-800 hover:text-ink',
-            collapsed && 'justify-center px-0',
-          )}
-        >
-          {collapsed ? (
-            <PanelLeftOpen className="h-4 w-4 shrink-0" />
-          ) : (
-            <PanelLeftClose className="h-4 w-4 shrink-0" />
-          )}
-          {!collapsed ? <span>Colapsar</span> : null}
-        </button>
+        {!isTabletRange ? (
+          <button
+            type="button"
+            onClick={toggle}
+            aria-label={collapsed ? 'Expandir menu' : 'Colapsar menu'}
+            className={cn(
+              'flex w-full items-center gap-2.5 rounded-lg px-2.5 py-[7px] text-[13px] text-slate-500 transition-colors hover:bg-white/[0.065] hover:text-white',
+              collapsed && 'justify-center px-0',
+            )}
+          >
+            {collapsed ? (
+              <PanelLeftOpen className="h-4 w-4 shrink-0" />
+            ) : (
+              <PanelLeftClose className="h-4 w-4 shrink-0" />
+            )}
+            {!collapsed ? <span>Colapsar</span> : null}
+          </button>
+        ) : null}
 
         <a
           href="https://zyteron.cl"
@@ -250,7 +245,7 @@ export function Sidebar() {
           rel="noopener noreferrer"
           title="Desarrollado por Zyteron"
           className={cn(
-            'mt-1 flex items-center justify-center gap-1.5 rounded-md px-2.5 py-2 text-2xs text-ink-faint transition-colors hover:bg-surface-800 hover:text-brand-700',
+            'mt-1 flex items-center justify-center gap-1.5 rounded-lg px-2.5 py-[7px] text-2xs text-slate-500 transition-colors hover:bg-white/[0.065] hover:text-brand-300',
             collapsed ? 'px-0' : 'justify-start',
           )}
         >

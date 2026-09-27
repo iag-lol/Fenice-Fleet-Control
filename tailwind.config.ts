@@ -8,23 +8,23 @@ const config: Config = {
         // Superficies: de la mas clara (fondo de pagina) a la mas contrastada.
         // Se conserva la escala numerica para no reescribir los componentes.
         surface: {
-          950: '#eef2f7',
+          950: '#f2f5f7',
           900: '#ffffff',
           850: '#ffffff',
-          800: '#f4f7fa',
-          750: '#e9eef5',
-          700: '#dbe3ec',
+          800: '#f7f9fa',
+          750: '#edf1f4',
+          700: '#dde5ea',
           600: '#c7d2de',
           500: '#b0bfd0',
         },
         ink: {
-          DEFAULT: '#0f1c2e',
-          muted: '#475569',
-          faint: '#5b6a7e',
+          DEFAULT: '#14232e',
+          muted: '#52616c',
+          faint: '#6b7a85',
         },
         line: {
-          DEFAULT: '#e2e8f0',
-          strong: '#cbd5e1',
+          DEFAULT: '#e4e9ed',
+          strong: '#cdd6dd',
         },
         brand: {
           50: '#eef8fb',
@@ -59,8 +59,8 @@ const config: Config = {
         DEFAULT: '0.375rem',
       },
       boxShadow: {
-        card: '0 1px 3px rgba(15, 28, 46, 0.07), 0 1px 2px rgba(15, 28, 46, 0.05)',
-        float: '0 8px 24px rgba(15, 28, 46, 0.10), 0 2px 6px rgba(15, 28, 46, 0.06)',
+        card: '0 1px 2px rgba(20, 35, 46, 0.035), 0 4px 12px rgba(20, 35, 46, 0.035)',
+        float: '0 8px 24px rgba(20, 35, 46, 0.09), 0 2px 6px rgba(20, 35, 46, 0.05)',
         panel: '0 20px 50px rgba(15, 28, 46, 0.18), 0 4px 14px rgba(15, 28, 46, 0.08)',
         /** Halo de marca para CTAs y elementos destacados (login, upsell). */
         glow: '0 0 0 1px rgba(13, 144, 174, 0.18), 0 12px 32px rgba(13, 144, 174, 0.22)',

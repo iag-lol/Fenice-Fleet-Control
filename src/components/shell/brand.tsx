@@ -26,16 +26,18 @@ export function BrandMark({ className }: { className?: string }) {
   );
 }
 
-export function BrandLockup({ compact }: { compact?: boolean }) {
+export function BrandLockup({ compact, inverted }: { compact?: boolean; inverted?: boolean }) {
   return (
     <div className="flex items-center gap-2.5">
       <BrandMark />
       {!compact ? (
         <div className="min-w-0 leading-tight">
-          <p className="truncate text-[13px] font-semibold tracking-tight text-ink">
+          <p className={cn('truncate text-[13px] font-semibold tracking-tight', inverted ? 'text-white' : 'text-ink')}>
             Fenice Fleet Control
           </p>
-          <p className="truncate text-2xs text-ink-faint">Control GPS y logistica</p>
+          <p className={cn('truncate text-2xs', inverted ? 'text-slate-400' : 'text-ink-faint')}>
+            Control GPS y logistica
+          </p>
         </div>
       ) : null}
     </div>

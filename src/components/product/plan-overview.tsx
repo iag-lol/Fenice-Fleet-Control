@@ -48,7 +48,7 @@ export function PlanOverview() {
   const implementadas = FEATURES;
 
   return (
-    <section className="rounded-xl border border-line bg-surface-900 p-4 shadow-card sm:p-5">
+    <section className="rounded-[10px] border border-line bg-surface-900 p-3.5 shadow-card">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="flex items-center gap-2 text-sm font-semibold text-ink">
@@ -68,7 +68,7 @@ export function PlanOverview() {
         </Link>
       </div>
 
-      <div className="mt-4 grid gap-3 lg:grid-cols-3">
+      <div className="mt-3.5 grid gap-2.5 lg:grid-cols-3">
         {PLAN_ORDER.map((plan) => {
           const incluido = planIncludes(config.plan, plan);
           const esActual = config.plan === plan;
@@ -77,7 +77,7 @@ export function PlanOverview() {
           return (
             <div
               key={plan}
-              className={`rounded-lg border p-3.5 transition-colors ${
+              className={`rounded-lg border p-3 transition-colors ${
                 esActual
                   ? 'border-brand-500 bg-brand-500/5 ring-1 ring-brand-500/20'
                   : incluido

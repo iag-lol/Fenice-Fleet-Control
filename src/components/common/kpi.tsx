@@ -50,7 +50,7 @@ export function KpiCard({ label, kpi, icon, tone = 'neutral', href, suffix, hint
       </div>
 
       <div className="mt-2 flex items-end gap-2">
-        <span className={cn('numeric text-2xl font-semibold leading-none', TONE_TEXT[tone])}>
+        <span className={cn('numeric text-xl font-semibold leading-none', TONE_TEXT[tone])}>
           {formatNumber(kpi.value)}
         </span>
         {suffix ? <span className="pb-0.5 text-xs text-ink-faint">{suffix}</span> : null}
@@ -82,7 +82,7 @@ export function KpiCard({ label, kpi, icon, tone = 'neutral', href, suffix, hint
   );
 
   const className =
-    'rounded-lg border border-line bg-surface-850 shadow-card p-3.5 transition-colors sm:p-4';
+    'rounded-[10px] border border-line bg-surface-850 shadow-card p-3.5 transition-colors';
 
   if (href) {
     return (

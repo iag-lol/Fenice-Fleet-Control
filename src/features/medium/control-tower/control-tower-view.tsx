@@ -1,7 +1,7 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
-import { PanelRightClose, PanelRightOpen, X } from 'lucide-react';
+import { ListFilter, PanelRightClose, PanelRightOpen, RefreshCw, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { OperationalMap } from '@/components/map/operational-map';
@@ -31,15 +31,6 @@ import { systemModeQuery, useControlData } from '@/hooks/use-control-data';
  * no el mapa, y dos entradas para lo mismo confundian sin aportar.
  */
 
-/**
- * Alturas de la hoja movil, como fraccion de la pantalla.
- *
- * Arranca en la minima: en un telefono el mapa es lo que no cabe en ningun
- * otro sitio, y la lista siempre esta a un toque.
- */
-const SHEET_HEIGHTS = ['40%', '60%', '88%'] as const;
-type SheetStep = 0 | 1 | 2;
-
 const MIN_PANEL = 280;
 const MAX_PANEL = 560;
 const DEFAULT_PANEL = 360;
@@ -61,7 +52,7 @@ export function ControlTowerView() {
   // abrian a la vez y no dejaban espacio real para el mapa ni sus controles.
   const [panelOpen, setPanelOpen] = useState(true);
   const [hasStoredPanelPreference, setHasStoredPanelPreference] = useState(false);
-  const [sheetStep, setSheetStep] = useState<SheetStep>(0);
+  const [mobilePanelOpen, setMobilePanelOpen] = useState(false);
   const [hydrated, setHydrated] = useState(false);
   const draggingRef = useRef(false);
   const panelWidthRef = useRef(panelWidth);
@@ -96,6 +87,21 @@ export function ControlTowerView() {
   useEffect(() => {
     if (!hasStoredPanelPreference) setPanelOpen(!isTabletRange);
   }, [isTabletRange, hasStoredPanelPreference]);
+
+  useEffect(() => {
+    if (isDesktop || !mobilePanelOpen) return;
+    const onKeyDown = (event: KeyboardEvent): void => {
+      if (event.key === 'Escape') setMobilePanelOpen(false);
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [isDesktop, mobilePanelOpen]);
+
+  // Al elegir una entidad desde el inventario movil, vuelve al mapa para que
+  // el encuadre y la ficha seleccionada sean visibles de inmediato.
+  useEffect(() => {
+    if (!isDesktop && currentSelection) setMobilePanelOpen(false);
+  }, [currentSelection, isDesktop]);
 
   const togglePanel = useCallback(() => {
     setPanelOpen((current) => {
@@ -176,6 +182,7 @@ export function ControlTowerView() {
 
   const panel = (
     <OperationsPanel
+      hideHeader={!isDesktop}
       snapshot={snapshot ?? null}
       sourceStatus={
         mode && (mode.gps.provider === 'unavailable' || mode.operations.provider === 'mock')
@@ -316,35 +323,69 @@ export function ControlTowerView() {
         </>
       ) : null}
 
-      {/*
-        --- Movil: hoja bajo el mapa, con tres alturas ---
-
-        Una altura fija no sirve para las dos cosas que se hacen aqui: mirar
-        el mapa (quiero la hoja pequena) y revisar la lista (quiero la hoja
-        grande). Se arranca en la altura minima para que el mapa mande, y el
-        tirador cicla entre las tres.
-      */}
-      {!isDesktop && hasOperationsPanel ? (
-        <div
-          className="pointer-events-none absolute inset-x-0 bottom-0 z-30 transition-[height] duration-200 md:hidden"
-          style={{ height: SHEET_HEIGHTS[sheetStep] }}
+      {/* En movil no queda ninguna hoja semivisible sobre el mapa. El centro
+          operacional se abre a pantalla completa desde un unico control. */}
+      {!isDesktop && hasOperationsPanel && !mobilePanelOpen ? (
+        <button
+          type="button"
+          onClick={() => setMobilePanelOpen(true)}
+          aria-label="Abrir centro operacional"
+          className="absolute bottom-[calc(66px+env(safe-area-inset-bottom,0px))] left-1/2 z-30 flex min-h-11 -translate-x-1/2 items-center gap-2 rounded-full border border-white/20 bg-[#0d2430] px-4 text-xs font-semibold text-white shadow-panel transition-transform active:scale-[0.98] md:hidden"
         >
-          <div className="pointer-events-auto flex h-full flex-col overflow-hidden rounded-t-2xl border-t border-line bg-surface-900 shadow-panel">
-            <button
-              type="button"
-              onClick={() =>
-                setSheetStep((step) => ((step + 1) % SHEET_HEIGHTS.length) as SheetStep)
-              }
-              aria-label={
-                sheetStep === SHEET_HEIGHTS.length - 1 ? 'Reducir el panel' : 'Ampliar el panel'
-              }
-              className="flex min-h-11 w-full shrink-0 items-center justify-center"
-            >
-              <span className="h-1.5 w-11 rounded-full bg-line-strong" aria-hidden />
-            </button>
-            <div className="min-h-0 flex-1">{panel}</div>
+          <span className="flex h-7 w-7 items-center justify-center rounded-full bg-brand-400/20 text-brand-300">
+            <ListFilter className="h-4 w-4" />
+          </span>
+          Ver operación
+          <span className="rounded-full bg-white/10 px-1.5 py-0.5 text-[10px] text-slate-300">
+            {(snapshot?.vehicles.length ?? 0) + (snapshot?.pendingWorkOrders.length ?? 0)}
+          </span>
+        </button>
+      ) : null}
+
+      {!isDesktop && hasOperationsPanel && mobilePanelOpen ? (
+        <section
+          className="fixed inset-0 z-[70] flex min-h-0 flex-col bg-surface-950 animate-fade-in md:hidden"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Centro operacional"
+        >
+          <div className="safe-top shrink-0 border-b border-white/10 bg-[#0d2430] text-white shadow-float">
+            <div className="flex h-16 items-center gap-3 px-3.5">
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-brand-400/15 text-brand-300 ring-1 ring-white/10">
+                <ListFilter className="h-4.5 w-4.5" />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block text-sm font-semibold">Centro operacional</span>
+                <span className="block truncate text-2xs text-slate-400">
+                  Flota, clientes, geocercas y despachos
+                </span>
+              </span>
+              <button
+                type="button"
+                onClick={refreshAll}
+                disabled={map.isFetching || alerts.isFetching || communes.isFetching}
+                aria-label="Actualizar datos"
+                className="flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 text-slate-300 transition-colors hover:bg-white/10 hover:text-white disabled:opacity-50"
+              >
+                <RefreshCw
+                  className={cn(
+                    'h-4 w-4',
+                    (map.isFetching || alerts.isFetching || communes.isFetching) && 'animate-spin',
+                  )}
+                />
+              </button>
+              <button
+                type="button"
+                onClick={() => setMobilePanelOpen(false)}
+                aria-label="Cerrar centro operacional"
+                className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/10 text-white transition-colors hover:bg-white/15"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
           </div>
-        </div>
+          <div className="min-h-0 flex-1 bg-surface-900">{panel}</div>
+        </section>
       ) : null}
     </div>
   );

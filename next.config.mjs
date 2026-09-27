@@ -22,12 +22,14 @@ const MAP_TILE_HOSTS = [
   'https://demotiles.maplibre.org',
 ];
 
+const IS_DEVELOPMENT = process.env.NODE_ENV !== 'production';
+
 const CONTENT_SECURITY_POLICY = [
   "default-src 'self'",
   // Next.js hidrata con pequenos scripts inline (JSON de __NEXT_DATA__ y el
   // bootstrap de cada pagina); sin 'unsafe-inline' la aplicacion no arranca.
   // Es el mismo trade-off que documenta la propia guia de CSP de Next.js.
-  "script-src 'self' 'unsafe-inline'",
+  `script-src 'self' 'unsafe-inline'${IS_DEVELOPMENT ? " 'unsafe-eval'" : ''}`,
   // MapLibre inyecta estilos inline en sus controles y marcadores.
   `style-src 'self' 'unsafe-inline'`,
   `img-src 'self' data: blob: ${MAP_TILE_HOSTS.join(' ')}`,

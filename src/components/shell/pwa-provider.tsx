@@ -72,34 +72,43 @@ export function PwaProvider() {
   if (!visible || !prompt) return null;
 
   return (
-    <div className="fixed inset-x-2.5 bottom-[72px] z-[45] sm:inset-x-auto sm:bottom-4 sm:left-4 sm:w-[340px]">
-      <div className="flex items-start gap-3 rounded-xl border border-line-strong bg-surface-900/97 p-3 shadow-panel backdrop-blur">
-        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-brand-600 text-white">
-          <Download className="h-4.5 w-4.5" width={18} height={18} />
-        </span>
+    <div className="absolute inset-x-3 bottom-[70px] z-[45] sm:inset-x-auto sm:bottom-4 sm:left-4 sm:w-[360px]">
+      <div
+        role="status"
+        aria-live="polite"
+        className="relative overflow-hidden rounded-xl border border-line-strong bg-surface-900 shadow-panel"
+      >
+        <span className="absolute inset-y-0 left-0 w-1 bg-brand-500" aria-hidden />
 
-        <div className="min-w-0 flex-1">
-          <p className="text-[13px] font-semibold text-ink">Instalar Fenice Fleet Control</p>
-          <p className="mt-0.5 text-xs leading-relaxed text-ink-muted">
-            Se abre como aplicacion, a pantalla completa y con avisos del sistema.
-          </p>
-          <button
-            type="button"
-            onClick={() => {
-              void prompt.prompt();
-              void prompt.userChoice.finally(() => setVisible(false));
-            }}
-            className="mt-2 inline-flex min-h-11 items-center rounded-md bg-brand-600 px-4 text-xs font-semibold text-white hover:bg-brand-700 sm:min-h-9 sm:px-3"
-          >
-            Instalar
-          </button>
+        <div className="flex items-start gap-3 py-3 pl-4 pr-12">
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-brand-600 text-white shadow-card">
+          <Download className="h-4.5 w-4.5" width={18} height={18} />
+          </span>
+
+          <div className="min-w-0 flex-1">
+            <p className="text-[13px] font-semibold leading-5 text-ink">Instala Fenice</p>
+            <p className="mt-0.5 text-xs leading-[1.45] text-ink-muted">
+              Accede más rápido, a pantalla completa y con avisos del sistema.
+            </p>
+            <button
+              type="button"
+              onClick={() => {
+                void prompt.prompt();
+                void prompt.userChoice.finally(() => setVisible(false));
+              }}
+              className="mt-2 inline-flex min-h-11 items-center rounded-md bg-brand-600 px-4 text-xs font-semibold text-white transition-colors hover:bg-brand-700 sm:min-h-8 sm:px-3"
+            >
+              Instalar aplicación
+            </button>
+          </div>
         </div>
 
         <button
           type="button"
           onClick={rechazar}
           aria-label="Ahora no"
-          className="-mr-1 -mt-1 flex h-11 w-11 shrink-0 items-center justify-center rounded-md text-ink-faint hover:bg-surface-800 hover:text-ink sm:h-9 sm:w-9"
+          title="Ahora no"
+          className="absolute right-2 top-2 flex h-9 w-9 items-center justify-center rounded-lg text-ink-faint transition-colors hover:bg-surface-800 hover:text-ink"
         >
           <X className="h-4 w-4" />
         </button>

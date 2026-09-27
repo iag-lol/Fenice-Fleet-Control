@@ -114,7 +114,7 @@ export function DataTable<T>({
                     key={column.key}
                     scope="col"
                     className={cn(
-                      'whitespace-nowrap px-3 py-2.5 text-2xs font-semibold uppercase tracking-wider text-ink-faint',
+                      'whitespace-nowrap px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.08em] text-ink-faint',
                       column.hideBelow && HIDE_CLASS[column.hideBelow],
                       column.headerClassName,
                     )}
@@ -159,7 +159,7 @@ export function DataTable<T>({
                   <td
                     key={column.key}
                     className={cn(
-                      'px-3 py-2.5 align-middle text-[13px] text-ink',
+                      'px-3 py-2 align-middle text-[13px] text-ink',
                       column.hideBelow && HIDE_CLASS[column.hideBelow],
                       column.className,
                     )}

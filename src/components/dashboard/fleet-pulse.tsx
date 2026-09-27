@@ -40,8 +40,8 @@ export function FleetPulse({
     .slice(0, 5);
 
   return (
-    <div className="flex h-full flex-col rounded-xl border border-line bg-surface-900 shadow-card">
-      <div className="flex items-start justify-between gap-3 border-b border-line px-4 py-3">
+    <div className="flex h-full flex-col rounded-[10px] border border-line bg-surface-900 shadow-card">
+      <div className="flex items-start justify-between gap-3 border-b border-line px-3.5 py-2.5">
         <div>
           <p className="flex items-center gap-1.5 text-2xs font-semibold uppercase tracking-wider text-ink-faint">
             <Truck className="h-3.5 w-3.5" /> Flota ahora
@@ -65,8 +65,8 @@ export function FleetPulse({
         ) : null}
       </div>
 
-      <div className="px-4 py-3">
-        <div className="flex h-2.5 gap-0.5 overflow-hidden rounded-full bg-surface-750">
+      <div className="px-3.5 py-2.5">
+        <div className="flex h-2 gap-0.5 overflow-hidden rounded-full bg-surface-750">
           {tramos
             .filter((t) => t.value > 0)
             .map((tramo) => (
@@ -104,11 +104,11 @@ export function FleetPulse({
       </div>
 
       <div className="mt-auto border-t border-line">
-        <p className="flex items-center gap-1.5 px-4 pt-2.5 text-2xs font-semibold uppercase tracking-wider text-ink-faint">
+        <p className="flex items-center gap-1.5 px-3.5 pt-2.5 text-2xs font-semibold uppercase tracking-wider text-ink-faint">
           <Gauge className="h-3.5 w-3.5" /> En marcha
         </p>
         {enMarcha.length === 0 ? (
-          <p className="px-4 pb-3 pt-1.5 text-xs text-ink-faint">
+          <p className="px-3.5 pb-3 pt-1.5 text-xs text-ink-faint">
             Ningun vehiculo circulando en este momento.
           </p>
         ) : (
@@ -118,7 +118,7 @@ export function FleetPulse({
                 <Link
                   prefetch={false}
                   href={`/flota/${snapshot.vehicle.id}`}
-                  className="flex min-h-11 items-center gap-3 px-4 py-2 transition-colors hover:bg-surface-800"
+                  className="flex min-h-11 items-center gap-3 px-3.5 py-2 transition-colors hover:bg-surface-800"
                 >
                   <span className="numeric shrink-0 rounded bg-surface-750 px-1.5 py-0.5 text-2xs font-semibold text-ink">
                     {snapshot.vehicle.plate}

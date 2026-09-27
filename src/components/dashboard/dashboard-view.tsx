@@ -134,23 +134,23 @@ export function DashboardView() {
         }
       />
 
-      <div className="space-y-5">
+      <div className="space-y-4">
         {/* --- 1. Por donde empezar ------------------------------------- */}
         <section>
-          <h2 className="mb-2.5 flex items-center gap-2 text-2xs font-semibold uppercase tracking-wider text-ink-faint">
+          <h2 className="mb-2 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.1em] text-ink-faint">
             <AlertTriangle className="h-3.5 w-3.5" /> Requiere atencion
           </h2>
           <AttentionBoard items={attention} />
         </section>
 
         {/* --- 2 y 3. El dia y la flota --------------------------------- */}
-        <div className="grid gap-4 xl:grid-cols-[1.15fr_1fr]">
+        <div className="grid gap-3.5 xl:grid-cols-[1.15fr_1fr]">
           <DayProgress orders={orders} completion={completion} />
           <FleetPulse fleet={fleet} vehicles={vehiclesLive} />
         </div>
 
         {/* --- 4. Lo que esta en ejecucion ------------------------------ */}
-        <div className="grid gap-4 xl:grid-cols-[1.35fr_1fr]">
+        <div className="grid gap-3.5 xl:grid-cols-[1.35fr_1fr]">
           <Card>
             <CardHeader
               title="Rutas en curso"
@@ -180,7 +180,7 @@ export function DashboardView() {
                       <Link
                         prefetch={false}
                         href={`/rutas/${route.routeId}`}
-                        className="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-surface-800"
+                        className="flex items-center gap-3 px-3.5 py-2.5 transition-colors hover:bg-surface-800"
                       >
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-2">
@@ -216,7 +216,7 @@ export function DashboardView() {
             </CardBody>
           </Card>
 
-          <div className="space-y-4">
+          <div className="space-y-3.5">
             <Card>
               <CardHeader
                 title="Entregas de la semana"
@@ -264,7 +264,7 @@ export function DashboardView() {
                         <Link
                           prefetch={false}
                           href={`/alertas?alerta=${encodeURIComponent(alert.id)}`}
-                          className="block px-4 py-2.5 transition-colors hover:bg-surface-800"
+                          className="block px-3.5 py-2.5 transition-colors hover:bg-surface-800"
                         >
                           <div className="flex items-start justify-between gap-2">
                             <p className="min-w-0 flex-1 truncate text-[13px] text-ink">
