@@ -352,7 +352,8 @@ export async function deleteGeofence(id: GeofenceId): Promise<boolean> {
       .from(TABLE)
       .delete({ count: 'exact' })
       .eq('id', id);
-    return !error && (count ?? 0) > 0;
+    if (error) throw new Error(`No fue posible eliminar la geocerca: ${error.message}`);
+    return (count ?? 0) > 0;
   }
   return memoryStore().delete(id);
 }

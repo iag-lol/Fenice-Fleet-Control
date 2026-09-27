@@ -10,6 +10,7 @@ import {
   Navigation,
   Route as RouteIcon,
   Satellite,
+  Trash2,
 } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -28,6 +29,8 @@ import {
 import { Timeline } from '@/components/common/timeline';
 import { VehicleHistory } from '@/components/fleet/vehicle-history';
 import { ConnectGpsDialog } from '@/components/fleet/connect-gps-dialog';
+import { VehicleCameras } from '@/components/fleet/vehicle-cameras';
+import { VehicleDeleteDialog } from '@/components/fleet/vehicle-delete-dialog';
 import { FleetMap } from '@/components/map/fleet-map';
 import { Button, LinkButton } from '@/components/ui/button';
 import { Card, CardBody, CardHeader } from '@/components/ui/card';
@@ -62,6 +65,7 @@ export function VehicleDetailView({ vehicleId }: { vehicleId: string }) {
   // El mapa puede ocupar toda la altura util cuando el operador lo necesita.
   const [mapExpanded, setMapExpanded] = useState(false);
   const [gpsDialogOpen, setGpsDialogOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
 
   const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['vehicle', vehicleId],
@@ -162,6 +166,15 @@ export function VehicleDetailView({ vehicleId }: { vehicleId: string }) {
                 Ver ruta {route.code}
               </LinkButton>
             ) : null}
+
+            <Button
+              variant="danger"
+              size="sm"
+              icon={<Trash2 className="h-3.5 w-3.5" />}
+              onClick={() => setDeleteOpen(true)}
+            >
+              Eliminar vehículo
+            </Button>
           </>
         }
       />
@@ -241,6 +254,12 @@ export function VehicleDetailView({ vehicleId }: { vehicleId: string }) {
             </ErrorBoundary>
           </div>
         </Card>
+
+        {/* --- Cámaras: módulo preparado para los futuros streams del vehículo. --- */}
+        <VehicleCameras
+          vehicleLabel={`${vehicle.plate} · ${vehicle.fleetCode}`}
+          onRefresh={() => void refetch()}
+        />
 
         <div className="grid gap-4 xl:grid-cols-2">
           <div className="space-y-4">
@@ -437,6 +456,13 @@ export function VehicleDetailView({ vehicleId }: { vehicleId: string }) {
         onClose={() => setGpsDialogOpen(false)}
         vehicleId={vehicleId}
         vehicleLabel={`${vehicle.plate} · ${vehicle.fleetCode}`}
+      />
+
+      <VehicleDeleteDialog
+        open={deleteOpen}
+        vehicle={vehicle}
+        onClose={() => setDeleteOpen(false)}
+        onDeleted={() => router.replace('/flota')}
       />
     </>
   );

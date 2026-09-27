@@ -71,7 +71,7 @@ export function Header() {
             onClick={() => window.dispatchEvent(new Event('fenice:toggle-sidebar'))}
             aria-label="Expandir o colapsar menu lateral"
             title="Expandir o colapsar menu lateral"
-            className="hidden h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-line bg-surface-900 text-ink-faint shadow-card transition-colors hover:border-brand-400 hover:text-brand-700 md:flex"
+            className="app-sidebar-toggle hidden h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-line bg-surface-900 text-ink-faint shadow-card transition-colors hover:border-brand-400 hover:text-brand-700 xl:flex"
           >
             <PanelLeft className="h-4 w-4" />
           </button>

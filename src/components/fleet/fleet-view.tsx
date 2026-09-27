@@ -1,7 +1,7 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
-import { Gauge, MapPin, Navigation, Plus, RotateCcw, Truck, User, WifiOff } from 'lucide-react';
+import { Gauge, MapPin, Navigation, Plus, RotateCcw, Trash2, Truck, User, WifiOff } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useMemo, useState } from 'react';
 
@@ -16,6 +16,7 @@ import { SearchInput, Select } from '@/components/ui/input';
 import { QueryError } from '@/components/ui/query-state';
 import { SkeletonRows } from '@/components/ui/skeleton';
 import { VehicleCreateSheet } from '@/components/fleet/vehicle-create-sheet';
+import { VehicleDeleteDialog } from '@/components/fleet/vehicle-delete-dialog';
 import { useLiveFleet, useSecondsSince } from '@/hooks/use-live-fleet';
 import { VEHICLE_STATUS_LABEL } from '@/lib/engines/gps-health';
 import { formatElapsed, formatSpeed, normalizeSearch } from '@/lib/format';
@@ -40,6 +41,7 @@ export function FleetView() {
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState(searchParams.get('estado') ?? '');
   const [creating, setCreating] = useState(false);
+  const [deleting, setDeleting] = useState<VehicleSnapshot | null>(null);
 
   const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['fleet'],
@@ -176,6 +178,26 @@ export function FleetView() {
           <span className="text-ink-faint">0</span>
         ),
     },
+    {
+      key: 'actions',
+      header: 'Acciones',
+      headerClassName: 'w-[76px] text-right',
+      className: 'w-[76px] text-right',
+      cell: (row) => (
+        <button
+          type="button"
+          title={`Eliminar ${row.vehicle.plate}`}
+          aria-label={`Eliminar vehículo ${row.vehicle.plate}`}
+          onClick={(event) => {
+            event.stopPropagation();
+            setDeleting(row);
+          }}
+          className="ml-auto flex h-9 w-9 items-center justify-center rounded-md text-ink-faint transition-colors hover:bg-status-dormant/10 hover:text-status-dormant focus-visible:text-status-dormant"
+        >
+          <Trash2 className="h-4 w-4" />
+        </button>
+      ),
+    },
   ];
 
   return (
@@ -243,6 +265,13 @@ export function FleetView() {
       />
 
       <VehicleCreateSheet open={creating} onClose={() => setCreating(false)} />
+      {deleting ? (
+        <VehicleDeleteDialog
+          open
+          vehicle={deleting.vehicle}
+          onClose={() => setDeleting(null)}
+        />
+      ) : null}
 
       <Card className="overflow-hidden">
         <div className="flex flex-col gap-2.5 border-b border-line p-3 sm:flex-row sm:items-center">

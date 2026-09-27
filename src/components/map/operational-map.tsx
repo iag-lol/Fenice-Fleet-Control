@@ -484,7 +484,7 @@ export const OperationalMap = memo(function OperationalMap({
     },
     {
       key: 'clientes',
-      label: 'Clientes visibles',
+      label: 'Clientes',
       value: layers.clientes ? clientesEnfocados.length : 0,
       denominator: allClients.length,
       icon: Building2,
@@ -510,7 +510,7 @@ export const OperationalMap = memo(function OperationalMap({
       className={cn('relative h-full w-full bg-surface-950', fullscreen && 'fixed inset-0 z-[70]')}
     >
       {isLoading || !snapshot ? (
-        <div className="absolute inset-0 p-4 sm:top-[96px]">
+        <div className="absolute inset-0 p-4 sm:top-[72px] lg:top-[80px]">
           <Skeleton className="h-full w-full" />
           <p className="absolute inset-0 flex items-center justify-center text-xs text-ink-faint">
             Cargando centro operacional...
@@ -519,7 +519,7 @@ export const OperationalMap = memo(function OperationalMap({
       ) : (
         <ErrorBoundary section="el mapa operacional">
           <FleetMap
-            className="absolute inset-0 sm:top-[96px]"
+            className="absolute inset-0 sm:top-[72px] lg:top-[80px]"
             autoFit
             vehicles={layers.camiones ? vehiculosEnfocados : []}
             clients={clientesEnfocados}
@@ -540,32 +540,50 @@ export const OperationalMap = memo(function OperationalMap({
       )}
 
       {/* --- KPI operacionales: datos reales de la instantanea del mapa. --- */}
-      <div className="pointer-events-none absolute inset-x-0 top-0 z-10 hidden h-[96px] bg-surface-950 p-2 sm:block">
-        <div className="grid h-full grid-cols-6 gap-2">
-          {kpiCards.map((kpi) => {
+      <div className="pointer-events-none absolute inset-x-0 top-0 z-10 hidden h-[72px] bg-surface-950 p-2 sm:block lg:h-[80px]">
+        <div className="grid h-full grid-cols-3 grid-rows-2 overflow-hidden rounded-[10px] border border-line bg-surface-900 shadow-card lg:grid-cols-6 lg:grid-rows-1">
+          {kpiCards.map((kpi, index) => {
             const Icon = kpi.icon;
             const percentage =
               kpi.denominator > 0 ? Math.min(100, Math.round((kpi.value / kpi.denominator) * 100)) : 0;
             return (
               <div
                 key={kpi.key}
-                className="pointer-events-auto flex min-w-0 flex-col justify-between rounded-lg border border-line bg-surface-900 px-3 py-2 shadow-card"
+                className={cn(
+                  'pointer-events-auto relative flex min-w-0 items-center gap-2 px-2 lg:gap-2.5 lg:px-3',
+                  index < 3 && 'border-b border-line lg:border-b-0',
+                  (index === 0 || index === 1 || index === 3 || index === 4) &&
+                    'border-r border-line',
+                  index === 2 && 'lg:border-r lg:border-line',
+                )}
               >
-                <div className="flex min-w-0 items-center gap-2.5">
-                  <span className={cn('flex h-8 w-8 shrink-0 items-center justify-center rounded-full', kpi.iconSurface)}>
-                    <Icon className={cn('h-4 w-4', kpi.tone)} />
+                <span
+                  className={cn(
+                    'hidden h-8 w-8 shrink-0 items-center justify-center rounded-lg lg:flex',
+                    kpi.iconSurface,
+                  )}
+                >
+                  <Icon className={cn('h-4 w-4', kpi.tone)} />
+                </span>
+
+                <div className="flex min-w-0 flex-1 items-baseline gap-1.5">
+                  <span className="numeric shrink-0 text-[15px] font-semibold leading-none tracking-tight text-ink lg:text-lg">
+                    {kpi.value}
                   </span>
-                  <span className="min-w-0">
-                    <span className="numeric block text-lg font-semibold leading-none text-ink">{kpi.value}</span>
-                    <span className="block truncate text-2xs text-ink-faint">{kpi.label}</span>
+                  <span className="min-w-0 flex-1 truncate text-[10px] font-medium leading-none text-ink-muted lg:text-2xs">
+                    {kpi.label}
+                  </span>
+                  <span className="numeric hidden shrink-0 text-[10px] font-medium text-ink-faint xl:inline">
+                    {percentage}%
                   </span>
                 </div>
-                <div className="flex items-center gap-2">
-                  <span className="h-1.5 min-w-0 flex-1 overflow-hidden rounded-full bg-surface-750">
-                    <span className={cn('block h-full rounded-full', kpi.bar)} style={{ width: `${percentage}%` }} />
-                  </span>
-                  <span className="numeric w-7 text-right text-[10px] text-ink-faint">{percentage}%</span>
-                </div>
+
+                <span className="absolute inset-x-2 bottom-0 h-0.5 overflow-hidden rounded-t bg-surface-750 lg:inset-x-3">
+                  <span
+                    className={cn('block h-full rounded-t transition-[width] duration-300', kpi.bar)}
+                    style={{ width: `${percentage}%` }}
+                  />
+                </span>
               </div>
             );
           })}
@@ -573,7 +591,7 @@ export const OperationalMap = memo(function OperationalMap({
       </div>
 
       {/* --- Controles sobre el mapa: vista a la izquierda, operacion a la derecha. --- */}
-      <div className="pointer-events-none absolute inset-x-2.5 top-2.5 z-10 flex items-start justify-between gap-2 sm:top-[106px] sm:inset-x-3">
+      <div className="pointer-events-none absolute inset-x-2.5 top-2.5 z-10 flex items-start justify-between gap-2 sm:inset-x-3 sm:top-[82px] lg:top-[90px]">
         <div className="pointer-events-auto shrink-0">
           <MapViewQuickToggle />
         </div>
@@ -622,7 +640,7 @@ export const OperationalMap = memo(function OperationalMap({
       {isError || (layers.comunas && communesError) ? (
         <div
           role="alert"
-          className="absolute left-3 right-3 top-28 z-20 rounded-md border border-status-warning/30 bg-surface-900 p-3 text-xs text-status-warning sm:top-[154px]"
+          className="absolute left-3 right-3 top-28 z-20 rounded-md border border-status-warning/30 bg-surface-900 p-3 text-xs text-status-warning sm:top-[130px] lg:top-[138px]"
         >
           {isError
             ? 'No se pudo actualizar la operación. Se conservan los últimos datos.'
@@ -641,7 +659,7 @@ export const OperationalMap = memo(function OperationalMap({
       ) : null}
       {/* Aviso compacto y descartable, centrado bajo los controles. */}
       {gpsError && !gpsNoticeDismissed ? (
-        <div className="pointer-events-auto absolute inset-x-2.5 top-28 z-[5] sm:inset-x-auto sm:left-1/2 sm:top-[156px] sm:w-[430px] sm:-translate-x-1/2">
+        <div className="pointer-events-auto absolute inset-x-2.5 top-28 z-[5] sm:inset-x-auto sm:left-1/2 sm:top-[132px] sm:w-[430px] sm:-translate-x-1/2 lg:top-[140px]">
           {mode?.gps.provider === 'unavailable' ? (
             <PendingIntegrationNotice
               onDismiss={() => setGpsNoticeDismissed(true)}

@@ -100,8 +100,22 @@ export async function DELETE(
   if (denied) return denied;
 
   const { geofenceId } = await params;
-  if (!(await deleteGeofence(asGeofenceId(geofenceId)))) {
+  const id = asGeofenceId(geofenceId);
+  const geofence = await getGeofence(id);
+  if (!geofence) {
     return apiError('Geocerca no encontrada.', 404);
+  }
+  if (geofence.origin !== 'manual') {
+    return apiError('Solo se pueden eliminar geocercas creadas manualmente.', 409);
+  }
+
+  try {
+    if (!(await deleteGeofence(id))) return apiError('Geocerca no encontrada.', 404);
+  } catch (error) {
+    return apiError(
+      error instanceof Error ? error.message : 'No fue posible eliminar la geocerca.',
+      409,
+    );
   }
 
   const context = await getAuthContext();

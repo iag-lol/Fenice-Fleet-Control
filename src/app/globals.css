@@ -123,6 +123,22 @@ body {
   }
 }
 
+/*
+ * Un dispositivo tactil de ancho grande sigue comportandose como tablet.
+ * Estas reglas se aplican antes de que React hidrate la pagina: evitan el
+ * destello del sidebar expandido y el boton de apertura al cambiar de ruta.
+ */
+@media (pointer: coarse) and (min-width: 768px) {
+  .app-sidebar {
+    width: 60px !important;
+    transition-property: none !important;
+  }
+
+  .app-sidebar-toggle {
+    display: none !important;
+  }
+}
+
 /* --- Utilidades del shell ------------------------------------------------ */
 @layer utilities {
   /* Respeta notch e isla dinamica en iOS. */

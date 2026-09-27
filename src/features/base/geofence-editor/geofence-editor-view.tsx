@@ -20,6 +20,7 @@ import { FleetMap } from '@/components/map/fleet-map';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { EmptyState } from '@/components/ui/empty-state';
 import { ErrorBoundary } from '@/components/ui/error-boundary';
 import { SearchInput, Select } from '@/components/ui/input';
@@ -56,6 +57,7 @@ export function GeofenceEditorView() {
   const [search, setSearch] = useState('');
   const [kindFilter, setKindFilter] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<Geofence | null>(null);
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['geofences'],
@@ -121,11 +123,18 @@ export function GeofenceEditorView() {
   });
 
   const remove = useMutation({
-    mutationFn: async (id: string): Promise<void> => {
-      const response = await fetch(`/api/geocercas/${id}`, { method: 'DELETE' });
-      if (!response.ok) throw new Error('No fue posible eliminar la geocerca.');
+    mutationFn: async (geofence: Geofence): Promise<void> => {
+      const response = await fetch(`/api/geocercas/${geofence.id}`, { method: 'DELETE' });
+      if (!response.ok) {
+        const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+        throw new Error(payload?.error ?? 'No fue posible eliminar la geocerca.');
+      }
     },
-    onSuccess: invalidate,
+    onSuccess: (_data, geofence) => {
+      if (editing?.id === geofence.id) closeComposer();
+      setPendingDelete(null);
+      invalidate();
+    },
   });
 
   const duplicate = useMutation({
@@ -359,6 +368,19 @@ export function GeofenceEditorView() {
                 error={error}
                 editing={editing !== null}
               />
+              {editing?.origin === 'manual' ? (
+                <div className="border-t border-line px-4 py-3">
+                  <Button
+                    block
+                    variant="danger"
+                    size="sm"
+                    icon={<Trash2 className="h-3.5 w-3.5" />}
+                    onClick={() => setPendingDelete(editing)}
+                  >
+                    Eliminar esta geocerca
+                  </Button>
+                </div>
+              ) : null}
             </>
           ) : (
             <>
@@ -445,12 +467,14 @@ export function GeofenceEditorView() {
                             onClick={() => duplicate.mutate(geofence.id)}
                             icon={<Copy className="h-3.5 w-3.5" />}
                           />
-                          <IconAction
-                            label="Eliminar"
-                            danger
-                            onClick={() => remove.mutate(geofence.id)}
-                            icon={<Trash2 className="h-3.5 w-3.5" />}
-                          />
+                          {geofence.origin === 'manual' ? (
+                            <IconAction
+                              label={`Eliminar ${geofence.name}`}
+                              danger
+                              onClick={() => setPendingDelete(geofence)}
+                              icon={<Trash2 className="h-3.5 w-3.5" />}
+                            />
+                          ) : null}
                         </div>
                       </div>
 
@@ -485,6 +509,22 @@ export function GeofenceEditorView() {
           )}
         </Card>
       </div>
+
+      <ConfirmDialog
+        open={pendingDelete !== null}
+        title="Eliminar geocerca"
+        subject={pendingDelete?.name}
+        description="Se eliminará el perímetro y dejará de generar eventos y alertas. Los eventos históricos ya registrados se conservan."
+        confirmLabel="Eliminar geocerca"
+        loading={remove.isPending}
+        error={remove.error instanceof Error ? remove.error.message : null}
+        onClose={() => {
+          if (remove.isPending) return;
+          remove.reset();
+          setPendingDelete(null);
+        }}
+        onConfirm={() => pendingDelete && remove.mutate(pendingDelete)}
+      />
     </>
   );
 }

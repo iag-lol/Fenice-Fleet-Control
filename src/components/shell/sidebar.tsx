@@ -133,8 +133,16 @@ export function Sidebar() {
   return (
     <aside
       className={cn(
-        'hidden h-app shrink-0 flex-col border-r border-white/10 bg-[#0d2430] text-white shadow-[4px_0_18px_rgba(20,35,46,0.06)] transition-[width] duration-200 md:flex',
-        collapsed ? 'w-[60px]' : isControlTower ? 'w-[196px]' : 'w-[218px]',
+        'app-sidebar hidden h-app shrink-0 flex-col overflow-x-hidden border-r border-white/10 bg-[#0d2430] text-white shadow-[4px_0_18px_rgba(20,35,46,0.06)] md:flex',
+        // El ancho de tablet debe estar resuelto por CSS desde el primer
+        // render del servidor. Esperar a matchMedia hacia que cada pagina
+        // reservara 196/218 px y luego se cerrara a 60 px delante del usuario.
+        collapsed
+          ? 'w-[60px]'
+          : isControlTower
+            ? 'w-[196px] md:w-[60px] xl:w-[196px]'
+            : 'w-[218px] md:w-[60px] xl:w-[218px]',
+        !isTabletRange && hydrated && 'transition-[width] duration-200',
         !hydrated && 'invisible',
       )}
     >

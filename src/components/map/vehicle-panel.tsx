@@ -34,6 +34,7 @@ import {
   WorkOrderStatusBadge,
 } from '@/components/common/status';
 import { Timeline } from '@/components/common/timeline';
+import { VehicleCameras } from '@/components/fleet/vehicle-cameras';
 import { Button, LinkButton } from '@/components/ui/button';
 import { QueryError } from '@/components/ui/query-state';
 import { SkeletonRows } from '@/components/ui/skeleton';
@@ -58,7 +59,7 @@ import type { VehicleDetail } from '@/types/views';
 
 const DEFAULT_MAX_LEGAL_SPEED_KMH = 60;
 
-type PanelTab = 'informacion' | 'actividad' | 'ordenes' | 'alertas';
+type PanelTab = 'informacion' | 'actividad' | 'ordenes' | 'camaras' | 'alertas';
 
 const TRAJECTORY_EVENT_ICON: Record<TrajectoryEventType, typeof Square> = {
   stop: Square,
@@ -147,6 +148,7 @@ export function VehiclePanel({ vehicleId }: { vehicleId: string }) {
     { id: 'informacion', label: 'Información' },
     { id: 'actividad', label: 'Actividad' },
     { id: 'ordenes', label: 'Órdenes', count: ordersCount },
+    { id: 'camaras', label: 'Cámaras' },
     { id: 'alertas', label: 'Alertas', count: alertsCount },
   ];
 
@@ -728,6 +730,14 @@ export function VehiclePanel({ vehicleId }: { vehicleId: string }) {
         </p>
       )}
       </>
+      ) : null}
+
+      {tab === 'camaras' ? (
+        <VehicleCameras
+          compact
+          vehicleLabel={`${vehicle.plate} · ${vehicle.fleetCode}`}
+          onRefresh={() => void refetch()}
+        />
       ) : null}
       </div>
     </div>

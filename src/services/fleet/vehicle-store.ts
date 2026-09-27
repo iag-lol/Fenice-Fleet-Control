@@ -216,7 +216,8 @@ export async function deleteVehicleFromStore(id: VehicleId): Promise<boolean> {
   if (!isSupabaseConfigured()) return memoryStore().delete(id);
 
   const { error, count } = await getSupabaseClient().from(TABLE).delete({ count: 'exact' }).eq('id', id);
-  return !error && (count ?? 0) > 0;
+  if (error) throw new Error(`No fue posible eliminar el vehiculo: ${error.message}`);
+  return (count ?? 0) > 0;
 }
 
 /**

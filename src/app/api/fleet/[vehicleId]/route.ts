@@ -43,8 +43,15 @@ export async function DELETE(
 
   const { vehicleId } = await params;
   const id = asVehicleId(vehicleId);
-  if (!(await deleteVehicleFromStore(id))) {
-    return apiError('Vehiculo no encontrado.', 404);
+  try {
+    if (!(await deleteVehicleFromStore(id))) {
+      return apiError('Vehiculo no encontrado.', 404);
+    }
+  } catch (error) {
+    return apiError(
+      error instanceof Error ? error.message : 'No fue posible eliminar el vehiculo.',
+      409,
+    );
   }
 
   const context = await getAuthContext();
