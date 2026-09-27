@@ -85,7 +85,14 @@ export function ControlTowerView() {
   }, []);
 
   useEffect(() => {
-    if (!hasStoredPanelPreference) setPanelOpen(!isTabletRange);
+    // En tablet el mapa debe partir siempre con todo el ancho disponible,
+    // aunque exista una preferencia guardada desde escritorio. El operador
+    // aun puede abrir el panel manualmente con su control lateral.
+    if (isTabletRange) {
+      setPanelOpen(false);
+      return;
+    }
+    if (!hasStoredPanelPreference) setPanelOpen(true);
   }, [isTabletRange, hasStoredPanelPreference]);
 
   useEffect(() => {

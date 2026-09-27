@@ -541,7 +541,7 @@ export const OperationalMap = memo(function OperationalMap({
 
       {/* --- KPI operacionales: datos reales de la instantanea del mapa. --- */}
       <div className="pointer-events-none absolute inset-x-0 top-0 z-10 hidden h-[72px] bg-surface-950 p-2 sm:block lg:h-[80px]">
-        <div className="grid h-full grid-cols-3 grid-rows-2 overflow-hidden rounded-[10px] border border-line bg-surface-900 shadow-card lg:grid-cols-6 lg:grid-rows-1">
+        <div className="grid h-full grid-cols-6 overflow-hidden rounded-[10px] border border-line bg-surface-900 shadow-card">
           {kpiCards.map((kpi, index) => {
             const Icon = kpi.icon;
             const percentage =
@@ -550,37 +550,38 @@ export const OperationalMap = memo(function OperationalMap({
               <div
                 key={kpi.key}
                 className={cn(
-                  'pointer-events-auto relative flex min-w-0 items-center gap-2 px-2 lg:gap-2.5 lg:px-3',
-                  index < 3 && 'border-b border-line lg:border-b-0',
-                  (index === 0 || index === 1 || index === 3 || index === 4) &&
-                    'border-r border-line',
-                  index === 2 && 'lg:border-r lg:border-line',
+                  'pointer-events-auto flex min-w-0 flex-col justify-center px-2 py-1.5 xl:px-3',
+                  index < kpiCards.length - 1 && 'border-r border-line',
                 )}
               >
-                <span
-                  className={cn(
-                    'hidden h-8 w-8 shrink-0 items-center justify-center rounded-lg lg:flex',
-                    kpi.iconSurface,
-                  )}
-                >
-                  <Icon className={cn('h-4 w-4', kpi.tone)} />
-                </span>
-
-                <div className="flex min-w-0 flex-1 items-baseline gap-1.5">
-                  <span className="numeric shrink-0 text-[15px] font-semibold leading-none tracking-tight text-ink lg:text-lg">
+                <div className="flex items-center gap-2">
+                  <span
+                    className={cn(
+                      'flex h-7 w-7 shrink-0 items-center justify-center rounded-lg lg:h-8 lg:w-8',
+                      kpi.iconSurface,
+                    )}
+                  >
+                    <Icon className={cn('h-3.5 w-3.5 lg:h-4 lg:w-4', kpi.tone)} />
+                  </span>
+                  <span className="numeric shrink-0 text-base font-semibold leading-none tracking-tight text-ink lg:text-lg">
                     {kpi.value}
-                  </span>
-                  <span className="min-w-0 flex-1 truncate text-[10px] font-medium leading-none text-ink-muted lg:text-2xs">
-                    {kpi.label}
-                  </span>
-                  <span className="numeric hidden shrink-0 text-[10px] font-medium text-ink-faint xl:inline">
-                    {percentage}%
                   </span>
                 </div>
 
-                <span className="absolute inset-x-2 bottom-0 h-0.5 overflow-hidden rounded-t bg-surface-750 lg:inset-x-3">
+                <span className="mt-1 block whitespace-nowrap text-[10px] font-medium leading-tight text-ink-muted xl:text-xs">
+                  {kpi.label}
+                </span>
+
+                <span
+                  className="mt-1.5 block h-1 overflow-hidden rounded-full bg-surface-750"
+                  role="progressbar"
+                  aria-label={`${kpi.label}: ${percentage}%`}
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                  aria-valuenow={percentage}
+                >
                   <span
-                    className={cn('block h-full rounded-t transition-[width] duration-300', kpi.bar)}
+                    className={cn('block h-full rounded-full transition-[width] duration-300', kpi.bar)}
                     style={{ width: `${percentage}%` }}
                   />
                 </span>
