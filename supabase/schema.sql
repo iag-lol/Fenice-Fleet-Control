@@ -32,9 +32,16 @@
 --      SUPABASE_URL y SUPABASE_SERVICE_ROLE_KEY en tu `.env.local`.
 --   4. Crea el primer administrador con:  npm run create:admin
 --
+-- Actualizacion completa: incluye compatibilidad FMC130 / 3DTracking,
+-- permisos explicitos de servidor y Storage privado para publicidad.
+-- No inserta datos de demostracion ni crea dispositivos con IMEI ficticio.
+-- Ver docs/SUPABASE-PENDIENTES.md para aplicar y verificar.
 -- Ver docs/SUPABASE-INTEGRATION.md para el detalle completo.
 -- =============================================================================
 
+
+begin;
+set local search_path = public, extensions, pg_catalog;
 
 -- -----------------------------------------------------------------------------
 -- Extensiones
@@ -51,6 +58,7 @@ create extension if not exists pgcrypto;
 create or replace function fenice_set_actualizado_at()
 returns trigger
 language plpgsql
+set search_path = pg_catalog, public
 as $$
 begin
   new.actualizado_at = now();
@@ -190,12 +198,7 @@ create table if not exists dispositivos_gps (
 
   constraint dispositivos_gps_proveedor_valido check (proveedor in ('traccar', '3dtracking'))
 );
-comment on table dispositivos_gps is 'Equipos GPS instalados en los camiones (Traccar / 3DTracking).';
-comment on column dispositivos_gps.imei is 'Identificador del dispositivo tal como lo reporta el equipo: IMEI real en un Teltonika, o el "Device Identifier" configurado en Traccar Client.';
-comment on column dispositivos_gps.proveedor_id_externo is 'Identificador NUMERICO interno que Traccar/3DTracking asigna al dispositivo (deviceId), resuelto automaticamente a partir del imei. No lo ingresa el operador.';
-comment on column dispositivos_gps.servidor_url is 'Servidor Traccar de ESTE dispositivo. Vacio = usa el servidor configurado por variables de entorno (TRACCAR_BASE_URL), que es el caso normal cuando toda la flota comparte un unico servidor.';
-comment on column dispositivos_gps.habilitado is 'Permite pausar la conexion sin perder la asociacion (ej. equipo retirado temporalmente).';
-comment on column dispositivos_gps.ultima_conexion_at is 'Ultima vez que se confirmo una conexion exitosa (prueba manual o telemetria recibida). Alimenta el diagnostico de "Conectar GPS", no el estado en vivo del mapa.';
+
 
 -- Columnas nuevas sobre una tabla creada por una version anterior de este
 -- script: `create table if not exists` no la modifica, así que se agregan
@@ -204,14 +207,19 @@ alter table dispositivos_gps add column if not exists proveedor text not null de
 alter table dispositivos_gps add column if not exists servidor_url text;
 alter table dispositivos_gps add column if not exists habilitado boolean not null default true;
 alter table dispositivos_gps add column if not exists ultima_conexion_at timestamptz;
-do $$ begin
-  if not exists (
-    select 1 from pg_constraint where conname = 'dispositivos_gps_proveedor_valido'
-  ) then
-    alter table dispositivos_gps
-      add constraint dispositivos_gps_proveedor_valido check (proveedor in ('traccar', '3dtracking'));
-  end if;
-end $$;
+-- Una base antigua puede tener ESTA restriccion pero aceptar solo Traccar.
+-- Reemplazarla conserva filas y habilita tambien 3DTracking.
+alter table dispositivos_gps drop constraint if exists dispositivos_gps_proveedor_valido;
+alter table dispositivos_gps
+  add constraint dispositivos_gps_proveedor_valido
+  check (proveedor in ('traccar', '3dtracking'));
+
+comment on table dispositivos_gps is 'Equipos GPS instalados en los camiones (Traccar / 3DTracking).';
+comment on column dispositivos_gps.imei is 'Identificador del dispositivo tal como lo reporta el equipo: IMEI real en un Teltonika, o el "Device Identifier" configurado en Traccar Client.';
+comment on column dispositivos_gps.proveedor_id_externo is 'Identificador NUMERICO interno que Traccar/3DTracking asigna al dispositivo (deviceId), resuelto automaticamente a partir del imei. No lo ingresa el operador.';
+comment on column dispositivos_gps.servidor_url is 'Servidor Traccar de ESTE dispositivo. Vacio = usa el servidor configurado por variables de entorno (TRACCAR_BASE_URL), que es el caso normal cuando toda la flota comparte un unico servidor.';
+comment on column dispositivos_gps.habilitado is 'Permite pausar la conexion sin perder la asociacion (ej. equipo retirado temporalmente).';
+comment on column dispositivos_gps.ultima_conexion_at is 'Ultima vez que se confirmo una conexion exitosa (prueba manual o telemetria recibida). Alimenta el diagnostico de "Conectar GPS", no el estado en vivo del mapa.';
 
 drop trigger if exists trg_dispositivos_gps_actualizado_at on dispositivos_gps;
 create trigger trg_dispositivos_gps_actualizado_at
@@ -644,3 +652,82 @@ comment on table enlaces_conductor is 'Registro de emision y revocacion de enlac
 create index if not exists idx_enlaces_conductor_ruta on enlaces_conductor(ruta_id);
 
 alter table enlaces_conductor enable row level security;
+
+
+-- =============================================================================
+-- 8. PERMISOS EXPLICITOS PARA LA APLICACION
+-- =============================================================================
+-- El servidor usa service_role; el navegador usa las API propias y el login
+-- de Fenice. Estos permisos no dependen de los defaults de un proyecto nuevo.
+-- Se aplican SOLO a las tablas de Fenice, nunca a otras tablas del proyecto.
+grant usage on schema public to service_role;
+
+revoke all privileges on table
+  usuarios, sesiones, intentos_login, auditoria,
+  dispositivos_gps, conductores, vehiculos, rutas, paradas_ruta,
+  geocercas, eventos_geocerca, visitas_cliente, eventos_entrega, alertas,
+  configuracion_operacional, evidencias_entrega, fotos_evidencia, enlaces_conductor
+from public, anon, authenticated;
+
+grant select, insert, update, delete on table
+  usuarios, sesiones, intentos_login, auditoria,
+  dispositivos_gps, conductores, vehiculos, rutas, paradas_ruta,
+  geocercas, eventos_geocerca, visitas_cliente, eventos_entrega, alertas,
+  configuracion_operacional, evidencias_entrega, fotos_evidencia, enlaces_conductor
+to service_role;
+
+revoke execute on function fenice_set_actualizado_at() from public, anon, authenticated;
+grant execute on function fenice_set_actualizado_at() to service_role;
+
+
+-- =============================================================================
+-- 9. PUBLICIDAD DEL PORTAL DEL CLIENTE (SUPABASE STORAGE)
+-- =============================================================================
+-- Bucket propio PRIVADO: el servidor entrega la proyeccion publica de campañas
+-- y las imagenes a traves de /api/seguimiento. No hay politicas de escritura
+-- para anon/authenticated. content.json necesita application/json permitido.
+-- Crea/actualiza solo METADATOS de este bucket; conserva todos sus archivos.
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values (
+  'fenice-tracking-content',
+  'fenice-tracking-content',
+  false,
+  2097152,
+  array['image/jpeg', 'image/png', 'image/webp', 'application/json']
+)
+on conflict (id) do update set
+  public = excluded.public,
+  file_size_limit = excluded.file_size_limit,
+  allowed_mime_types = excluded.allowed_mime_types;
+
+commit;
+
+-- Actualiza la cache de metadatos de la Data API al terminar la transaccion.
+notify pgrst, 'reload schema';
+
+-- =============================================================================
+-- 10. COMPROBACIONES (SOLO METADATOS; NO EXPONEN DATOS NI CREDENCIALES)
+-- =============================================================================
+select c.relname as tabla, c.relrowsecurity as rls_activo,
+  has_table_privilege('service_role', c.oid, 'SELECT') as servidor_puede_leer,
+  has_table_privilege('service_role', c.oid, 'INSERT') as servidor_puede_insertar,
+  has_table_privilege('anon', c.oid, 'SELECT') as anon_puede_leer,
+  has_table_privilege('authenticated', c.oid, 'SELECT') as auth_puede_leer
+from pg_class c
+join pg_namespace n on n.oid = c.relnamespace
+where n.nspname = 'public'
+  and c.relname in (
+    'usuarios', 'sesiones', 'intentos_login', 'auditoria',
+    'dispositivos_gps', 'conductores', 'vehiculos', 'rutas', 'paradas_ruta',
+    'geocercas', 'eventos_geocerca', 'visitas_cliente', 'eventos_entrega', 'alertas',
+    'configuracion_operacional', 'evidencias_entrega', 'fotos_evidencia', 'enlaces_conductor'
+  )
+order by c.relname;
+
+select id, public, file_size_limit, allowed_mime_types
+from storage.buckets where id = 'fenice-tracking-content';
+
+select pg_get_constraintdef(oid) as proveedores_gps_permitidos
+from pg_constraint
+where conrelid = 'public.dispositivos_gps'::regclass
+  and conname = 'dispositivos_gps_proveedor_valido';

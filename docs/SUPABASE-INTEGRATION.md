@@ -4,11 +4,7 @@ Cómo conectar la base interna de la plataforma (login, flota, rutas,
 geocercas, alertas, configuración y evidencia de entrega) a un proyecto real
 de Supabase.
 
-**Estado actual:** todo lo descrito aquí está implementado y es aditivo. Sin
-`SUPABASE_URL` configurado, la plataforma sigue funcionando exactamente igual
-que antes: dataset de demostración en memoria, sin login. Configurar Supabase
-no rompe nada; simplemente reemplaza la memoria del proceso por persistencia
-real.
+La base interna se conecta mediante `SUPABASE_URL` y `SUPABASE_SERVICE_ROLE_KEY`. Sin esas credenciales, la persistencia de flota y login no está conectada; la demostración requiere activar explícitamente su modo. Para ejecutar de una vez la instalación, las actualizaciones FMC130/3DTracking y la publicidad del portal, consulta [Pendientes de Supabase para Fenice](SUPABASE-PENDIENTES.md).
 
 ---
 
@@ -58,11 +54,11 @@ Abre el **SQL Editor** del proyecto, pega el contenido completo de
 se puede volver a correr sin duplicar tablas ni perder datos.
 
 Crea 18 tablas (login, auditoría, flota, rutas, geocercas, alertas,
-configuración, evidencia y enlaces del conductor), sus índices, restricciones
+configuración, evidencia y enlaces del conductor), el bucket privado de publicidad, sus índices, restricciones
 de validez (`check`) que reflejan los mismos valores permitidos que ya valida
 la aplicación en TypeScript, y triggers para mantener `actualizado_at` al día.
 
-Habilita Row Level Security en todas las tablas **sin ninguna política
+Declara permisos explícitos para el servidor y habilita Row Level Security en todas las tablas **sin ninguna política
 permisiva**: es un cierre por defecto. La aplicación igual funciona porque
 usa la service role key, que ignora RLS; esto solo protege ante una futura
 exposición accidental de la anon key (que esta plataforma, hoy, ni siquiera
