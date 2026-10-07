@@ -358,3 +358,54 @@ body {
 .maplibregl-canvas:focus {
   outline: none;
 }
+
+/* Seguimiento público: el escritorio reserva una sola pantalla para el mapa. */
+.tracking-map-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 0 11px;
+  border: 1px solid #dce7e1;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, .96);
+  color: #526f5d;
+  box-shadow: 0 2px 8px rgba(24, 62, 40, .04);
+  font-size: 10px;
+  font-weight: 500;
+}
+.tracking-map-icon {
+  display: flex;
+  width: 36px;
+  height: 36px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #dce7e1;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, .96);
+  color: #526f5d;
+}
+.tracking-map-button:hover, .tracking-map-icon:hover { background: #eef5ee; }
+.tracking-shell button:focus-visible, .tracking-shell a:focus-visible { outline: 2px solid #448564; outline-offset: 3px; }
+@media (min-width: 768px) and (max-height: 700px) {
+  .tracking-main { padding-top: 12px; padding-bottom: 12px; gap: 12px; }
+  .tracking-intro h1 { font-size: 23px; }
+  .tracking-status { padding: 14px 16px; }
+  .tracking-eta { font-size: 30px; }
+  .tracking-metrics, .tracking-steps { margin-top: 10px; padding-top: 10px; }
+  .tracking-steps { display: none; }
+  .tracking-campaign-head { padding-top: 4px; padding-bottom: 4px; }
+  .tracking-campaign-controls { padding-top: 2px; padding-bottom: 2px; }
+  .tracking-campaign-controls button { height: 24px; width: 24px; }
+  .tracking-destination { padding: 12px 14px; }
+  .tracking-brand-panel { padding: 16px; }
+  .tracking-brand-panel p:last-child { margin-top: 6px; }
+}
+@media (max-width: 767px) {
+  .tracking-layout { min-height: 0; }
+  .tracking-map-button, .tracking-map-icon { min-height: 44px; }
+  .tracking-map-icon { width: 44px; height: 44px; }
+}
+@media (max-width: 767px) {
+  .tracking-campaign-controls button { min-width: 44px; min-height: 44px; }
+}

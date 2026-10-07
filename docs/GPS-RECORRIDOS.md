@@ -58,11 +58,25 @@ La ficha independiente también abre con el recorrido completo, sin reducirlo a 
 
 ## Seguimiento para el cliente
 
-La página pública destaca llegada estimada, estado del despacho y trayecto hacia el domicilio. En teléfono, el mapa aparece después del resumen de llegada. Permite encuadrar el trayecto y seguir la cámara del vehículo sin afectar la selección o cámara de la torre de control.
+El portal público `/seguimiento` y el enlace directo de cada entrega usan una pantalla dedicada a ubicación, destino, estado y llegada estimada. No muestran nombre comercial del cliente, ventas, saldos, productos, precios, historial de compras ni accesos a fichas internas. El mapa ocupa el área principal y solo recibe el vehículo asignado y el tramo previsto hacia ese domicilio. Dispone de encuadre del trayecto, seguimiento de cámara, zoom, vista satelital y ampliación con salida mediante Escape.
 
-La velocidad viene de la telemetría; no se asigna una velocidad ficticia al marcador. Una posición atrasada se identifica como última información conocida; con señal perdida, fix inválido o reloj adelantado no se publica como ubicación actual ni se calcula una ETA. Los pedidos cancelados se presentan como cancelados. Al entregar o cancelar, el backend deja de devolver ubicación y trazado del vehículo.
+En escritorio y tablet desde 768 px de ancho, la pantalla se adapta a la altura disponible sin scroll vertical ni horizontal. Se verificaron 1920 × 902, 1366 × 768, 1280 × 600, 1024 × 768 y 768 × 1024. En pantallas bajas se compacta el resumen para conservar mapa y publicidad visibles. En celular, el resumen precede al mapa de 480 px, seguido por el destino y las campañas; se permite scroll vertical y se evita el desbordamiento horizontal. Se comprobó 390 × 844. Al cambiar el tamaño del mapa se vuelve a encuadrar el vehículo y destino, sin hacerlo en cada lectura de GPS.
 
-Los datos de demostración están identificados en la página. Las pruebas visuales usan un proceso separado con `NEXT_DIST_DIR=.next-review` y fuentes de demostración explícitas, sin cambiar las credenciales ni el proveedor de la instancia real.
+La velocidad viene de la telemetría; no se asigna una velocidad ficticia al marcador. Una posición atrasada se identifica como última información conocida; con señal perdida, fix inválido o reloj adelantado no se publica como ubicación actual ni se calcula una ETA. Los pedidos cancelados se presentan como cancelados. Al entregar o cancelar, el backend deja de devolver ubicación y trazado del vehículo. La API pública conserva su proyección mínima y una prueba confirma que no filtra información comercial.
+
+### Imágenes de publicidad
+
+En **Configuración → Publicidad del seguimiento**, un administrador puede subir JPG, PNG o WebP de hasta 2 MB, usar una URL HTTPS, editar título y enlace opcional, reordenar imágenes y activar/desactivar cada campaña o el conjunto. Se admiten hasta seis imágenes horizontales; se recomienda 1600 × 800 px y se muestra la imagen completa. Dos diseños de Fenice sirven como ejemplos editables. Solo se publican imágenes activas, después de guardar. La edición muestra vista previa y no anuncia éxito si falla el almacenamiento.
+
+Las campañas rotan cada 5 a 30 segundos, con transición suave. Se pausan al pasar el cursor, al mantener el foco en sus controles, al ocultar la pestaña o cuando el dispositivo solicita menos movimiento. Incluyen anterior/siguiente y pausa manual. No hay ventanas emergentes ni anuncios sobre el mapa. Las imágenes con errores se descartan de la rotación y, si no queda ninguna disponible, se presenta una tarjeta de marca. Los enlaces abren otra pestaña sin enviar la referencia de seguimiento.
+
+Las escrituras de configuración y archivos exigen el permiso `configuracion.editar` y validan el origen. Las URLs rechazan esquemas ejecutables, credenciales incrustadas y rutas arbitrarias; los archivos verifican firma JPG/PNG/WebP y excluyen SVG/HTML subidos. Las imágenes cargadas reciben identificadores aleatorios y cabeceras de tipo y caché. Los SVG de ejemplo son recursos estáticos propios del proyecto.
+
+Con Supabase configurado, el servidor conserva configuración e imágenes en el bucket privado `fenice-tracking-content`, creado mediante Storage. La clave de servicio permanece en el servidor y no se otorgan escrituras a visitantes. Se usa [la API oficial de buckets](https://supabase.com/docs/guides/storage/buckets/creating-buckets) y [descarga de archivos privados](https://supabase.com/docs/reference/javascript/storage-from-download). Sin Supabase, un servidor Node conserva los archivos bajo `TRACKING_CONTENT_DIR` (por defecto `.fenice/tracking-content`); esa carpeta debe estar en un volumen persistente al desplegar. En Vercel las escrituras requieren Supabase y no se simula persistencia mediante memoria temporal. No se necesitan tablas nuevas ni cambios al esquema comercial.
+
+Validación: guardado/lectura y subida real de una imagen en el servidor local; pruebas de permisos, URLs, formatos, límites, contenido desactivado, persistencia local y contrato de Storage/fallos. La prueba remota de Storage queda pendiente de conectar las credenciales Supabase, ausentes en este entorno. Las campañas de la revisión viven en `.fenice/tracking-content-review`, separadas de la configuración real y excluidas de Git.
+
+Capturas: [portal en escritorio](assets/gps-portal-cliente-escritorio.jpg) y [portal en celular](assets/gps-portal-cliente-movil.jpg). Los datos de demostración se identifican en la pantalla y usan `NEXT_DIST_DIR=.next-review` con proveedores ficticios explícitos.
 
 ## Requisitos de operación
 

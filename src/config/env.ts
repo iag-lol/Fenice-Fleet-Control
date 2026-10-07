@@ -87,6 +87,8 @@ const serverEnvSchema = z.object({
 
   // --- Base de datos interna de la plataforma ---
   DATABASE_URL: z.string().optional(),
+  /** Archivos de publicidad en servidor local; con Supabase se usa Storage. */
+  TRACKING_CONTENT_DIR: z.string().default('.fenice/tracking-content'),
 
   // --- Trafico en tiempo real ---
   TRAFFIC_PROVIDER: z.enum(['none', 'mapbox', 'tomtom', 'google']).default('none'),

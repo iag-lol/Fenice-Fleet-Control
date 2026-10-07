@@ -128,3 +128,15 @@ it('entrega al visor la caducidad de la muestra para no publicar señal vieja du
     Date.parse(session!.vehicle!.positionExpiresAt!) - Date.parse(p.timestamp),
   ).toBe(180000);
 });
+
+
+it('no entrega información comercial del cliente ni documentos internos al portal', async () => {
+  mocks.workOrder.mockResolvedValue({ ...order, clientName: 'Privado', clientId: 'private-client', notes: 'Saldo pendiente privado', products: [{ price: 12345 }], totalAmount: 99999 });
+  const session = await loadTrackingSession({ reference: 'OT-1' });
+  expect(session).not.toHaveProperty('clientName');
+  expect(session).not.toHaveProperty('clientId');
+  expect(session).not.toHaveProperty('products');
+  expect(session).not.toHaveProperty('notes');
+  expect(session).not.toHaveProperty('totalAmount');
+  expect(JSON.stringify(session)).not.toContain('Privado');
+});

@@ -4,8 +4,8 @@ import { TrackingView } from '@/components/tracking/tracking-view';
 import { Skeleton } from '@/components/ui/skeleton';
 
 export const metadata = {
-  title: 'Seguimiento de pedido',
-  description: 'Consulta el estado y la ubicacion de tu pedido de Fenice SpA.',
+  title: { absolute: 'Tu entrega · Fenice SpA' },
+  description: 'Ubicación de tu vehículo, trayecto al destino y llegada estimada de tu entrega Fenice.',
 };
 
 export default function SeguimientoPage() {

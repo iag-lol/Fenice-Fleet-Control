@@ -5,6 +5,7 @@ import {
   Building2,
   Check,
   Database,
+  ImagePlus,
   RotateCcw,
   Satellite,
   Save,
@@ -21,6 +22,7 @@ import { Card, CardBody, CardHeader } from '@/components/ui/card';
 import { NumberField, Select, Toggle } from '@/components/ui/input';
 import { QueryError } from '@/components/ui/query-state';
 import { SkeletonRows } from '@/components/ui/skeleton';
+import { TrackingContentSettings } from '@/components/settings/tracking-content-settings';
 import { TridTrackingIntegrationCard } from '@/components/settings/tridtracking-integration-card';
 import { TraccarIntegrationCard } from '@/components/settings/traccar-integration-card';
 import {
@@ -138,6 +140,7 @@ export function SettingsView() {
         description="Umbrales que gobiernan el estado comercial de clientes, la salud del GPS, el control de ruta y las geocercas de entrega."
         actions={
           <>
+            <LinkButton href="/configuracion#publicidad-seguimiento" variant="secondary" size="sm" icon={<ImagePlus className="h-3.5 w-3.5" />}>Publicidad del seguimiento</LinkButton>
             <LinkButton
               href="/configuracion/geocercas"
               variant="secondary"
@@ -593,6 +596,7 @@ export function SettingsView() {
           </CardBody>
         </Card>
       </div>
+      <div className="mt-5"><TrackingContentSettings /></div>
     </>
   );
 }
