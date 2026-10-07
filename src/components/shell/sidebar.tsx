@@ -7,7 +7,10 @@ import { HelpCircle, PanelLeftClose, PanelLeftOpen, Radio } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 
 import { BrandLockup } from '@/components/shell/brand';
-import { getVisibleNavGroups, isActivePath } from '@/components/shell/navigation';
+import {
+  getVisibleNavGroups,
+  isActivePath,
+} from '@/components/shell/navigation';
 import { PlanBadge } from '@/components/product/plan-badge';
 import { useIsTabletRange } from '@/hooks/use-media-query';
 import { cn } from '@/lib/cn';
@@ -70,8 +73,12 @@ function SidebarUserCard({ collapsed }: { collapsed: boolean }) {
       </span>
       {!collapsed ? (
         <span className="min-w-0 flex-1">
-          <span className="block truncate text-[13px] font-medium text-white">{name}</span>
-          <span className="block truncate text-2xs text-slate-400">{roleLabel}</span>
+          <span className="block truncate text-[13px] font-medium text-white">
+            {name}
+          </span>
+          <span className="block truncate text-2xs text-slate-400">
+            {roleLabel}
+          </span>
         </span>
       ) : null}
     </div>
@@ -94,16 +101,22 @@ function SidebarUserCard({ collapsed }: { collapsed: boolean }) {
  */
 export function Sidebar() {
   const pathname = usePathname();
-  const isControlTower = pathname?.startsWith('/control') ?? false;
   const isTabletRange = useIsTabletRange();
-  const collapsedPreference = useSidebarStore((state) => state.collapsedPreference);
+  const collapsedPreference = useSidebarStore(
+    (state) => state.collapsedPreference,
+  );
   const hydrated = useSidebarStore((state) => state.hydrated);
   const hydratePreference = useSidebarStore((state) => state.hydratePreference);
   const togglePreference = useSidebarStore((state) => state.togglePreference);
   const [animateWidth, setAnimateWidth] = useState(false);
   const collapsed = isTabletRange || collapsedPreference;
 
-  useEffect(() => { hydratePreference(); }, [hydratePreference]);
+  useEffect(() => {
+    hydratePreference();
+  }, [hydratePreference]);
+  useEffect(() => {
+    setAnimateWidth(false);
+  }, [pathname]);
 
   const toggle = useCallback((): void => {
     if (isTabletRange) return;
@@ -114,33 +127,49 @@ export function Sidebar() {
   useEffect(() => {
     const onHeaderToggle = (): void => toggle();
     window.addEventListener('fenice:toggle-sidebar', onHeaderToggle);
-    return () => window.removeEventListener('fenice:toggle-sidebar', onHeaderToggle);
+    return () =>
+      window.removeEventListener('fenice:toggle-sidebar', onHeaderToggle);
   }, [toggle]);
 
   return (
     <aside
       data-collapsed={collapsed}
+      onTransitionEnd={(event) => {
+        if (
+          event.target === event.currentTarget &&
+          event.propertyName === 'width'
+        )
+          setAnimateWidth(false);
+      }}
       className={cn(
         'app-sidebar hidden h-app shrink-0 flex-col overflow-x-hidden border-r border-white/10 bg-[#0d2430] text-white shadow-[4px_0_18px_rgba(20,35,46,0.06)] md:flex',
         // El ancho de tablet debe estar resuelto por CSS desde el primer
         // render del servidor. Esperar a matchMedia hacia que cada pagina
         // reservara 196/218 px y luego se cerrara a 60 px delante del usuario.
-        collapsed
-          ? 'w-[60px]'
-          : isControlTower
-            ? 'w-[196px] md:w-[60px] xl:w-[196px]'
-            : 'w-[218px] md:w-[60px] xl:w-[218px]',
+        collapsed ? 'w-[60px]' : 'w-[218px] md:w-[60px] xl:w-[218px]',
         !isTabletRange && animateWidth && 'transition-[width] duration-200',
         !hydrated && 'invisible',
       )}
     >
-      <div className={cn('flex h-[52px] items-center border-b border-white/10 px-3', collapsed && 'justify-center px-2')}>
-        <Link href="/" className="min-w-0 rounded" aria-label="Fenice Fleet Control - inicio">
+      <div
+        className={cn(
+          'flex h-[52px] items-center border-b border-white/10 px-3',
+          collapsed && 'justify-center px-2',
+        )}
+      >
+        <Link
+          href="/"
+          className="min-w-0 rounded"
+          aria-label="Fenice Fleet Control - inicio"
+        >
           <BrandLockup compact={collapsed} inverted />
         </Link>
       </div>
 
-      <nav className="flex-1 overflow-y-auto px-2 py-2.5" aria-label="Navegacion principal">
+      <nav
+        className="flex-1 overflow-y-auto px-2 py-2.5"
+        aria-label="Navegacion principal"
+      >
         {getVisibleNavGroups().map((group) => (
           <div key={group.label} className="mb-4 last:mb-0">
             {!collapsed ? (
@@ -148,7 +177,10 @@ export function Sidebar() {
                 {group.label}
               </p>
             ) : (
-              <div className="mx-2 mb-2 border-t border-white/10 first:border-t-0" aria-hidden />
+              <div
+                className="mx-2 mb-2 border-t border-white/10 first:border-t-0"
+                aria-hidden
+              />
             )}
 
             <ul className="space-y-0.5">
@@ -171,15 +203,25 @@ export function Sidebar() {
                           : 'text-slate-400 hover:bg-white/[0.065] hover:text-white',
                       )}
                     >
-                      <Icon className={cn('h-4 w-4 shrink-0', active && 'text-brand-300')} />
-                      {!collapsed ? <span className="truncate">{item.label}</span> : null}
+                      <Icon
+                        className={cn(
+                          'h-4 w-4 shrink-0',
+                          active && 'text-brand-300',
+                        )}
+                      />
+                      {!collapsed ? (
+                        <span className="truncate">{item.label}</span>
+                      ) : null}
                       {!collapsed && item.featureId ? (
                         <span className="ml-auto shrink-0">
                           <PlanBadge featureId={item.featureId} />
                         </span>
                       ) : null}
                       {active && !collapsed && !item.featureId ? (
-                        <span className="ml-auto h-1.5 w-1.5 rounded-full bg-brand-300" aria-hidden />
+                        <span
+                          className="ml-auto h-1.5 w-1.5 rounded-full bg-brand-300"
+                          aria-hidden
+                        />
                       ) : null}
                     </Link>
                   </li>
@@ -200,7 +242,9 @@ export function Sidebar() {
           )}
         >
           <Radio className="h-4 w-4 shrink-0" />
-          {!collapsed ? <span className="truncate">Seguimiento publico</span> : null}
+          {!collapsed ? (
+            <span className="truncate">Seguimiento publico</span>
+          ) : null}
         </Link>
 
         <a
@@ -214,7 +258,9 @@ export function Sidebar() {
           )}
         >
           <HelpCircle className="h-4 w-4 shrink-0" />
-          {!collapsed ? <span className="truncate">¿Necesitas ayuda?</span> : null}
+          {!collapsed ? (
+            <span className="truncate">¿Necesitas ayuda?</span>
+          ) : null}
         </a>
 
         {!isTabletRange ? (
@@ -246,7 +292,11 @@ export function Sidebar() {
             collapsed ? 'px-0' : 'justify-start',
           )}
         >
-          {!collapsed ? <span className="truncate">Desarrollado por Zyteron</span> : <span aria-hidden>Z</span>}
+          {!collapsed ? (
+            <span className="truncate">Desarrollado por Zyteron</span>
+          ) : (
+            <span aria-hidden>Z</span>
+          )}
         </a>
 
         <SidebarUserCard collapsed={collapsed} />

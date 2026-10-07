@@ -1,0 +1,18 @@
+import { RouteDetailView } from '@/components/routes/route-detail-view';
+import { ErrorBoundary } from '@/components/ui/error-boundary';
+
+export const metadata = { title: 'Detalle de ruta' };
+
+export default async function RouteDetailPage({
+  params,
+}: {
+  params: Promise<{ routeId: string }>;
+}) {
+  const { routeId } = await params;
+
+  return (
+    <ErrorBoundary section="el detalle de la ruta">
+      <RouteDetailView routeId={routeId} />
+    </ErrorBoundary>
+  );
+}

@@ -1,6 +1,7 @@
 'use client';
 
-import type { ReactNode } from 'react';
+import { useEffect, useId, useRef, type ReactNode } from 'react';
+import { usePathname } from 'next/navigation';
 
 import { Header } from '@/components/shell/header';
 import { MobileMenuSheet, MobileTabBar } from '@/components/shell/mobile-nav';
@@ -21,23 +22,42 @@ export interface AppShellProps {
 
 export function AppShell({ children, fullBleed }: AppShellProps) {
   useAppHeight();
+  const pathname = usePathname();
+  const shellInstance = useId();
+  const isFullBleed = fullBleed ?? pathname.startsWith('/control');
+  const mainRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    if (window.location.hash || !mainRef.current) return;
+    mainRef.current.scrollTop = 0;
+    mainRef.current.scrollLeft = 0;
+  }, [pathname]);
 
   return (
-    <div className="flex h-app overflow-hidden bg-surface-950 bg-[radial-gradient(circle_at_top_right,rgba(13,144,174,0.055),transparent_32rem)]">
+    <div
+      data-testid="app-shell"
+      data-shell-instance={shellInstance}
+      className="flex h-app overflow-hidden bg-surface-950 bg-[radial-gradient(circle_at_top_right,rgba(13,144,174,0.055),transparent_32rem)]"
+    >
       <Sidebar />
 
       <div className="relative flex min-w-0 flex-1 flex-col">
         <Header />
 
         <main
+          ref={mainRef}
+          data-layout={isFullBleed ? 'map' : 'page'}
           className={cn(
             'app-shell-main min-w-0 flex-1',
-            fullBleed
+            isFullBleed
               ? 'relative overflow-hidden'
               : 'overflow-y-auto px-3 pb-20 pt-3 sm:px-4 sm:pb-5 lg:px-5 lg:pt-4',
           )}
         >
-          {fullBleed ? children : <div className="mx-auto w-full max-w-[1600px]">{children}</div>}
+          {isFullBleed ? (
+            children
+          ) : (
+            <div className="mx-auto w-full max-w-[1600px]">{children}</div>
+          )}
         </main>
 
         {/* Se ancla al area de contenido, no al viewport completo: asi nunca

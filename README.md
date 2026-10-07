@@ -351,7 +351,9 @@ cartera de clientes y el texto blanco sobre los botones sólidos.
 
 ## Responsive
 
-La barra lateral conserva la preferencia de apertura al navegar entre páginas. Contraída mantiene 60 px; la animación de ancho se activa solo desde el control de abrir/cerrar. En tablet, la consulta de medios se resuelve inmediatamente en la navegación de cliente, manteniendo la vista de iconos o el menú móvil de orientación vertical. [Comprobación visual de la barra contraída](docs/assets/sidebar-contraido-navegacion.jpg).
+Las 19 páginas internas comparten un layout persistente: sidebar, cabecera y navegación móvil permanecen montados mientras se reemplaza el contenido de la página. La carga y los errores se resuelven dentro de ese marco. Contraído mantiene 60 px; abierto mantiene 218 px en todas las secciones. La animación de ancho termina al completar la apertura/cierre o al navegar. Las consultas de medios conservan el modo de tablet y la orientación vertical usa navegación móvil. Login, seguimiento público y portal del conductor conservan sus pantallas independientes.
+
+Se comprobaron los 12 accesos principales en escritorio y tablet, verificando una sola instancia del menú y ancho de 60 px después de cada clic. También se revisaron editores de configuración, fichas de vehículo/ruta, regreso al mapa y vuelta desde el seguimiento público. [Resultado visual](docs/assets/sidebar-layout-persistente.jpg) y [registro de navegación](docs/assets/sidebar-navegacion-auditoria.json).
 
 Diseñada para operar desde el teléfono en terreno, no solo desde el escritorio.
 

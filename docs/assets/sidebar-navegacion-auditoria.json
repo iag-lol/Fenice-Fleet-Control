@@ -1,0 +1,209 @@
+{
+  "simulated": true,
+  "before": {
+    "route": "/clientes/dormidos",
+    "sidebarsDuringLoading": 0
+  },
+  "desktop": {
+    "allStable": true,
+    "routes": [
+      {
+        "button": "Panel",
+        "collapsed": "true",
+        "path": "/",
+        "shell": "_r_0_",
+        "sidebars": 1,
+        "width": 60
+      },
+      {
+        "button": "Torre de control",
+        "collapsed": "true",
+        "path": "/control",
+        "shell": "_r_0_",
+        "sidebars": 1,
+        "width": 60
+      },
+      {
+        "button": "Despachos",
+        "collapsed": "true",
+        "path": "/despachos",
+        "shell": "_r_0_",
+        "sidebars": 1,
+        "width": 60
+      },
+      {
+        "button": "Alertas",
+        "collapsed": "true",
+        "path": "/alertas",
+        "shell": "_r_0_",
+        "sidebars": 1,
+        "width": 60
+      },
+      {
+        "button": "Flota",
+        "collapsed": "true",
+        "path": "/flota",
+        "shell": "_r_0_",
+        "sidebars": 1,
+        "width": 60
+      },
+      {
+        "button": "Ordenes de trabajo",
+        "collapsed": "true",
+        "path": "/ordenes",
+        "shell": "_r_0_",
+        "sidebars": 1,
+        "width": 60
+      },
+      {
+        "button": "Rutas",
+        "collapsed": "true",
+        "path": "/rutas",
+        "shell": "_r_0_",
+        "sidebars": 1,
+        "width": 60
+      },
+      {
+        "button": "Evidencia de entrega",
+        "collapsed": "true",
+        "path": "/evidencias",
+        "shell": "_r_0_",
+        "sidebars": 1,
+        "width": 60
+      },
+      {
+        "button": "Clientes",
+        "collapsed": "true",
+        "path": "/clientes",
+        "shell": "_r_0_",
+        "sidebars": 1,
+        "width": 60
+      },
+      {
+        "button": "Clientes dormidos",
+        "collapsed": "true",
+        "path": "/clientes/dormidos",
+        "shell": "_r_0_",
+        "sidebars": 1,
+        "width": 60
+      },
+      {
+        "button": "Inteligencia territorial",
+        "collapsed": "true",
+        "path": "/territorio",
+        "shell": "_r_0_",
+        "sidebars": 1,
+        "width": 60
+      },
+      {
+        "button": "Configuracion",
+        "collapsed": "true",
+        "path": "/configuracion",
+        "shell": "_r_0_",
+        "sidebars": 1,
+        "width": 60
+      }
+    ]
+  },
+  "tablet": {
+    "allStable": true,
+    "routes": [
+      {
+        "button": "Panel",
+        "collapsed": "true",
+        "path": "/",
+        "shell": "_r_0_",
+        "sidebars": 1,
+        "width": 60
+      },
+      {
+        "button": "Torre de control",
+        "collapsed": "true",
+        "path": "/control",
+        "shell": "_r_0_",
+        "sidebars": 1,
+        "width": 60
+      },
+      {
+        "button": "Despachos",
+        "collapsed": "true",
+        "path": "/despachos",
+        "shell": "_r_0_",
+        "sidebars": 1,
+        "width": 60
+      },
+      {
+        "button": "Alertas",
+        "collapsed": "true",
+        "path": "/alertas",
+        "shell": "_r_0_",
+        "sidebars": 1,
+        "width": 60
+      },
+      {
+        "button": "Flota",
+        "collapsed": "true",
+        "path": "/flota",
+        "shell": "_r_0_",
+        "sidebars": 1,
+        "width": 60
+      },
+      {
+        "button": "Ordenes de trabajo",
+        "collapsed": "true",
+        "path": "/ordenes",
+        "shell": "_r_0_",
+        "sidebars": 1,
+        "width": 60
+      },
+      {
+        "button": "Rutas",
+        "collapsed": "true",
+        "path": "/rutas",
+        "shell": "_r_0_",
+        "sidebars": 1,
+        "width": 60
+      },
+      {
+        "button": "Evidencia de entrega",
+        "collapsed": "true",
+        "path": "/evidencias",
+        "shell": "_r_0_",
+        "sidebars": 1,
+        "width": 60
+      },
+      {
+        "button": "Clientes",
+        "collapsed": "true",
+        "path": "/clientes",
+        "shell": "_r_0_",
+        "sidebars": 1,
+        "width": 60
+      },
+      {
+        "button": "Clientes dormidos",
+        "collapsed": "true",
+        "path": "/clientes/dormidos",
+        "shell": "_r_0_",
+        "sidebars": 1,
+        "width": 60
+      },
+      {
+        "button": "Inteligencia territorial",
+        "collapsed": "true",
+        "path": "/territorio",
+        "shell": "_r_0_",
+        "sidebars": 1,
+        "width": 60
+      },
+      {
+        "button": "Configuracion",
+        "collapsed": "true",
+        "path": "/configuracion",
+        "shell": "_r_0_",
+        "sidebars": 1,
+        "width": 60
+      }
+    ]
+  }
+}
