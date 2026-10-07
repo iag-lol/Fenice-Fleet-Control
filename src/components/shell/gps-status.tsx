@@ -52,7 +52,7 @@ export function GpsStatusIndicator({ compact }: { compact?: boolean }) {
     }
   }, [isPaused, refresh]);
 
-  const simulated = mode?.gps.simulated ?? true;
+  const simulated = mode?.gps.simulated ?? false;
 
   // El escalonamiento es el mismo que aplican los motores del servidor.
   const severity =
@@ -104,18 +104,21 @@ export function GpsStatusIndicator({ compact }: { compact?: boolean }) {
       <span
         className={cn(
           'hidden items-center gap-1.5 rounded border px-2 py-1 text-2xs font-semibold uppercase tracking-wide lg:inline-flex',
-          simulated
+          mode?.gps.provider === 'unavailable'
+            ? 'border-status-warning/30 bg-status-warning/10 text-status-warning'
+            : simulated
             ? 'border-status-warning/30 bg-status-warning/10 text-status-warning'
             : 'border-status-active/30 bg-status-active/10 text-status-active',
         )}
         title={
           simulated
-            ? 'Telemetria generada por el simulador integrado. Configura GPS_PROVIDER=traccar para usar el servidor GPS real.'
-            : 'Conectado al servidor GPS.'
+            ? 'Telemetria generada por el simulador integrado.'
+            : mode?.gps.provider === 'unavailable' ? 'Proveedor GPS sin conexion. Revisa la prueba en Configuracion.'
+            : 'Proveedor GPS real configurado. El estado de señal se muestra junto a la ultima actualizacion.'
         }
       >
         <Satellite className="h-3 w-3" />
-        GPS: {mode?.gps.label ?? 'DEMO'}
+        GPS: {mode?.gps.label ?? 'CARGANDO'}
       </span>
 
       <span

@@ -23,6 +23,14 @@ export interface ScopeInput {
   communeBoundary: LatLng[] | null;
 }
 
+/** La ficha de un vehiculo siempre tiene prioridad sobre filtros generales. */
+export function resolveMapScope(scope: ScopeInput, isolate: boolean): ScopeInput {
+  if (scope.vehicleId !== null) {
+    return { vehicleId: scope.vehicleId, routeId: null, communeBoundary: null };
+  }
+  return isolate ? scope : { vehicleId: null, routeId: null, communeBoundary: null };
+}
+
 /** Lo minimo que este motor necesita saber de cada entidad. */
 export interface ScopedVehicle {
   vehicleId: string;
@@ -83,8 +91,8 @@ export function scopeVehicles<T extends ScopedVehicle>(
  * por que esta donde esta.
  */
 export function scopeRoutes<T extends ScopedRoute>(routes: T[], scope: ScopeInput): T[] {
-  if (scope.routeId !== null) return routes.filter((r) => r.routeId === scope.routeId);
   if (scope.vehicleId !== null) return routes.filter((r) => r.vehicleId === scope.vehicleId);
+  if (scope.routeId !== null) return routes.filter((r) => r.routeId === scope.routeId);
 
   if (scope.communeBoundary !== null) {
     // Una ruta pertenece a la comuna si alguna de sus paradas cae dentro.
@@ -110,28 +118,12 @@ export function scopePoints<T extends ScopedPoint>(
   routes: ScopedRoute[] = [],
   keyOf?: (point: T) => string | null,
 ): T[] {
-  const focusedRoute =
-    scope.routeId !== null
-      ? (routes.find((r) => r.routeId === scope.routeId) ?? null)
-      : scope.vehicleId !== null
-        ? (routes.find((r) => r.vehicleId === scope.vehicleId) ?? null)
-        : null;
-
-  if (focusedRoute) {
-    if (keyOf) {
-      const permitidos = new Set(focusedRoute.stops.map((s) => `${s.lat},${s.lng}`));
-      return points.filter((p) => {
-        const clave = keyOf(p);
-        return clave !== null
-          ? permitidos.has(clave)
-          : permitidos.has(`${p.lat},${p.lng}`);
-      });
-    }
-    const permitidos = new Set(focusedRoute.stops.map((s) => `${s.lat},${s.lng}`));
-    return points.filter((p) => permitidos.has(`${p.lat},${p.lng}`));
+  if (scope.vehicleId !== null || scope.routeId !== null) {
+    const focusedRoutes = scopeRoutes(routes, scope);
+    const permitidos = new Set(focusedRoutes.flatMap((r) => r.stops.map((s) => `${s.lat},${s.lng}`)));
+    return points.filter((p) => permitidos.has(keyOf?.(p) ?? `${p.lat},${p.lng}`));
   }
 
   // Sin vehiculo ni ruta enfocados, manda la comuna.
-  if (scope.vehicleId !== null || scope.routeId !== null) return [];
   return points.filter((p) => insideCommune(p, scope.communeBoundary));
 }

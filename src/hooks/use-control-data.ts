@@ -22,7 +22,7 @@ export const mapQuery = queryOptions({
   queryKey: ['map', 'snapshot'],
   queryFn: ({ signal }) => read<MapSnapshot>('/api/map', 'la operación', signal),
   staleTime: 15_000,
-  refetchInterval: 30_000,
+  refetchInterval: 15_000,
 });
 export const alertsQuery = queryOptions({
   queryKey: ['alerts'],

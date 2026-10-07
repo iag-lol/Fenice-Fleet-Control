@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { boundsForPoints, closedRing, geofencePoints, operationPoints } from '@/lib/map-navigation';
+import { boundsForPoints, closedRing, geofencePoints, operationPoints, vehicleOverviewPoints } from '@/lib/map-navigation';
 import { DEFAULT_GEOFENCE_RULES, asGeofenceId, type Geofence } from '@/types/core';
-import type { MapSnapshot } from '@/types/views';
+import type { MapSnapshot, RouteGeometry } from '@/types/views';
 
 const circle: Geofence = {
   id: asGeofenceId('test'), name: 'Zona', description: null, kind: 'carga',
@@ -34,5 +34,24 @@ describe('operational camera and perimeter geometry', () => {
     const snapshot: MapSnapshot = { generatedAt: '', vehicles: [], clients: [], routes: [], geofences: [circle], alerts: [], pendingWorkOrders: [], communes: [] };
     expect(boundsForPoints(operationPoints(snapshot))).not.toBeNull();
     expect(operationPoints({ ...snapshot, geofences: [{ ...circle, active: false }] })).toEqual([]);
+  });
+});
+
+describe('encuadre completo de la ficha', () => {
+  it('incluye inicio, destino, curvas del historial y posicion fuera del recorrido', () => {
+    const route: RouteGeometry = {
+      routeId: 'r1', vehicleId: 'v1', code: 'Ruta', name: 'Ruta', vehiclePlate: 'PTWD73', status: 'en_curso',
+      plannedPath: [{ lat: -33.4, lng: -70.6 }, { lat: -33.5, lng: -70.7 }],
+      executedPath: [{ lat: -33.45, lng: -70.65 }],
+      executedSegments: [[{ lat: -33.55, lng: -70.75 }]], stops: [],
+    };
+    expect(boundsForPoints(vehicleOverviewPoints([route], { lat: -33.3, lng: -70.8 })))
+      .toEqual({ minLat: -33.55, maxLat: -33.3, minLng: -70.8, maxLng: -70.6 });
+    expect(boundsForPoints(vehicleOverviewPoints([route], null)))
+      .toEqual({ minLat: -33.55, maxLat: -33.4, minLng: -70.75, maxLng: -70.6 });
+  });
+  it('no encuadra coordenadas ausentes o erroneas', () => {
+    expect(vehicleOverviewPoints([], null)).toEqual([]);
+    expect(vehicleOverviewPoints([], { lat: 0, lng: 0 })).toEqual([]);
   });
 });

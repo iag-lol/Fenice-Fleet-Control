@@ -2,18 +2,26 @@
 
 import { useQuery } from '@tanstack/react-query';
 import {
+  ArrowRight,
+  Check,
   CheckCircle2,
   Clock,
-  LogOut,
+  Crosshair,
   MapPin,
-  PackageSearch,
+  Navigation,
+  Package,
+  RefreshCw,
+  Route,
   Search,
+  ShieldCheck,
   Timer,
   Truck,
+  WifiOff,
+  XCircle,
 } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useEffect, useState, type FormEvent } from 'react';
-
+import { useCallback, useEffect, useState, type FormEvent } from 'react';
+import type { Map as MapLibreMap } from 'maplibre-gl';
 import { BrandMark } from '@/components/shell/brand';
 import { FleetMap } from '@/components/map/fleet-map';
 import { Button } from '@/components/ui/button';
@@ -21,426 +29,705 @@ import { Input } from '@/components/ui/input';
 import { ErrorBoundary } from '@/components/ui/error-boundary';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useAppHeight } from '@/hooks/use-app-height';
-import { formatDuration, formatElapsed, formatEta, formatSmartDateTime, formatTime } from '@/lib/format';
+import {
+  formatDuration,
+  formatElapsed,
+  formatEta,
+  formatSmartDateTime,
+  formatTime,
+} from '@/lib/format';
 import { cn } from '@/lib/cn';
-import { useMapStore } from '@/stores/map-store';
-import type { RouteGeometry } from '@/types/views';
 import type { TrackingSession } from '@/types/core';
 
-/** Id fijo: en esta pantalla nunca hay mas de un trazado que resaltar. */
-const TRAJECTORY_ROUTE_ID = 'tracking-trajectory';
-
-/**
- * Seguimiento publico de pedido.
- *
- * Sin autenticacion y sin el shell interno: es la unica superficie que ve un
- * cliente final de Fenice. Muestra exclusivamente su pedido, y nada del resto
- * de la operacion.
- */
-export function TrackingView({ presetReference }: { presetReference?: string } = {}) {
+const TRACKING_ROUTE = 'tracking-trajectory';
+export function TrackingView({
+  presetReference,
+}: { presetReference?: string } = {}) {
   useAppHeight();
   const router = useRouter();
   const searchParams = useSearchParams();
-
   const initialRef = presetReference ?? searchParams.get('ref') ?? '';
   const [reference, setReference] = useState(initialRef);
   const [submitted, setSubmitted] = useState(initialRef);
-  // Con un enlace directo por pedido, el formulario de busqueda solo estorba:
-  // el destinatario ya llego a lo que le interesa. Se puede revelar igual,
-  // por si quiere consultar otro numero.
   const [searchOpen, setSearchOpen] = useState(!presetReference);
-
+  const [map, setMap] = useState<MapLibreMap | null>(null);
+  const [following, setFollowing] = useState(false);
+  const [tick, setTick] = useState(() => Date.now());
   useEffect(() => {
     setReference(initialRef);
     setSubmitted(initialRef);
   }, [initialRef]);
-
+  useEffect(() => {
+    const update = () => setTick(Date.now());
+    const timer = setInterval(update, 10000);
+    document.addEventListener('visibilitychange', update);
+    window.addEventListener('online', update);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener('visibilitychange', update);
+      window.removeEventListener('online', update);
+    };
+  }, []);
   const { data, isFetching, isError, error, refetch } = useQuery({
     queryKey: ['tracking', submitted],
     enabled: submitted.trim().length >= 4,
-    // El cliente final espera ver el camion moverse: refresco frecuente.
-    refetchInterval: 20_000,
+    refetchInterval: 20000,
     retry: false,
-    queryFn: async (): Promise<TrackingSession> => {
-      const response = await fetch(`/api/seguimiento?ref=${encodeURIComponent(submitted)}`);
+    queryFn: async ({ signal }): Promise<TrackingSession> => {
+      const response = await fetch(
+        `/api/seguimiento?ref=${encodeURIComponent(submitted)}`,
+        { signal },
+      );
       if (!response.ok) {
-        const body = (await response.json().catch(() => null)) as { error?: string } | null;
-        throw new Error(body?.error ?? 'No encontramos un pedido con ese numero.');
+        const body = await response.json().catch(() => null);
+        throw new Error(
+          body?.error ?? 'No encontramos un pedido con ese número.',
+        );
       }
-      return (await response.json()) as TrackingSession;
+      return response.json();
     },
   });
-
-  const highlightRoute = useMapStore((s) => s.highlightRoute);
-  const hasTrajectory = (data?.trajectory?.length ?? 0) > 0;
+  const onMapReady = useCallback((ready: MapLibreMap) => setMap(ready), []);
   useEffect(() => {
-    // Aca nunca hay mas de un trazado que mostrar: siempre "resaltado", nunca
-    // el estilo de fondo que usa el mapa operativo para rutas no elegidas.
-    highlightRoute(hasTrajectory ? TRAJECTORY_ROUTE_ID : null);
-    return () => highlightRoute(null);
-  }, [hasTrajectory, highlightRoute]);
-
-  const onSubmit = (event: FormEvent): void => {
+    if (!map) return;
+    const manual = (event: { originalEvent?: unknown }) => {
+      if (event.originalEvent) setFollowing(false);
+    };
+    map.on('dragstart', manual);
+    map.on('zoomstart', manual);
+    return () => {
+      map.off('dragstart', manual);
+      map.off('zoomstart', manual);
+    };
+  }, [map]);
+  const age = data?.vehicle?.lastUpdateAt
+    ? Math.max(
+        0,
+        Math.round((tick - Date.parse(data.vehicle.lastUpdateAt)) / 1000),
+      )
+    : null;
+  const expiresAt = data?.vehicle?.positionExpiresAt
+    ? Date.parse(data.vehicle.positionExpiresAt)
+    : null;
+  const expired =
+    expiresAt !== null && Number.isFinite(expiresAt)
+      ? tick >= expiresAt
+      : age !== null && age >= 180;
+  const vehiclePosition = expired ? null : data?.vehicle?.position;
+  const freshUntil = data?.vehicle?.freshUntil
+    ? Date.parse(data.vehicle.freshUntil)
+    : null;
+  const late =
+    freshUntil !== null && Number.isFinite(freshUntil)
+      ? tick >= freshUntil
+      : age !== null && age >= 60;
+  useEffect(() => {
+    if (following && map && vehiclePosition)
+      map.easeTo({
+        center: [vehiclePosition.lng, vehiclePosition.lat],
+        duration: 800,
+      });
+  }, [map, following, vehiclePosition]);
+  const submit = (event: FormEvent) => {
     event.preventDefault();
     const value = reference.trim();
     if (value.length < 4) return;
     setSubmitted(value);
+    setFollowing(false);
     router.replace(`/seguimiento/${encodeURIComponent(value)}`);
   };
-
-  // Se apoya en `trackingAllowed`, que es la misma decision que tomo el
-  // backend: si la interfaz usara su propio criterio, podrian discrepar.
-  const delivered = data !== undefined && !data.trackingAllowed && data.status !== 'cancelada';
-
+  const cancelled = data?.status === 'cancelada';
+  const delivered = !!data && !data.trackingAllowed && !cancelled;
+  const atDestination = data?.status === 'en_cliente';
+  const inRoute =
+    !!data && ['en_ruta', 'proxima', 'en_cliente'].includes(data.status);
+  const delayed =
+    !vehiclePosition ||
+    data?.vehicle?.connection === 'stale' ||
+    late ||
+    isError;
+  const currentEta = delayed ? null : data?.eta;
+  const fit = () => {
+    if (!map || !data) return;
+    const points = [
+      ...(data.trajectory ?? []),
+      ...(vehiclePosition ? [vehiclePosition] : []),
+      ...(data.destination.coordinates ? [data.destination.coordinates] : []),
+    ];
+    if (!points.length) return;
+    map.fitBounds(
+      [
+        [
+          Math.min(...points.map((p) => p.lng)),
+          Math.min(...points.map((p) => p.lat)),
+        ],
+        [
+          Math.max(...points.map((p) => p.lng)),
+          Math.max(...points.map((p) => p.lat)),
+        ],
+      ],
+      { padding: 70, maxZoom: 15, duration: 600 },
+    );
+    setFollowing(false);
+  };
   return (
     <div className="min-h-app bg-surface-950">
       <header className="safe-top border-b border-line bg-surface-900">
-        <div className="mx-auto flex h-14 max-w-3xl items-center gap-2.5 px-4">
-          <BrandMark className="h-7 w-7" />
-          <div className="min-w-0">
-            <p className="truncate text-[13px] font-semibold text-ink">Seguimiento de pedido</p>
-            <p className="truncate text-2xs text-ink-faint">Fenice SpA</p>
+        <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6">
+          <div className="flex items-center gap-3">
+            <BrandMark className="h-8 w-8" />
+            <div>
+              <p className="text-sm font-semibold text-ink">
+                Fenice{' '}
+                <span className="font-normal text-ink-faint">
+                  · Seguimiento
+                </span>
+              </p>
+              <p className="text-[10px] text-ink-faint">
+                Tu entrega, a la vista
+              </p>
+            </div>
           </div>
+          <span className="hidden items-center gap-1.5 text-xs text-ink-faint sm:flex">
+            <ShieldCheck className="h-4 w-4" />
+            Información de tu pedido
+          </span>
         </div>
       </header>
-
-      <main className="safe-bottom mx-auto max-w-3xl px-4 py-6">
-        {searchOpen ? (
-          <form onSubmit={onSubmit} className="mb-6">
-            <label htmlFor="ref" className="mb-2 block text-sm font-medium text-ink">
-              Ingresa tu numero de pedido u orden de trabajo
-            </label>
-            <div className="flex gap-2">
-              <Input
-                id="ref"
-                value={reference}
-                onChange={(event) => setReference(event.target.value.toUpperCase())}
-                onClear={() => setReference('')}
-                placeholder="Ej: OT-2026-001582"
-                autoComplete="off"
-                spellCheck={false}
-                className="numeric"
-              />
-              <Button
-                type="submit"
-                variant="primary"
-                icon={<Search className="h-4 w-4" />}
-                loading={isFetching && submitted === reference.trim()}
-                disabled={reference.trim().length < 4}
-              >
-                <span className="hidden sm:inline">Buscar</span>
-              </Button>
-            </div>
-            <p className="mt-2 text-2xs text-ink-faint">
-              Puedes usar el numero de pedido o el numero de orden de trabajo que aparece en tu
-              documento de despacho.
+      <main className="safe-bottom mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8">
+        <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p className="text-[10px] font-semibold uppercase tracking-[.18em] text-brand-700">
+              Seguimiento de entrega
             </p>
-          </form>
-        ) : (
-          <div className="mb-6 flex items-center justify-between gap-3">
-            <div className="min-w-0">
-              <p className="truncate text-2xs uppercase tracking-wider text-ink-faint">
-                Pedido consultado
-              </p>
-              <p className="numeric truncate text-sm font-semibold text-ink">{submitted}</p>
-            </div>
+            <h1 className="mt-1 text-2xl font-semibold tracking-tight text-ink sm:text-3xl">
+              {submitted ? 'El camino de tu pedido' : '¿Dónde está tu pedido?'}
+            </h1>
+            <p className="mt-2 text-xs text-ink-muted">
+              Estado del despacho y ubicación del vehículo asignado.
+            </p>
+          </div>
+          {!searchOpen ? (
             <Button
-              type="button"
-              variant="ghost"
               size="sm"
+              variant="secondary"
               icon={<Search className="h-3.5 w-3.5" />}
               onClick={() => setSearchOpen(true)}
             >
               Buscar otro pedido
             </Button>
-          </div>
-        )}
-
+          ) : null}
+        </div>
+        {searchOpen ? (
+          <form
+            onSubmit={submit}
+            className="mb-6 max-w-xl rounded-xl border border-line bg-surface-900 p-4"
+          >
+            <label
+              htmlFor="tracking-reference"
+              className="mb-2 block text-xs font-medium text-ink"
+            >
+              Número de pedido u orden de trabajo
+            </label>
+            <div className="flex gap-2">
+              <Input
+                id="tracking-reference"
+                value={reference}
+                onChange={(e) => setReference(e.target.value.toUpperCase())}
+                placeholder="Ej. OT-2026-001582"
+                autoComplete="off"
+                spellCheck={false}
+              />
+              <Button
+                type="submit"
+                loading={isFetching}
+                disabled={reference.trim().length < 4}
+                icon={<Search className="h-4 w-4" />}
+              >
+                Buscar
+              </Button>
+            </div>
+            <p className="mt-2 text-[10px] text-ink-faint">
+              Usa el número de tu documento de despacho.
+            </p>
+          </form>
+        ) : null}
         {submitted.trim().length < 4 ? (
-          <div className="rounded-lg border border-line bg-surface-850 px-6 py-12 text-center">
-            <span className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-surface-800 text-ink-faint">
-              <PackageSearch className="h-6 w-6" />
-            </span>
-            <p className="text-sm font-medium text-ink">Consulta el estado de tu pedido</p>
-            <p className="mx-auto mt-1 max-w-sm text-xs leading-relaxed text-ink-faint">
-              Ingresa el numero que aparece en tu documento de despacho para ver el estado de la
-              entrega y la ubicacion del vehiculo en camino.
-            </p>
+          <div className="grid gap-6 rounded-2xl border border-line bg-surface-900 p-7 sm:grid-cols-2 sm:p-12">
+            <div>
+              <Package className="mb-5 h-10 w-10 text-brand-700" />
+              <h2 className="text-xl font-semibold text-ink">
+                Acompañamos tu entrega
+              </h2>
+              <p className="mt-3 max-w-sm text-sm leading-relaxed text-ink-muted">
+                Consulta el avance del pedido, la hora estimada de llegada y la
+                visita a tu domicilio.
+              </p>
+            </div>
+            <div className="space-y-4 self-center">
+              {[
+                [Package, 'Pedido preparado'],
+                [Truck, 'Vehículo en camino'],
+                [CheckCircle2, 'Entrega en tu domicilio'],
+              ].map(([Icon, label], i) => {
+                const StepIcon = Icon as typeof Package;
+                return (
+                  <div
+                    key={i}
+                    className="flex items-center gap-3 rounded-xl bg-surface-850 p-4"
+                  >
+                    <StepIcon className="h-5 w-5 text-ink-faint" />
+                    <p className="text-sm text-ink">{String(label)}</p>
+                    <ArrowRight className="ml-auto h-4 w-4 text-ink-faint" />
+                  </div>
+                );
+              })}
+            </div>
           </div>
-        ) : isError ? (
-          <div className="rounded-lg border border-status-warning/30 bg-status-warning/5 px-6 py-10 text-center">
-            <p className="text-sm font-medium text-ink">
-              {error instanceof Error ? error.message : 'No encontramos un pedido con ese numero.'}
+        ) : !data && isError ? (
+          <div
+            role="alert"
+            className="rounded-xl border border-amber-200 bg-amber-50 p-8 text-center"
+          >
+            <p className="font-medium text-ink">{(error as Error).message}</p>
+            <p className="mt-2 text-xs text-ink-muted">
+              Revisa la referencia o consulta a tu ejecutivo comercial.
             </p>
-            <p className="mx-auto mt-1 max-w-sm text-xs leading-relaxed text-ink-faint">
-              Revisa que el numero este completo y sin espacios. Si el problema persiste, contacta a
-              tu ejecutivo comercial.
-            </p>
-            <Button className="mt-4" size="sm" variant="secondary" onClick={() => void refetch()}>
+            <Button
+              className="mt-4"
+              variant="secondary"
+              onClick={() => void refetch()}
+            >
               Reintentar
             </Button>
           </div>
         ) : !data ? (
-          <div className="space-y-3">
-            <Skeleton className="h-32 w-full" />
-            <Skeleton className="h-64 w-full" />
+          <div className="grid gap-4 lg:grid-cols-[360px_1fr]">
+            <Skeleton className="h-[500px]" />
+            <Skeleton className="h-[580px]" />
           </div>
         ) : (
-          <div className="space-y-4">
-            {/* --- Estado principal --- */}
-            <section
-              className={cn(
-                'rounded-lg border p-5',
-                delivered
-                  ? 'border-status-active/30 bg-status-active/5'
-                  : 'border-brand-500/30 bg-brand-500/5',
-              )}
-            >
-              <div className="flex items-start gap-3">
-                <span
-                  className={cn(
-                    'flex h-10 w-10 shrink-0 items-center justify-center rounded-full',
-                    delivered
-                      ? 'bg-status-active/20 text-status-active'
-                      : 'bg-brand-500/20 text-brand-700',
-                  )}
+          <>
+            {data.simulated ? (
+              <p className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-xs text-amber-800">
+                Demostración: este pedido y sus posiciones son datos de prueba.
+              </p>
+            ) : null}
+            {isError ? (
+              <p
+                role="alert"
+                className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-xs text-amber-800"
+              >
+                No pudimos actualizar el pedido. Se conserva la última
+                información recibida.
+                <button
+                  className="ml-2 underline"
+                  onClick={() => void refetch()}
                 >
-                  {delivered ? <CheckCircle2 className="h-5 w-5" /> : <Truck className="h-5 w-5" />}
-                </span>
-
-                <div className="min-w-0 flex-1">
-                  <p className="text-base font-semibold text-ink">
-                    {delivered ? 'Tu pedido fue entregado.' : `Tu pedido esta ${data.statusLabel.toLowerCase()}.`}
+                  Reintentar
+                </button>
+              </p>
+            ) : null}
+            <section className="mb-4 flex items-center justify-between gap-3 rounded-xl bg-[#102b46] p-4 text-white lg:hidden">
+              <div>
+                <p className="text-[10px] text-slate-300">{data.statusLabel}</p>
+                <p className="numeric mt-1 text-xs font-medium">
+                  {data.orderNumber}
+                </p>
+                {currentEta?.arrivalAt ? (
+                  <p className="mt-1 text-[10px] text-slate-300">
+                    Llegada aprox. {formatTime(currentEta.arrivalAt)}
                   </p>
-
-                  {!delivered && data.eta?.minutes !== null && data.eta !== null ? (
-                    <p className="mt-1 text-sm text-ink-muted">
-                      Entrega estimada:{' '}
-                      <span className="numeric font-semibold text-brand-700">
-                        {formatEta(data.eta.minutes)}
-                      </span>
-                    </p>
-                  ) : null}
-
-                  {delivered && data.deliveredAt ? (
-                    <p className="mt-1 text-sm text-ink-muted">
-                      Entregado el {formatSmartDateTime(data.deliveredAt)}
-                    </p>
-                  ) : null}
-
-                  <div className="mt-3 grid grid-cols-2 gap-3 border-t border-line/60 pt-3">
-                    <div>
-                      <p className="text-2xs uppercase tracking-wider text-ink-faint">
-                        Numero de pedido
-                      </p>
-                      <p className="numeric mt-0.5 text-[13px] text-ink">{data.orderNumber}</p>
-                    </div>
-                    <div>
-                      <p className="text-2xs uppercase tracking-wider text-ink-faint">
-                        Orden de trabajo
-                      </p>
-                      <p className="numeric mt-0.5 text-[13px] text-ink">{data.workOrderNumber}</p>
-                    </div>
-                  </div>
-                </div>
+                ) : null}
               </div>
-
-              {/* Barra de progreso de la entrega. */}
-              <div className="mt-4">
-                <div className="h-1.5 overflow-hidden rounded-full bg-surface-750">
-                  <div
-                    className={cn(
-                      'h-full rounded-full transition-[width] duration-700',
-                      delivered ? 'bg-status-active' : 'bg-brand-400',
-                    )}
-                    style={{ width: `${Math.round(data.progress * 100)}%` }}
-                  />
-                </div>
-                <div className="mt-1.5 flex justify-between text-2xs text-ink-faint">
-                  <span>En preparacion</span>
-                  <span>En camino</span>
-                  <span>Entregado</span>
-                </div>
-              </div>
-            </section>
-
-            {/* --- Destino --- */}
-            <section className="rounded-lg border border-line bg-surface-850 p-4">
-              <p className="text-2xs uppercase tracking-wider text-ink-faint">Direccion de entrega</p>
-              <p className="mt-1 flex items-start gap-2 text-[13px] text-ink">
-                <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-ink-faint" />
-                <span>
-                  {data.destination.addressLine}, {data.destination.communeName}
-                </span>
+              <p className="text-2xl font-semibold">
+                {delivered
+                  ? 'Entregado'
+                  : cancelled
+                    ? 'Cancelado'
+                    : atDestination
+                      ? 'En destino'
+                      : currentEta?.minutes != null
+                        ? formatEta(currentEta.minutes)
+                        : inRoute
+                          ? 'En camino'
+                          : 'Preparando'}
               </p>
             </section>
-
-            {/* --- Visita al domicilio: llego, cuanto lleva, si ya se fue --- */}
-            {data.arrival ? (
-              <section className="rounded-lg border border-line bg-surface-850 p-4">
-                <p className="text-2xs uppercase tracking-wider text-ink-faint">
-                  {data.arrival.departedAt ? 'Visita al domicilio' : 'El vehiculo esta en el domicilio'}
-                </p>
-                <div className="mt-1 flex items-start gap-2 text-[13px] text-ink">
-                  {data.arrival.departedAt ? (
-                    <LogOut className="mt-0.5 h-4 w-4 shrink-0 text-ink-faint" />
-                  ) : (
-                    <Timer className="mt-0.5 h-4 w-4 shrink-0 text-brand-700" />
-                  )}
-                  <span>
-                    Llego a las <span className="numeric font-medium">{formatTime(data.arrival.arrivedAt)}</span>
-                    {data.arrival.departedAt ? (
-                      <>
-                        {' '}y salio a las{' '}
-                        <span className="numeric font-medium">{formatTime(data.arrival.departedAt)}</span>
-                      </>
-                    ) : null}
-                    {data.arrival.dwellMinutes !== null ? (
-                      <>
-                        {' '}
-                        ·{' '}
-                        <span className="numeric font-medium">
-                          {formatDuration(data.arrival.dwellMinutes * 60)}
-                        </span>{' '}
-                        {data.arrival.departedAt ? 'en el lugar' : 'dentro del domicilio'}
-                      </>
-                    ) : null}
-                    .
-                  </span>
-                </div>
-              </section>
-            ) : null}
-
-            {/* --- Mapa: solo mientras el pedido este en curso --- */}
-            {data.trackingAllowed && data.vehicle?.position && data.destination.coordinates ? (
-              <section className="overflow-hidden rounded-lg border border-line bg-surface-850">
-                <div className="flex items-center justify-between gap-3 border-b border-line px-4 py-3">
-                  <div className="min-w-0">
-                    <p className="truncate text-[13px] font-medium text-ink">
-                      Vehiculo {data.vehicle.label}
-                    </p>
-                    <p className="truncate text-2xs text-ink-faint">
-                      {data.vehicle.moving ? 'En movimiento' : 'Detenido'} ·{' '}
-                      {formatElapsed(
-                        data.vehicle.lastUpdateAt
-                          ? Math.round(
-                              (Date.now() - new Date(data.vehicle.lastUpdateAt).getTime()) / 1000,
-                            )
-                          : null,
+            <div className="grid items-start gap-5 lg:grid-cols-[350px_minmax(0,1fr)]">
+              <aside className="order-2 space-y-4 lg:order-1">
+                <section className="overflow-hidden rounded-xl border border-line bg-surface-900 shadow-card">
+                  <div className="hidden bg-[#102b46] p-5 text-white lg:block">
+                    <div className="mb-4 flex items-center gap-2 text-xs text-slate-300">
+                      {cancelled ? (
+                        <XCircle className="h-4 w-4" />
+                      ) : delivered ? (
+                        <CheckCircle2 className="h-4 w-4 text-emerald-300" />
+                      ) : (
+                        <Truck className="h-4 w-4 text-cyan-200" />
                       )}
+                      {data.statusLabel}
+                    </div>
+                    <p className="text-[10px] uppercase tracking-wider text-slate-300">
+                      {delivered
+                        ? 'Entrega finalizada'
+                        : cancelled
+                          ? 'Pedido cancelado'
+                          : atDestination
+                            ? 'Vehículo en el domicilio'
+                            : 'Llegada estimada'}
                     </p>
+                    <p className="mt-1 text-3xl font-semibold tracking-tight">
+                      {delivered
+                        ? 'Entregado'
+                        : cancelled
+                          ? 'Cancelado'
+                          : atDestination
+                            ? 'En destino'
+                            : currentEta?.minutes != null
+                              ? formatEta(currentEta.minutes)
+                              : inRoute
+                                ? 'En actualización'
+                                : 'En preparación'}
+                    </p>
+                    {currentEta?.arrivalAt && !delivered ? (
+                      <p className="mt-2 text-xs text-slate-300">
+                        Hora aproximada: {formatTime(currentEta.arrivalAt)}
+                      </p>
+                    ) : null}
+                    {delivered && data.deliveredAt ? (
+                      <p className="mt-2 text-xs text-slate-300">
+                        {formatSmartDateTime(data.deliveredAt)}
+                      </p>
+                    ) : null}
                   </div>
-                  <Clock className="h-4 w-4 shrink-0 text-ink-faint" />
-                </div>
-
-                <div className="relative h-[300px] sm:h-[380px]">
-                  <ErrorBoundary section="el mapa de seguimiento">
-                    <FleetMap
-                      className="absolute inset-0"
-                      // Solo el vehiculo asignado y el destino: ninguna otra
-                      // informacion de la operacion se comparte con el cliente.
-                      layerOverride={{
-                        camiones: true,
-                        clientes: true,
-                        rutas: data.trajectory !== null,
-                        geocercas: false,
-                        calor: false,
-                        pedidos: false,
-                        alertas: false,
-                        comunas: false,
-                      }}
-                      vehicles={[
-                        {
-                          vehicleId: 'tracking-vehicle',
-                          plate: data.vehicle.label,
-                          fleetCode: '',
-                          status: data.vehicle.moving ? 'moving' : 'stopped',
-                          position: {
-                            vehicleId: 'tracking-vehicle' as never,
-                            deviceId: 'tracking-device' as never,
-                            timestamp: data.vehicle.lastUpdateAt ?? data.lastUpdateAt,
-                            lat: data.vehicle.position.lat,
-                            lng: data.vehicle.position.lng,
-                            speed: data.vehicle.moving ? 30 : 0,
-                            heading: data.vehicle.heading,
-                            ignition: 'on',
-                            valid: true,
-                          },
-                        },
-                      ]}
-                      clients={[
-                        {
-                          clientId: 'tracking-destination',
-                          code: '',
-                          name: 'Direccion de entrega',
-                          lat: data.destination.coordinates.lat,
-                          lng: data.destination.coordinates.lng,
-                          communeCode: '',
-                          communeName: data.destination.communeName,
-                          addressLine: data.destination.addressLine,
-                          status: 'active',
-                          daysSincePurchase: null,
-                          daysSinceVisit: null,
-                          hasPendingOrder: true,
-                          visitedToday: false,
-                          lifetimeValue: 0,
-                          segment: 'estacion_servicio',
-                          salesRep: null,
-                        },
-                      ]}
-                      routes={
-                        data.trajectory
-                          ? [
-                              {
-                                routeId: TRAJECTORY_ROUTE_ID,
-                                code: '',
-                                name: 'Trayecto hacia tu domicilio',
-                                vehicleId: 'tracking-vehicle',
-                                vehiclePlate: data.vehicle.label,
-                                status: 'en_curso',
-                                // Solo el tramo hasta este domicilio: el resto de la
-                                // ruta no se comparte con el cliente final.
-                                plannedPath: data.trajectory,
-                                executedPath: [],
-                                stops: [],
-                              } satisfies RouteGeometry,
-                            ]
-                          : []
-                      }
-                      geofences={[]}
-                      alerts={[]}
-                      workOrders={[]}
-                      communes={[]}
-                      heatmapPoints={[]}
+                  <div className="p-5">
+                    <p className="text-[10px] uppercase tracking-wider text-ink-faint">
+                      Pedido
+                    </p>
+                    <p className="numeric mt-1 text-sm font-semibold text-ink">
+                      {data.orderNumber}
+                    </p>
+                    <p className="mt-1 text-[10px] text-ink-faint">
+                      Orden {data.workOrderNumber}
+                    </p>
+                    <ol className="mt-5 space-y-5">
+                      {[
+                        ['Preparación', 'Tu pedido está registrado'],
+                        ['En camino', 'El vehículo va hacia tu domicilio'],
+                        [
+                          'Entrega',
+                          delivered
+                            ? 'Entrega registrada'
+                            : 'Pendiente de llegada',
+                        ],
+                      ].map(([title, detail], index) => {
+                        const done =
+                          !cancelled && (delivered || (index === 0 && inRoute));
+                        const active =
+                          !cancelled &&
+                          !delivered &&
+                          (index === 0
+                            ? !inRoute
+                            : index === 1
+                              ? inRoute
+                              : atDestination);
+                        return (
+                          <li key={title} className="flex items-center gap-3">
+                            <span
+                              className={cn(
+                                'flex h-7 w-7 shrink-0 items-center justify-center rounded-full border text-xs',
+                                done
+                                  ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                                  : active
+                                    ? 'border-cyan-200 bg-cyan-50 text-cyan-700'
+                                    : 'border-line text-ink-faint',
+                              )}
+                            >
+                              {done ? (
+                                <Check className="h-3.5 w-3.5" />
+                              ) : (
+                                index + 1
+                              )}
+                            </span>
+                            <div>
+                              <p className="text-xs font-medium text-ink">
+                                {title}
+                              </p>
+                              <p className="mt-0.5 text-[10px] text-ink-faint">
+                                {detail}
+                              </p>
+                            </div>
+                          </li>
+                        );
+                      })}
+                    </ol>
+                  </div>
+                </section>
+                <section className="rounded-xl border border-line bg-surface-900 p-5">
+                  <p className="flex items-center gap-2 text-xs font-semibold text-ink">
+                    <MapPin className="h-4 w-4 text-brand-700" />
+                    Tu dirección de entrega
+                  </p>
+                  <p className="mt-3 text-sm leading-relaxed text-ink-muted">
+                    {data.destination.addressLine}
+                  </p>
+                  <p className="mt-1 text-xs text-ink-faint">
+                    {data.destination.communeName}
+                  </p>
+                </section>
+                {data.arrival ? (
+                  <section className="rounded-xl border border-emerald-200 bg-emerald-50 p-5">
+                    <p className="flex items-center gap-2 text-xs font-semibold text-emerald-800">
+                      <Timer className="h-4 w-4" />
+                      Visita al domicilio
+                    </p>
+                    <p className="mt-2 text-xs text-emerald-800">
+                      Llegó a las {formatTime(data.arrival.arrivedAt)}
+                      {data.arrival.departedAt
+                        ? ` · salió a las ${formatTime(data.arrival.departedAt)}`
+                        : ''}
+                    </p>
+                    {data.arrival.dwellMinutes != null ? (
+                      <p className="mt-1 text-xs text-emerald-700">
+                        {formatDuration(data.arrival.dwellMinutes * 60)} en el
+                        lugar
+                      </p>
+                    ) : null}
+                  </section>
+                ) : null}
+              </aside>
+              <div className="order-1 space-y-3 lg:order-2">
+                <section className="overflow-hidden rounded-xl border border-line bg-surface-900 shadow-card">
+                  <div className="flex items-center justify-between gap-2 border-b border-line px-4 py-3">
+                    <div>
+                      <p className="flex items-center gap-2 text-sm font-semibold text-ink">
+                        <Navigation className="h-4 w-4 text-brand-700" />
+                        {delivered
+                          ? 'Entrega finalizada'
+                          : cancelled
+                            ? 'Seguimiento finalizado'
+                            : 'Mapa de tu entrega'}
+                      </p>
+                      <p className="mt-1 text-[10px] text-ink-faint">
+                        {data.vehicle
+                          ? `Vehículo ${data.vehicle.label}`
+                          : 'Destino del pedido'}
+                      </p>
+                    </div>
+                    {!delivered && !cancelled && data.vehicle ? (
+                      <span
+                        className={cn(
+                          'flex items-center gap-1.5 rounded-full px-2 py-1 text-[10px]',
+                          delayed
+                            ? 'bg-amber-50 text-amber-700'
+                            : 'bg-emerald-50 text-emerald-700',
+                        )}
+                      >
+                        <span className="h-1.5 w-1.5 rounded-full bg-current" />
+                        {delayed
+                          ? 'Actualizando señal'
+                          : data.vehicle.moving && !delayed
+                            ? 'En movimiento'
+                            : 'Detenido'}
+                      </span>
+                    ) : null}
+                  </div>
+                  {delivered || cancelled ? (
+                    <div className="flex min-h-[420px] flex-col items-center justify-center bg-surface-850 px-8 text-center">
+                      {delivered ? (
+                        <CheckCircle2 className="mb-5 h-14 w-14 text-emerald-600" />
+                      ) : (
+                        <XCircle className="mb-5 h-14 w-14 text-ink-faint" />
+                      )}
+                      <h2 className="text-xl font-semibold text-ink">
+                        {delivered
+                          ? 'Tu entrega ya está registrada'
+                          : 'Este pedido está cancelado'}
+                      </h2>
+                      <p className="mt-3 max-w-sm text-sm leading-relaxed text-ink-muted">
+                        {delivered
+                          ? 'El seguimiento del vehículo terminó al entregar tu pedido.'
+                          : 'Consulta a tu ejecutivo comercial para conocer los siguientes pasos.'}
+                      </p>
+                      <p className="mt-5 flex items-center gap-1.5 text-xs text-ink-faint">
+                        <ShieldCheck className="h-4 w-4" />
+                        La ubicación del vehículo ya no se comparte.
+                      </p>
+                    </div>
+                  ) : data.destination.coordinates ? (
+                    <div className="relative h-[380px] sm:h-[560px]">
+                      <ErrorBoundary section="el mapa de seguimiento">
+                        <FleetMap
+                          key={submitted}
+                          autoFit
+                          autoFitKey={`${submitted}:${vehiclePosition ? 'vehicle' : 'destination'}`}
+                          isolated
+                          highlightedRoute={TRACKING_ROUTE}
+                          onMapReady={onMapReady}
+                          className="absolute inset-0"
+                          vehicles={
+                            vehiclePosition && data.vehicle
+                              ? [
+                                  {
+                                    vehicleId: 'tracking-vehicle',
+                                    plate: data.vehicle.label,
+                                    fleetCode: '',
+                                    status: delayed
+                                      ? 'offline'
+                                      : data.vehicle.moving
+                                        ? 'moving'
+                                        : 'stopped',
+                                    position: {
+                                      vehicleId: 'tracking-vehicle' as never,
+                                      deviceId: 'tracking-device' as never,
+                                      timestamp:
+                                        data.vehicle.lastUpdateAt ??
+                                        data.lastUpdateAt,
+                                      lat: vehiclePosition.lat,
+                                      lng: vehiclePosition.lng,
+                                      speed: data.vehicle.speedKmh ?? 0,
+                                      heading: data.vehicle.heading,
+                                      ignition: 'unknown',
+                                      valid: true,
+                                    },
+                                  },
+                                ]
+                              : []
+                          }
+                          clients={[
+                            {
+                              clientId: 'tracking-destination',
+                              code: '',
+                              name: 'Tu entrega',
+                              lat: data.destination.coordinates.lat,
+                              lng: data.destination.coordinates.lng,
+                              communeCode: '',
+                              communeName: data.destination.communeName,
+                              addressLine: data.destination.addressLine,
+                              status: 'active',
+                              daysSincePurchase: null,
+                              daysSinceVisit: null,
+                              hasPendingOrder: true,
+                              visitedToday: false,
+                              lifetimeValue: 0,
+                              segment: 'estacion_servicio',
+                              salesRep: null,
+                            },
+                          ]}
+                          routes={
+                            data.trajectory
+                              ? [
+                                  {
+                                    routeId: TRACKING_ROUTE,
+                                    code: '',
+                                    name: 'Trayecto hacia tu domicilio',
+                                    vehicleId: 'tracking-vehicle',
+                                    vehiclePlate: data.vehicle?.label ?? null,
+                                    status: 'en_curso',
+                                    plannedPath: data.trajectory,
+                                    executedPath: [],
+                                    stops: [],
+                                  },
+                                ]
+                              : []
+                          }
+                          geofences={[]}
+                          alerts={[]}
+                          workOrders={[]}
+                          communes={[]}
+                          heatmapPoints={[]}
+                          layerOverride={{
+                            camiones: true,
+                            clientes: true,
+                            rutas: true,
+                            geocercas: false,
+                            calor: false,
+                            pedidos: false,
+                            alertas: false,
+                            comunas: false,
+                          }}
+                        />
+                      </ErrorBoundary>
+                      <div className="absolute left-3 top-3 flex gap-2">
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          icon={<Route className="h-3.5 w-3.5" />}
+                          onClick={fit}
+                        >
+                          Ver trayecto
+                        </Button>
+                        {vehiclePosition ? (
+                          <Button
+                            size="sm"
+                            variant={following ? 'primary' : 'secondary'}
+                            icon={<Crosshair className="h-3.5 w-3.5" />}
+                            onClick={() => setFollowing(!following)}
+                          >
+                            {following ? 'Siguiendo' : 'Seguir vehículo'}
+                          </Button>
+                        ) : null}
+                      </div>
+                      {data.vehicle && delayed ? (
+                        <div className="absolute bottom-9 left-3 right-3 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50/95 px-3 py-2 text-xs text-amber-800">
+                          <WifiOff className="h-4 w-4 shrink-0" />
+                          <p>
+                            Esperamos una nueva posición del GPS.
+                            {age !== null
+                              ? ` Última muestra: ${formatElapsed(age)}.`
+                              : ''}
+                          </p>
+                        </div>
+                      ) : null}
+                    </div>
+                  ) : (
+                    <div className="flex h-[380px] flex-col items-center justify-center p-8 text-center">
+                      <MapPin className="mb-3 h-9 w-9 text-ink-faint" />
+                      <p className="text-sm text-ink-muted">
+                        La dirección todavía no tiene coordenadas para mostrar
+                        el mapa.
+                      </p>
+                    </div>
+                  )}
+                  {!delivered && !cancelled ? (
+                    <div className="flex flex-wrap items-center justify-between gap-2 border-t border-line px-4 py-3 text-[10px] text-ink-faint">
+                      <span className="flex items-center gap-2">
+                        <span className="w-5 border-t-2 border-dashed border-[#173f67]" />
+                        {data.trajectory
+                          ? 'Trayecto planificado hacia tu domicilio'
+                          : 'Destino de tu entrega'}
+                      </span>
+                      <span className="flex items-center gap-1.5">
+                        <Clock className="h-3 w-3" />
+                        {age === null
+                          ? 'Esperando señal GPS'
+                          : `GPS: ${formatElapsed(age)}`}
+                      </span>
+                    </div>
+                  ) : null}
+                </section>
+                <div className="flex flex-wrap items-center justify-between gap-2 px-1 text-[10px] text-ink-faint">
+                  <p className="flex items-center gap-1.5">
+                    <ShieldCheck className="h-3.5 w-3.5" />
+                    Solo mostramos tu pedido y el trayecto hacia tu domicilio.
+                  </p>
+                  <button
+                    onClick={() => void refetch()}
+                    disabled={isFetching}
+                    className="flex items-center gap-1.5 hover:text-ink"
+                  >
+                    <RefreshCw
+                      className={cn('h-3 w-3', isFetching && 'animate-spin')}
                     />
-                  </ErrorBoundary>
+                    {isFetching
+                      ? 'Actualizando'
+                      : `Actualizado ${formatTime(data.lastUpdateAt)}`}
+                  </button>
                 </div>
-              </section>
-            ) : delivered ? (
-              <section className="rounded-lg border border-status-active/25 bg-status-active/5 px-4 py-6 text-center">
-                <p className="text-[13px] font-medium text-ink">
-                  El seguimiento finalizo con la entrega.
-                </p>
-                <p className="mx-auto mt-1 max-w-sm text-xs leading-relaxed text-ink-faint">
-                  Por privacidad dejamos de compartir la ubicacion del vehiculo: el camion
-                  continua su ruta hacia otros clientes.
-                </p>
-              </section>
-            ) : (
-              <section className="rounded-lg border border-line bg-surface-850 px-4 py-6 text-center">
-                <p className="text-[13px] text-ink">
-                  Tu pedido aun no ha sido despachado a un vehiculo.
-                </p>
-                <p className="mt-1 text-xs text-ink-faint">
-                  Cuando salga a ruta podras ver aqui la ubicacion del camion en tiempo real.
-                </p>
-              </section>
-            )}
-
-            <p className="text-center text-2xs text-ink-faint">
-              Ultima actualizacion: {formatSmartDateTime(data.lastUpdateAt)}
-            </p>
-          </div>
+              </div>
+            </div>
+          </>
         )}
       </main>
     </div>

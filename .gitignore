@@ -3,6 +3,7 @@ node_modules/
 
 # Build de Next
 .next/
+.next-review/
 out/
 *.tsbuildinfo
 

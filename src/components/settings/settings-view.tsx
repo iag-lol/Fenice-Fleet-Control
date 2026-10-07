@@ -21,6 +21,7 @@ import { Card, CardBody, CardHeader } from '@/components/ui/card';
 import { NumberField, Select, Toggle } from '@/components/ui/input';
 import { QueryError } from '@/components/ui/query-state';
 import { SkeletonRows } from '@/components/ui/skeleton';
+import { TridTrackingIntegrationCard } from '@/components/settings/tridtracking-integration-card';
 import { TraccarIntegrationCard } from '@/components/settings/traccar-integration-card';
 import {
   GEOFENCE_RADIUS_PRESETS,
@@ -523,7 +524,8 @@ export function SettingsView() {
           </CardBody>
         </Card>
 
-        <TraccarIntegrationCard />
+        <TridTrackingIntegrationCard />
+        {data.gps.provider === 'traccar' || data.gps.provider === 'mock' ? <TraccarIntegrationCard /> : null}
 
         {/* --- Estado del sistema --- */}
         <Card className="lg:col-span-2">
@@ -537,26 +539,31 @@ export function SettingsView() {
               title="Telemetria GPS"
               value={data.gps.label}
               simulated={data.gps.simulated}
+              statusLabel={data.gps.provider === 'unavailable' ? 'Sin conexion' : data.gps.simulated ? 'Demo' : 'Configurado'}
+              unavailable={data.gps.provider === 'unavailable'}
               detail={
                 data.gps.simulated
-                  ? 'Simulador integrado. Activa el servidor real con GPS_PROVIDER=traccar y las variables TRACCAR_*.'
-                  : `Conectado por ${data.gps.transport}.`
+                  ? 'Simulador integrado. Activa 3DTracking o Traccar desde la configuracion del servidor.'
+                  : data.gps.provider === 'unavailable' ? 'Proveedor sin conexion. Usa la prueba GPS para revisar la configuracion.' : `Consulta mediante ${data.gps.transport}.`
               }
             />
             <IntegrationTile
               title="Fuente operacional"
               value={data.operations.label}
               simulated={data.operations.simulated}
+              statusLabel={data.operations.provider === 'mock' && !data.operations.simulated ? 'Sin fuente' : data.operations.simulated ? 'Demo' : 'Configurado'}
+              unavailable={data.operations.provider === 'mock' && !data.operations.simulated}
               detail={
                 data.operations.simulated
                   ? 'Dataset de demostracion. Conecta la base de Fenice con OPERATIONS_PROVIDER=external y credenciales de solo lectura.'
-                  : 'Conexion de solo lectura activa.'
+                  : data.operations.provider === 'mock' ? 'Conecta la fuente de operaciones para recibir clientes y pedidos.' : 'Fuente de operaciones configurada para solo lectura.'
               }
             />
             <IntegrationTile
               title="Calculo de ETA"
               value={data.routingProvider === 'estimated' ? 'Estimacion interna' : data.routingProvider}
               simulated={data.routingProvider === 'estimated'}
+              statusLabel={data.routingProvider === 'estimated' ? 'Estimacion' : 'Configurado'}
               detail={
                 data.routingProvider === 'estimated'
                   ? 'Estimacion propia sobre el corredor planificado. Configura ROUTING_PROVIDER para usar un proveedor de ruteo real.'
@@ -567,6 +574,7 @@ export function SettingsView() {
               title="Geocodificacion"
               value={data.geocodingProvider === 'none' ? 'Desactivada' : data.geocodingProvider}
               simulated={data.geocodingProvider === 'none'}
+              statusLabel={data.geocodingProvider === 'none' ? 'Desactivado' : 'Configurado'}
               detail={
                 data.geocodingProvider === 'none'
                   ? 'Sin proveedor configurado. Las direcciones sin coordenadas se reportan como alerta operacional.'
@@ -579,7 +587,7 @@ export function SettingsView() {
             <p className="text-2xs leading-relaxed text-ink-faint">
               La configuracion se aplica de inmediato a todos los motores de reglas y se mantiene
               mientras el servidor este en ejecucion. La persistencia definitiva se habilita al
-              conectar la base interna de la plataforma (variable <code>DATABASE_URL</code>).
+              configurar Supabase para la base interna de la plataforma.
               Autenticacion: {data.authEnabled ? 'activada' : 'desactivada (AUTH_ENABLED=false)'}.
             </p>
           </CardBody>
@@ -594,18 +602,22 @@ function IntegrationTile({
   value,
   simulated,
   detail,
+  statusLabel,
+  unavailable = false,
 }: {
   title: string;
   value: string;
   simulated: boolean;
   detail: string;
+  statusLabel?: string;
+  unavailable?: boolean;
 }) {
   return (
     <div className="rounded-md border border-line bg-surface-900 p-3">
       <div className="flex items-start justify-between gap-2">
         <p className="text-2xs uppercase tracking-wider text-ink-faint">{title}</p>
-        <Badge tone={simulated ? 'warning' : 'active'} dot>
-          {simulated ? 'Demo' : 'Conectado'}
+        <Badge tone={unavailable || simulated ? 'warning' : 'active'} dot>
+          {statusLabel ?? (simulated ? 'Demo' : 'Configurado')}
         </Badge>
       </div>
       <p className="mt-1.5 text-[13px] font-medium capitalize text-ink">{value}</p>

@@ -75,6 +75,7 @@ export function withPositionArchive(provider: GpsProvider, archive: PositionArch
   };
   return {
     info: provider.info,
+    healthCheck: provider.healthCheck?.bind(provider),
     getVehicles: () => provider.getVehicles(),
     getDeviceStatus: (id) => provider.getDeviceStatus(id),
     getVehicleEvents: (query) => provider.getVehicleEvents(query),

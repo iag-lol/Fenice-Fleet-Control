@@ -59,7 +59,9 @@ export function ConnectGpsDialog({ open, onClose, vehicleId, vehicleLabel }: Con
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ identifier, serverUrl: serverUrl || undefined }),
       });
-      return (await response.json()) as TraccarConnectionTest;
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.error ?? 'No fue posible probar la conexion GPS.');
+      return body as TraccarConnectionTest;
     },
     onSuccess: setTestResult,
   });
@@ -99,7 +101,7 @@ export function ConnectGpsDialog({ open, onClose, vehicleId, vehicleLabel }: Con
   });
 
   const busy = test.isPending || save.isPending || disconnect.isPending;
-  const canSave = identifier.trim().length > 0 && testResult?.deviceFound === true;
+  const canSave = identifier.trim().length > 0 && testResult?.ok === true;
 
   return (
     <Sheet open={open} onClose={onClose} title="Conectar GPS" description={vehicleLabel}>
@@ -125,7 +127,7 @@ export function ConnectGpsDialog({ open, onClose, vehicleId, vehicleLabel }: Con
               setIdentifier(e.target.value);
               setTestResult(null);
             }}
-            placeholder="Ej. 123456789"
+            placeholder="IMEI de 15 digitos o identificador del celular"
             disabled={busy}
           />
           <p className="mt-1 text-2xs text-ink-faint">
@@ -160,6 +162,7 @@ export function ConnectGpsDialog({ open, onClose, vehicleId, vehicleLabel }: Con
         </Button>
 
         {testResult ? <ConnectionTestSummary result={testResult} /> : null}
+        {test.isError ? <p className="text-xs text-status-dormant">{test.error.message}</p> : null}
 
         <div className="flex gap-2 border-t border-line pt-4">
           {data?.device ? (
@@ -210,8 +213,8 @@ function ConnectionTestSummary({ result }: { result: TraccarConnectionTest }) {
           <span className={row.ok ? 'text-ink' : 'text-ink-faint'}>{row.label}</span>
         </div>
       ))}
-      <p className="text-xs text-ink-muted">Para conservar recorridos durante cortes de red, activa el almacenamiento sin conexión del equipo. En Traccar Client permite ubicación en segundo plano y revisa que el ahorro de batería no detenga el servicio.</p>
-      <p className={`pt-1 text-xs ${result.ok ? 'text-status-active' : 'text-status-warning'}`}>
+      <p className="text-xs text-ink-muted">En el FMC130 verifica SIM y APN, servidor y puerto Teltonika, y frecuencia de envío. Prueba que los registros pendientes se recuperen al volver la cobertura. En un celular, permite ubicación en segundo plano.</p>
+      <p className={`pt-1 text-xs ${result.ok && result.hasPosition ? 'text-status-active' : 'text-status-warning'}`}>
         {result.message}
       </p>
       {result.ok ? (

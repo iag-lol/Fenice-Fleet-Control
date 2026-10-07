@@ -75,7 +75,11 @@ export class TraccarClient {
       );
     }
 
-    return (await response.json()) as T;
+    try {
+      return (await response.json()) as T;
+    } catch {
+      throw new TraccarRequestError('server', 'El servidor Traccar no devolvio una respuesta JSON valida.');
+    }
   }
 
   async getDevices(): Promise<TraccarDevice[]> {
@@ -85,11 +89,14 @@ export class TraccarClient {
   /** Un dispositivo por su `uniqueId` (el "Device Identifier" de Traccar Client), o `null` si no existe. */
   async getDeviceByUniqueId(uniqueId: string): Promise<TraccarDevice | null> {
     const devices = await this.request<TraccarDevice[]>('/devices', { uniqueId });
-    return devices.find((d) => d.uniqueId === uniqueId) ?? devices[0] ?? null;
+    return devices.find((d) => d.uniqueId === uniqueId) ?? null;
   }
 
   async getPositions(deviceId?: number): Promise<TraccarPosition[]> {
-    return this.request<TraccarPosition[]>('/positions', deviceId ? { deviceId: String(deviceId) } : undefined);
+    // deviceId solo es valido con from/to (historial). Para posiciones
+    // actuales, Traccar devuelve las ultimas conocidas de la cuenta.
+    const positions = await this.request<TraccarPosition[]>('/positions');
+    return deviceId === undefined ? positions : positions.filter((p) => p.deviceId === deviceId);
   }
 }
 

@@ -12,8 +12,8 @@ import { useMapStore } from '@/stores/map-store';
  * aviso, un operador que no recuerda haber seleccionado nada creeria que se
  * quedo sin datos.
  *
- * Por eso el aviso dice tres cosas: en que esta enfocado, que puede apagar
- * el aislamiento sin perder la seleccion, y como quitar el foco del todo.
+ * La ficha siempre aisla su vehiculo. Para rutas y comunas se permite
+ * alternar el aislamiento; quitar el foco vuelve a la operacion general.
  */
 
 export interface FocusBannerProps {
@@ -62,15 +62,7 @@ export function FocusBanner({
 
   if (focos.length === 0) return null;
 
-  // Cuando lo unico enfocado es UN vehiculo (el caso mas frecuente), el
-  // rotulo lo nombra explicitamente en vez del generico "Seleccionado":
-  // es la frase que pide la operacion ("1 vehiculo seleccionado").
-  const label =
-    focos.length === 1 && focos[0]?.id === 'vehiculo' && !isolate
-      ? '1 vehículo seleccionado'
-      : isolate
-        ? 'Viendo solo'
-        : 'Seleccionado';
+  const label = vehiclePlate || isolate ? 'Viendo solo' : 'Seleccionado';
 
   return (
     <div className="pointer-events-auto flex max-w-[calc(100vw-1.25rem)] flex-wrap items-center gap-2 rounded-lg border border-brand-500/45 bg-surface-900/96 px-2.5 py-2 shadow-float backdrop-blur">
@@ -99,7 +91,11 @@ export function FocusBanner({
         </span>
       ))}
 
-      <button
+      {vehiclePlate ? (
+        <span className="inline-flex items-center gap-1.5 px-2 text-2xs text-ink-muted">
+          <EyeOff className="h-3.5 w-3.5" /> Solo este vehículo
+        </span>
+      ) : <button
         type="button"
         onClick={() => setIsolate(!isolate)}
         title={
@@ -111,7 +107,7 @@ export function FocusBanner({
       >
         {isolate ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
         {isolate ? `${hiddenCount} ocultos` : 'Mostrando todos'}
-      </button>
+      </button>}
     </div>
   );
 }

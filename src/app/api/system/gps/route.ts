@@ -27,7 +27,7 @@ export async function GET(): Promise<Response> {
     env.GPS_PROVIDER === '3dtracking'
       ? Boolean(env.TRIDTRACKING_USERNAME && env.TRIDTRACKING_PASSWORD)
       : env.GPS_PROVIDER === 'traccar'
-        ? Boolean(env.TRACCAR_BASE_URL)
+        ? Boolean(env.TRACCAR_BASE_URL && (env.TRACCAR_TOKEN || (env.TRACCAR_USERNAME && env.TRACCAR_PASSWORD)))
         : true;
 
   try {
@@ -44,12 +44,15 @@ export async function GET(): Promise<Response> {
     let posiciones: number | null = null;
     let ultimaPosicionAt: string | null = null;
     let posicionesValidas: number | null = null;
+    let telemetryError: string | null = null;
 
     if (salud.ok) {
-      const [flota, actuales] = await Promise.all([
-        gps.getVehicles().catch(() => []),
-        gps.getAllCurrentPositions().catch(() => []),
-      ]);
+      const [fleetResult, positionsResult] = await Promise.allSettled([gps.getVehicles(), gps.getAllCurrentPositions()]);
+      const flota = fleetResult.status === 'fulfilled' ? fleetResult.value : [];
+      const actuales = positionsResult.status === 'fulfilled' ? positionsResult.value : [];
+      if (fleetResult.status === 'rejected' || positionsResult.status === 'rejected') {
+        telemetryError = 'La sesion responde, pero fallo la consulta de flota o posiciones. Revisa permisos y disponibilidad del proveedor.';
+      }
       vehiculos = flota.length;
       posiciones = actuales.length;
       // Una posicion invalida es un equipo que reporta SIN fijacion satelital:
@@ -68,8 +71,8 @@ export async function GET(): Promise<Response> {
       transport: gps.info.preferredTransport,
       /** `false` avisa de que faltan variables de entorno, no de que la red falle. */
       credencialesPresentes: configurado,
-      ok: salud.ok,
-      message: salud.message,
+      ok: salud.ok && !telemetryError,
+      message: telemetryError ?? salud.message,
       latencyMs: salud.latencyMs,
       vehiculos,
       posiciones,

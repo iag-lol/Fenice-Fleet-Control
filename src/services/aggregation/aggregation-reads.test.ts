@@ -3,7 +3,7 @@ import { DEFAULT_GEOFENCE_RULES } from '@/types/core';
 import type { Alert, Geofence, Position, Vehicle } from '@/types/core';
 
 const sources = vi.hoisted(() => ({
-  gps: { getVehicles: vi.fn(), getAllCurrentPositions: vi.fn(), getDeviceStatus: vi.fn() },
+  gps: { getVehicles: vi.fn(), getAllCurrentPositions: vi.fn(), getDeviceStatus: vi.fn(), getPositionHistory: vi.fn(), getVehicleEvents: vi.fn() },
   operations: {
     getVehicles: vi.fn(), getRoutes: vi.fn(), getWorkOrders: vi.fn(), getAlerts: vi.fn(),
     getGeofences: vi.fn(), getDrivers: vi.fn(), getClients: vi.fn(),
@@ -19,7 +19,7 @@ vi.mock('@/services/settings/settings-store', async () => {
 });
 
 import { loadMapSnapshot } from './dashboard-aggregator';
-import { loadFleetTelemetry } from './fleet-aggregator';
+import { loadFleetTelemetry, loadVehicleDetail } from './fleet-aggregator';
 import { loadCommuneOperationalSummary } from './commune-aggregator';
 
 const vehicle: Vehicle = {
@@ -82,4 +82,35 @@ describe('single reads within operational responses', () => {
     expect(Object.values(summary).reduce((sum, c) => sum + c.openAlerts, 0)).toBe(1);
     expect(Object.values(summary).reduce((sum, c) => sum + c.vehiclesInside, 0)).toBe(1);
   });
+});
+
+describe('detalle GPS con disponibilidad parcial', () => {
+  beforeEach(() => {
+    for (const mock of [...Object.values(sources.gps), ...Object.values(sources.operations)]) mock.mockReset().mockResolvedValue([]);
+    sources.gps.getVehicles.mockResolvedValue([vehicle]); sources.gps.getAllCurrentPositions.mockResolvedValue([position]);
+  });
+
+it('la ficha no suma distancia ni tiempo de marcha durante un corte GPS', async () => {
+  const time = Date.now();
+  sources.gps.getPositionHistory.mockResolvedValue([
+    { ...position, timestamp: new Date(time - 600000).toISOString(), lat: -33.45, speed: 30 },
+    { ...position, timestamp: new Date(time - 585000).toISOString(), lat: -33.449, speed: 30 },
+    { ...position, timestamp: new Date(time - 30000).toISOString(), lat: -33.44, speed: 0 },
+    { ...position, timestamp: new Date(time).toISOString(), lat: -33.439, speed: 0 },
+  ]);
+  const detail = await loadVehicleDetail(vehicle.id);
+  expect(detail?.journey.movingSeconds).toBe(15);
+  expect(detail?.journey.stoppedSeconds).toBe(30);
+  expect(detail?.journey.distanceKm).toBeLessThan(.3);
+});
+
+it('mantiene disponible la ficha si solo fallan historial y eventos del proveedor', async () => {
+  sources.gps.getPositionHistory.mockRejectedValue(new Error('history unavailable'));
+  sources.gps.getVehicleEvents.mockRejectedValue(new Error('alerts denied'));
+  const detail = await loadVehicleDetail(vehicle.id);
+  expect(detail?.vehicle.id).toBe(vehicle.id);
+  expect(detail?.snapshot.position).toBe(position);
+  expect(detail?.telemetryWarnings).toHaveLength(2);
+});
+
 });

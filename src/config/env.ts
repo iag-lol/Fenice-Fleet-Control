@@ -210,7 +210,11 @@ let cached: ServerEnv | null = null;
 export function getServerEnv(): ServerEnv {
   if (cached) return cached;
 
-  const parsed = serverEnvSchema.safeParse(process.env);
+  // .env.example incluye campos opcionales vacios. Un campo sin configurar
+  // debe activar el default o permanecer ausente, no invalidar una URL/enum.
+  const values = Object.fromEntries(Object.entries(process.env)
+    .filter(([, value]) => value !== undefined && value.trim() !== ''));
+  const parsed = serverEnvSchema.safeParse(values);
 
   if (!parsed.success) {
     const issues = parsed.error.issues

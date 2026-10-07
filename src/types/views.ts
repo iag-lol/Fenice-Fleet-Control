@@ -103,6 +103,7 @@ export interface RouteSummary {
 
 /** Todo lo que el mapa operacional necesita en una sola respuesta. */
 export interface MapSnapshot {
+  activeDeliveries?: ActiveDelivery[];
   generatedAt: IsoDateTime;
   vehicles: VehicleSnapshot[];
   clients: ClientMapPoint[];
@@ -142,6 +143,10 @@ export interface RouteGeometry {
   plannedPath: LatLng[];
   executedPath: LatLng[];
   executedSegments?: LatLng[][];
+  /** Contexto completo del recorrido, o traza activa de reproduccion. */
+  visualRole?: 'context' | 'preview' | 'active';
+  speedSections?: { path: LatLng[]; color: string }[];
+  showEndpoints?: boolean;
   /**
    * Cuanto del corredor planificado (`plannedPath`) ya quedo atras, medido en
    * metros desde su inicio segun la posicion ACTUAL del vehiculo. `null`
@@ -188,6 +193,8 @@ export interface WorkOrderMapPoint {
 
 /** Ficha completa de un vehiculo, usada en el popup y en /flota/[id]. */
 export interface VehicleDetail {
+  activeDelivery?: ActiveDelivery | null;
+  telemetryWarnings?: string[];
   snapshot: VehicleSnapshot;
   vehicle: Vehicle;
   driver: Driver | null;
@@ -212,6 +219,31 @@ export interface VehicleDetail {
   eta: { minutes: number | null; arrivalAt: IsoDateTime | null; distanceKm: number | null } | null;
   timeline: TimelineEntry[];
   openAlerts: Alert[];
+}
+
+/** Operational presence; quantities are ordered liters, never inferred pump flow. */
+export interface ActiveDelivery {
+  workOrderId: string;
+  workOrderNumber: string;
+  clientId: string;
+  clientName: string;
+  addressLine: string;
+  communeName: string;
+  vehicleId: string;
+  vehiclePlate: string;
+  driverName: string | null;
+  lat: number;
+  lng: number;
+  geofence: Geofence;
+  enteredAt: string;
+  stoppedAt: string | null;
+  observedAt: string;
+  arrivalObserved: boolean;
+  lines: { productName: string; liters: number }[] | null;
+  totalLiters: number | null;
+  workOrderStatus: WorkOrder['status'];
+  staleSeconds: number;
+  movingSpeedThresholdKmh: number;
 }
 
 export type TimelineEntryKind =

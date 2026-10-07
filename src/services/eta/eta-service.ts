@@ -1,7 +1,7 @@
 import 'server-only';
 
 import { getServerEnv } from '@/config/env';
-import { haversineMeters, projectOnPolyline } from '@/lib/geo';
+import { distanceToSegment, haversineMeters, isUsableCoordinate, polylineLengthMeters, projectOnPolyline, type PolylineProjection } from '@/lib/geo';
 import type { LatLng } from '@/types/core';
 
 /**
@@ -42,6 +42,24 @@ export interface RoutingProvider {
 /** Minutos de servicio asumidos por cada parada intermedia pendiente. */
 const SERVICE_MINUTES_PER_STOP = 9;
 
+const pendingStops = (value?: number) => Number.isFinite(value) ? Math.max(0, Math.floor(value!)) : 0;
+const usableRequest = (request: EtaRequest) => isUsableCoordinate(request.origin) && isUsableCoordinate(request.destination) &&
+  Number.isFinite((request.now ?? new Date()).getTime());
+
+/** A loop can place the same coordinate at several different points of progress. */
+function ambiguousProjection(point: LatLng, path: LatLng[], projection: PolylineProjection): boolean {
+  let cumulative = 0;
+  for (let i = 1; i < path.length; i++) {
+    const a = path[i - 1]!, b = path[i]!;
+    const length = haversineMeters(a, b);
+    const candidate = distanceToSegment(point, a, b);
+    if (candidate.distanceMeters <= projection.distanceMeters + 5 &&
+      Math.abs(cumulative + length * candidate.t - projection.alongMeters) > 150) return true;
+    cumulative += length;
+  }
+  return false;
+}
+
 /**
  * Velocidad efectiva urbana. No es la velocidad instantanea: incorpora
  * semaforos, congestion y maniobras. Un camion que marca 60 km/h en una
@@ -51,7 +69,7 @@ function effectiveSpeedKmh(distanceKm: number, currentSpeedKmh: number | undefin
   // A mayor distancia, mas probable es incorporar vias rapidas.
   const base = distanceKm > 15 ? 42 : distanceKm > 6 ? 32 : 24;
 
-  if (currentSpeedKmh === undefined) return base;
+  if (currentSpeedKmh === undefined || !Number.isFinite(currentSpeedKmh) || currentSpeedKmh < 0) return base;
   // Un vehiculo detenido no implica ETA infinito: pondera poco.
   const blended = base * 0.75 + Math.min(currentSpeedKmh, 80) * 0.25;
   return Math.max(12, blended);
@@ -66,6 +84,8 @@ export class EstimatedRoutingProvider implements RoutingProvider {
 
   async estimate(request: EtaRequest): Promise<EtaResult> {
     const now = request.now ?? new Date();
+    const unavailable: EtaResult = { minutes: null, arrivalAt: null, distanceKm: null, source: 'estimated', basis: 'Sin datos suficientes' };
+    if (!usableRequest(request)) return unavailable;
 
     let distanceMeters: number;
     let basis: string;
@@ -77,11 +97,13 @@ export class EstimatedRoutingProvider implements RoutingProvider {
 
       | { meters: number; basis: string }
       | null => {
-      if (!request.path || request.path.length < 2) return null;
+      if (!request.path || request.path.length < 2 || !request.path.every(isUsableCoordinate)) return null;
 
       const originProjection = projectOnPolyline(request.origin, request.path);
       const destinationProjection = projectOnPolyline(request.destination, request.path);
       if (!originProjection || !destinationProjection) return null;
+      if (originProjection.distanceMeters > 150 || destinationProjection.distanceMeters > 150 ||
+        ambiguousProjection(request.origin, request.path, originProjection) || ambiguousProjection(request.destination, request.path, destinationProjection)) return null;
 
       const along = destinationProjection.alongMeters - originProjection.alongMeters;
 
@@ -90,7 +112,9 @@ export class EstimatedRoutingProvider implements RoutingProvider {
       // el FINAL de la ruta, no hasta la entrega. Se usa la distancia directa.
       if (along <= 0) return null;
 
-      return { meters: along, basis: 'Distancia sobre el corredor planificado' };
+      const meters = along + (originProjection.distanceMeters + destinationProjection.distanceMeters) * 1.35;
+      if (meters < haversineMeters(request.origin, request.destination) * 0.98) return null;
+      return { meters, basis: 'Distancia sobre el corredor planificado, incluyendo acceso y salida' };
     })();
 
     // La proyeccion sobre el corredor solo se acepta si es coherente con la
@@ -105,13 +129,13 @@ export class EstimatedRoutingProvider implements RoutingProvider {
     }
 
     if (!Number.isFinite(distanceMeters) || distanceMeters < 0) {
-      return { minutes: null, arrivalAt: null, distanceKm: null, source: 'estimated', basis: 'Sin datos suficientes' };
+      return unavailable;
     }
 
     const distanceKm = distanceMeters / 1000;
     const speed = effectiveSpeedKmh(distanceKm, request.currentSpeedKmh);
     const travelMinutes = (distanceKm / speed) * 60;
-    const serviceMinutes = (request.remainingStops ?? 0) * SERVICE_MINUTES_PER_STOP;
+    const serviceMinutes = pendingStops(request.remainingStops) * SERVICE_MINUTES_PER_STOP;
     const minutes = Math.max(1, Math.round(travelMinutes + serviceMinutes));
 
     return {
@@ -121,7 +145,7 @@ export class EstimatedRoutingProvider implements RoutingProvider {
       source: 'estimated',
       basis:
         serviceMinutes > 0
-          ? `${basis}, mas ${request.remainingStops} entrega(s) intermedia(s)`
+          ? `${basis}, mas ${pendingStops(request.remainingStops)} entrega(s) intermedia(s)`
           : basis,
     };
   }
@@ -137,6 +161,7 @@ export class OsrmRoutingProvider implements RoutingProvider {
   constructor(private readonly baseUrl: string) {}
 
   async estimate(request: EtaRequest): Promise<EtaResult | null> {
+    if (!usableRequest(request)) return null;
     const now = request.now ?? new Date();
     const coordinates = `${request.origin.lng},${request.origin.lat};${request.destination.lng},${request.destination.lat}`;
     const url = `${this.baseUrl.replace(/\/+$/, '')}/route/v1/driving/${coordinates}?overview=false`;
@@ -146,12 +171,15 @@ export class OsrmRoutingProvider implements RoutingProvider {
       if (!response.ok) return null;
 
       const payload = (await response.json()) as {
+        code?: string;
         routes?: { duration: number; distance: number }[];
       };
       const route = payload.routes?.[0];
-      if (!route) return null;
+      if (payload.code !== 'Ok' || !route || !Number.isFinite(route.duration) || route.duration < 0 ||
+        !Number.isFinite(route.distance) || route.distance < 0 ||
+        route.distance < haversineMeters(request.origin, request.destination) * 0.98) return null;
 
-      const serviceMinutes = (request.remainingStops ?? 0) * SERVICE_MINUTES_PER_STOP;
+      const serviceMinutes = pendingStops(request.remainingStops) * SERVICE_MINUTES_PER_STOP;
       const minutes = Math.max(1, Math.round(route.duration / 60 + serviceMinutes));
 
       return {
@@ -237,7 +265,11 @@ async function fetchOsrmFullRoute(waypoints: LatLng[], baseUrl: string): Promise
     if (payload.code !== 'Ok' || !route?.geometry?.coordinates) return null;
 
     const path = route.geometry.coordinates.map(([lng, lat]) => ({ lat: lat!, lng: lng! }));
-    if (path.length < 2) return null;
+    if (path.length < 2 || !path.every(isUsableCoordinate) ||
+      !Number.isFinite(route.distance) || route.distance < 0 || !Number.isFinite(route.duration) || route.duration < 0 ||
+      waypoints.some((point) => (projectOnPolyline(point, path)?.distanceMeters ?? Infinity) > 150)) return null;
+    const geometryMeters = polylineLengthMeters(path);
+    if (Math.abs(geometryMeters - route.distance) > Math.max(200, geometryMeters * 0.1)) return null;
 
     return {
       path,
@@ -265,6 +297,7 @@ async function fetchOsrmFullRoute(waypoints: LatLng[], baseUrl: string): Promise
  * sepa que no es un trazado real y pueda decidir que hacer con eso.
  */
 export async function planDrivingRoute(waypoints: LatLng[]): Promise<RoutePlanResult> {
+  if (!waypoints.every(isUsableCoordinate)) throw new Error('La ruta contiene coordenadas inválidas. Corrige las paradas antes de calcularla.');
   if (waypoints.length < 2) {
     return { path: waypoints, distanceKm: 0, durationMinutes: 0, source: 'direct' };
   }

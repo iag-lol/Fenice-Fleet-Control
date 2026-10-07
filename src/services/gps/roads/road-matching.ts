@@ -1,6 +1,7 @@
 import 'server-only';
 import { getServerEnv } from '@/config/env';
 import { haversineMeters, isUsableCoordinate } from '@/lib/geo';
+import { roadPathForTransition } from '@/lib/gps-motion';
 import type { Position } from '@/types/core';
 
 interface MatchResponse {
@@ -14,7 +15,8 @@ export async function matchRoadSegment(previous: Position, next: Position, baseU
   const seconds = (Date.parse(next.timestamp) - Date.parse(previous.timestamp)) / 1000;
   const distance = haversineMeters(previous, next);
   if (!previous.valid || !next.valid || !isUsableCoordinate(previous) || !isUsableCoordinate(next) ||
-    seconds <= 0 || seconds > 60 || distance < 3 || distance / seconds > 55 ||
+    previous.vehicleId !== next.vehicleId || previous.deviceId !== next.deviceId || next.historyGapBefore ||
+    !Number.isFinite(seconds) || seconds <= 0 || seconds > 60 || distance < 3 || distance / seconds > 55 ||
     (previous.accuracy ?? 0) > 50 || (next.accuracy ?? 0) > 50) return;
   const coordinates = `${previous.lng},${previous.lat};${next.lng},${next.lat}`;
   const params = new URLSearchParams({
@@ -36,7 +38,8 @@ export async function matchRoadSegment(previous: Position, next: Position, baseU
       haversineMeters(path[0]!, previous) > 35 || haversineMeters(path.at(-1)!, next) > 35) return;
     const meters = path.slice(1).reduce((sum, point, i) => sum + haversineMeters(path[i]!, point), 0);
     if (meters > Math.max(distance * 3, 150) || meters / seconds > 55) return;
-    return { fromTimestamp: previous.timestamp, confidence: match.confidence, path };
+    const roadMatch = { fromTimestamp: previous.timestamp, confidence: match.confidence, path };
+    return roadPathForTransition(previous, { ...next, roadMatch }) ? roadMatch : undefined;
   } catch { return; }
 }
 
@@ -49,11 +52,18 @@ export async function addRoadMatches(positions: Position[]): Promise<Position[]>
   // Serializa lotes concurrentes para no reordenar muestras del mismo vehiculo.
   const work = async (): Promise<Position[]> => {
     const results = [...positions];
+    const grouped = new Map<string, { position: Position; index: number }[]>();
+    positions.forEach((position, index) => {
+      const group = grouped.get(position.vehicleId) ?? [];
+      group.push({ position, index });
+      grouped.set(position.vehicleId, group);
+    });
+    const groups = [...grouped.values()].map((group) => group.sort((a, b) => Date.parse(a.position.timestamp) - Date.parse(b.position.timestamp)));
     let cursor = 0;
     const worker = async () => {
-      while (cursor < positions.length) {
-        const index = cursor++;
-        const position = positions[index]!;
+      while (cursor < groups.length) {
+        const group = groups[cursor++]!;
+        for (const { index, position } of group) {
         const previous = recent.get(position.vehicleId);
         let roadMatch = previous?.timestamp === position.timestamp ? previous.roadMatch : undefined;
         if (previous && Date.parse(position.timestamp) > Date.parse(previous.timestamp)) {
@@ -62,9 +72,10 @@ export async function addRoadMatches(positions: Position[]): Promise<Position[]>
         const result = { ...position, ...(roadMatch ? { roadMatch } : {}) };
         results[index] = result;
         if (!previous || Date.parse(position.timestamp) >= Date.parse(previous.timestamp)) recent.set(position.vehicleId, result);
+        }
       }
     };
-    await Promise.all(Array.from({ length: Math.min(4, positions.length) }, worker));
+    await Promise.all(Array.from({ length: Math.min(4, groups.length) }, worker));
     if (recent.size > 2000) {
       const active = new Set<string>(positions.map((p) => p.vehicleId));
       for (const id of recent.keys()) if (!active.has(id)) recent.delete(id);

@@ -1,14 +1,17 @@
 import 'server-only';
 
+import { buildReplayTimeline, findStops } from '@/lib/engines/route-replay';
+import { analyzeJourney } from '@/lib/engines/journey-analysis';
 import { getOperationalSettings } from '@/services/settings/settings-store';
 import { getCommuneName } from '@/data/communes';
 import { deriveVehicleStatus, evaluateConnectionState } from '@/lib/engines/gps-health';
-import { detectStops, evaluateRouteProgress, resolveCommune } from '@/lib/engines/route-compliance';
+import { evaluateRouteProgress, resolveCommune } from '@/lib/engines/route-compliance';
 import { COMMUNES } from '@/data/communes';
-import { haversineMeters, isUsableCoordinate, projectOnPolyline } from '@/lib/geo';
+import { isUsableCoordinate, projectOnPolyline } from '@/lib/geo';
 import { nearbyGeofences, resolveVehicleActivity } from '@/lib/engines/vehicle-activity';
 import { estimateEta } from '@/services/eta/eta-service';
 import { getGpsProvider, getOperationsProvider } from '@/services/registry';
+import { loadActiveDeliveries } from './active-delivery-aggregator';
 import type {
   Alert,
   DeviceStatus,
@@ -58,7 +61,11 @@ export function mergeFleet(erpVehicles: Vehicle[], gpsVehicles: Vehicle[]): Vehi
 
   for (const desdeGps of gpsVehicles) {
     const id = String(desdeGps.id);
-    if (porId.has(id)) continue;
+    const known = porId.get(id);
+    if (known) {
+      porId.set(id, { ...known, device: desdeGps.device ?? known.device });
+      continue;
+    }
 
     // Tambien puede estar en el ERP con otro identificador pero el mismo
     // equipo instalado: el IMEI es lo que de verdad une ambos mundos.
@@ -336,13 +343,10 @@ function buildTimeline(
     }
   }
 
-  const stops = detectStops({
-    positions: history,
-    movingSpeedThresholdKmh: settings.gps.movingSpeedThresholdKmh,
-    prolongedStopSeconds: settings.route.prolongedStopSeconds,
-  });
+  const replay = buildReplayTimeline(history);
+  const stops = replay ? findStops(replay, settings.route.prolongedStopSeconds) : [];
 
-  for (const stop of stops.filter((s) => s.prolonged)) {
+  for (const stop of stops) {
     entries.push({
       id: `stop-${stop.startedAt}`,
       kind: 'detencion',
@@ -354,12 +358,12 @@ function buildTimeline(
   }
 
   for (const event of events) {
-    if (event.type === 'harsh_braking') {
+    if (event.type === 'harsh_braking' || event.type === 'harsh_acceleration' || event.type === 'power_cut' || event.type === 'sos') {
       entries.push({
         id: event.id,
-        kind: 'desvio',
+        kind: 'evento_gps',
         timestamp: event.timestamp,
-        title: 'Desvio detectado',
+        title: ({ harsh_braking: 'Frenada brusca', harsh_acceleration: 'Aceleracion brusca', power_cut: 'Corte de alimentacion', sos: 'Alarma SOS' } as Record<string, string>)[event.type]!,
         detail: event.detail ?? null,
         position: event.position ?? null,
       });
@@ -408,15 +412,22 @@ export async function loadVehicleDetail(vehicleId: VehicleId): Promise<VehicleDe
     .filter((w) => w.vehicleId === vehicleId)
     .sort((a, b) => (a.stopSequence ?? 0) - (b.stopSequence ?? 0));
 
-  const [history, events] = await Promise.all([
+  const [historyResult, eventsResult] = await Promise.allSettled([
     gps.getPositionHistory({
       vehicleId,
       from: new Date(now.getTime() - HISTORY_WINDOW_MS).toISOString(),
       to: now.toISOString(),
-      limit: 600,
+      limit: 20000,
     }),
     gps.getVehicleEvents({ vehicleId, limit: 60 }),
   ]);
+
+  const history = historyResult.status === 'fulfilled' ? historyResult.value : [];
+  const events = eventsResult.status === 'fulfilled' ? eventsResult.value : [];
+  const telemetryWarnings = [
+    ...(historyResult.status === 'rejected' ? ['El historial GPS no esta disponible en este momento. Puedes seguir consultando la posicion y el estado del vehiculo.'] : []),
+    ...(eventsResult.status === 'rejected' ? ['No fue posible consultar los eventos del proveedor GPS.'] : []),
+  ];
 
   const position = snapshot.position;
   const progress = route
@@ -433,28 +444,9 @@ export async function loadVehicleDetail(vehicleId: VehicleId): Promise<VehicleDe
       (w) => w.id !== currentWorkOrder?.id && !['visita_detectada', 'completada', 'cancelada'].includes(w.status),
     ) ?? null;
 
-  // Kilometraje y tiempos de la jornada, medidos sobre el historial real.
-  let distanceKm = 0;
-  for (let i = 1; i < history.length; i += 1) {
-    distanceKm += haversineMeters(history[i - 1]!, history[i]!) / 1000;
-  }
-
-  const stops = detectStops({
-    positions: history,
-    movingSpeedThresholdKmh: settings.gps.movingSpeedThresholdKmh,
-    prolongedStopSeconds: settings.route.prolongedStopSeconds,
-  });
-
-  const stoppedSeconds = stops.reduce((sum, s) => sum + s.durationSeconds, 0);
-  const totalSeconds =
-    history.length >= 2
-      ? Math.max(
-          0,
-          (new Date(history[history.length - 1]!.timestamp).getTime() -
-            new Date(history[0]!.timestamp).getTime()) /
-            1000,
-        )
-      : 0;
+  // La ficha y el explorador aplican la misma continuidad de muestras.
+  const replay = buildReplayTimeline(history);
+  const analysis = replay ? analyzeJourney(replay, settings.route.maxLegalSpeedKmh) : null;
 
   const deliveriesCompleted = vehicleWorkOrders.filter((w) =>
     ['visita_detectada', 'completada'].includes(w.status),
@@ -487,6 +479,7 @@ export async function loadVehicleDetail(vehicleId: VehicleId): Promise<VehicleDe
 
   return {
     snapshot: { ...snapshot, driver },
+    activeDelivery: (await loadActiveDeliveries({ ...context, vehicles: [vehicle] }, drivers, now, new Map([[vehicle.id, history]])))[0] ?? null,
     vehicle,
     driver,
     currentWorkOrder,
@@ -499,16 +492,17 @@ export async function loadVehicleDetail(vehicleId: VehicleId): Promise<VehicleDe
       progressRatio: progress?.completionRatio ?? 0,
     },
     journey: {
-      distanceKm: Math.round(distanceKm * 10) / 10,
+      distanceKm: replay ? Math.round(replay.totalMeters / 100) / 10 : null,
       startedAt: route?.startedAt ?? history[0]?.timestamp ?? null,
-      movingSeconds: Math.max(0, Math.round(totalSeconds - stoppedSeconds)),
-      stoppedSeconds: Math.round(stoppedSeconds),
+      movingSeconds: Math.round(analysis?.movingSeconds ?? 0),
+      stoppedSeconds: Math.round(analysis?.stoppedSeconds ?? 0),
       deliveriesCompleted,
       deliveriesPending: Math.max(0, vehicleWorkOrders.length - deliveriesCompleted),
       communeName: communeName ?? (position?.communeCode ? getCommuneName(position.communeCode) : null),
     },
     eta,
     timeline: buildTimeline(route, history, events, vehicleWorkOrders),
+    telemetryWarnings,
     openAlerts: context.alerts.filter((a) => a.vehicleId === vehicleId && a.state !== 'resuelta'),
   };
 }

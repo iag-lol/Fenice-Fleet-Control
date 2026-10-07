@@ -233,7 +233,7 @@ describe('estado del equipo', () => {
   it('escala a intermitente, sin señal y offline segun el silencio', () => {
     const en = (min: number) =>
       mapUnitToDeviceStatus(
-        unidad({ LastReportedTimeUTC: new Date(ahora.getTime() - min * 60_000).toISOString() }),
+        unidad({ LastReportedTimeUTC: new Date(ahora.getTime() - min * 60_000).toISOString(), Position: { GPSTimeUtc: new Date(ahora.getTime() - min * 60_000).toISOString() } }),
         ahora,
         UMBRALES,
       )!.connection;
@@ -241,6 +241,10 @@ describe('estado del equipo', () => {
     expect(en(2)).toBe('stale');
     expect(en(5)).toBe('lost');
     expect(en(30)).toBe('offline');
+  });
+
+  it('un fix antiguo reenviado no aparece como señal fresca', () => {
+    expect(mapUnitToDeviceStatus(unidad({ LastReportedTimeUTC: ahora.toISOString(), Position: { GPSTimeUtc: '2026-09-01T10:00:00Z' } }), ahora, UMBRALES)!.connection).toBe('offline');
   });
 
   it('no afirma nada cuando la unidad nunca reporto', () => {

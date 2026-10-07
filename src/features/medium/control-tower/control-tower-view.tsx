@@ -220,7 +220,7 @@ export function ControlTowerView() {
   return (
     <div ref={containerRef} className="relative flex h-full w-full overflow-hidden">
       <div className="relative min-w-0 flex-1">
-        <OperationalMap detailExternal={Boolean(desktopSelection)} />
+        <OperationalMap detailExternal={Boolean(desktopSelection)} mobileDockClearance={usesMobileLayout ? hasOperationsPanel ? 132 : 80 : 0} />
 
         {/* Alternar el panel: en el mapa cada pixel horizontal cuenta. */}
         {!usesMobileLayout && hasOperationsPanel && !desktopSelection ? (

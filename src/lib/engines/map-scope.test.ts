@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   isScoped,
+  resolveMapScope,
   scopePoints,
   scopeRoutes,
   scopeVehicles,
@@ -106,5 +107,30 @@ describe('enfoque del mapa', () => {
   it('el vehiculo aislado manda sobre la ruta resaltada', () => {
     const ambos: ScopeInput = { vehicleId: 'v2', routeId: 'r1', communeBoundary: null };
     expect(scopeVehicles(VEHICULOS, ambos, RUTAS).map((v) => v.vehicleId)).toEqual(['v2']);
+    expect(scopeRoutes(RUTAS, ambos).map((r) => r.routeId)).toEqual(['r2']);
+    expect(scopePoints([DENTRO, FUERA], ambos, RUTAS)).toEqual([FUERA]);
+  });
+});
+
+describe('ficha del vehiculo', () => {
+  it('aisla la ficha aun con el aislamiento general desactivado', () => {
+    expect(resolveMapScope({ vehicleId: 'v2', routeId: 'r1', communeBoundary: COMUNA }, false))
+      .toEqual({ ...LIBRE, vehicleId: 'v2' });
+  });
+  it('restaura los filtros generales cuando se cierra la ficha', () => {
+    const general = { ...LIBRE, communeBoundary: COMUNA };
+    expect(resolveMapScope(general, true)).toEqual(general);
+    expect(resolveMapScope(general, false)).toEqual(LIBRE);
+  });
+  it('incluye las paradas de todas sus rutas, sin paradas de otro camion', () => {
+    const rutas = [...RUTAS, { routeId: 'r3', vehicleId: 'v1', stops: [{ lat: -33.6, lng: -70.8 }] }];
+    expect(scopePoints([DENTRO, FUERA, ...rutas[2]!.stops], { ...LIBRE, vehicleId: 'v1' }, rutas))
+      .toEqual([DENTRO, ...rutas[2]!.stops]);
+  });
+  it('mantiene el vehiculo sin inventar coordenadas cuando falta GPS', () => {
+    const scope = resolveMapScope({ ...LIBRE, vehicleId: 'v3' }, false);
+    expect(scopeVehicles(VEHICULOS, scope, RUTAS)).toEqual([VEHICULOS[2]]);
+    expect(scopeRoutes(RUTAS, scope)).toEqual([]);
+    expect(scopePoints([DENTRO, FUERA], scope, RUTAS)).toEqual([]);
   });
 });

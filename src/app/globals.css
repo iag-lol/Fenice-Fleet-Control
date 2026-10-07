@@ -337,6 +337,24 @@ body {
   display: none !important;
 }
 
+/* Hover cards cannot steal the pointer from the pin and flicker closed. */
+.fleet-pin-popup,
+.fleet-pin-popup .maplibregl-popup-content {
+  pointer-events: none !important;
+}
+
+.fleet-pin-popup {
+  z-index: 5;
+}
+
+.fleet-active-delivery-popup {
+  z-index: 6;
+}
+
+.fleet-active-delivery-popup .maplibregl-popup-content {
+  pointer-events: auto;
+}
+
 .maplibregl-canvas:focus {
   outline: none;
 }

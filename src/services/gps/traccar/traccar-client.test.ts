@@ -84,3 +84,15 @@ describe('TraccarClient', () => {
     expect((error as TraccarRequestError).message).toContain('500');
   });
 });
+
+describe('identidad y posiciones actuales del equipo', () => {
+  it('rechaza un resultado distinto al IMEI buscado aunque sea el unico dispositivo', async () => {
+    const fetchMock = vi.fn(async () => respuesta([{ id: 1, uniqueId: 'otro-imei' }])) as unknown as typeof fetch;
+    expect(await cliente(fetchMock).getDeviceByUniqueId('mi-imei')).toBeNull();
+  });
+  it('filtra posiciones actuales localmente sin enviar deviceId sin from/to', async () => {
+    const fetchMock = vi.fn(async () => respuesta([{ id: 5, deviceId: 42 }, { id: 6, deviceId: 99 }])) as unknown as typeof fetch;
+    expect(await cliente(fetchMock).getPositions(42)).toEqual([{ id: 5, deviceId: 42 }]);
+    expect(String((fetchMock as unknown as ReturnType<typeof vi.fn>).mock.calls[0]?.[0])).toBe('https://gps.midominio.cl/api/positions');
+  });
+});

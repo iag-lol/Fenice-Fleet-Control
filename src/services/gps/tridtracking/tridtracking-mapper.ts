@@ -122,6 +122,7 @@ export function mapUnitToVehicle(unit: TridUnit): Vehicle | null {
           imei,
           model: (unit.UnitType ?? '3DTracking').trim() || '3DTracking',
           externalId: uid,
+          provider: '3dtracking',
           ...(unit.PhoneNumber ? { simNumber: unit.PhoneNumber } : {}),
         };
 
@@ -195,7 +196,7 @@ export function mapUnitToDeviceStatus(
   const uid = (unit.Uid ?? '').trim();
   if (uid === '') return null;
 
-  const last = toIsoUtc(unit.LastReportedTimeUTC) ?? toIsoUtc(unit.Position?.GPSTimeUtc);
+  const last = toIsoUtc(unit.Position?.GPSTimeUtc) ?? toIsoUtc(unit.LastReportedTimeUTC);
   const seconds = last === null ? null : Math.max(0, Math.round((now.getTime() - Date.parse(last)) / 1000));
 
   const connection: DeviceStatus['connection'] =

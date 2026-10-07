@@ -2,7 +2,9 @@ import 'server-only';
 
 import { getServerEnv } from '@/config/env';
 import { getSupabaseClient, isSupabaseConfigured } from '@/lib/supabase/server-client';
-import { getVehicleByIdFromStore, setVehicleDeviceInMemory } from '@/services/fleet/vehicle-store';
+import { getVehicleByIdFromStore, listVehicles, setVehicleDeviceInMemory } from '@/services/fleet/vehicle-store';
+import { mapTraccarPosition } from '@/services/gps/traccar/traccar-mapper';
+import { getOperationalSettings } from '@/services/settings/settings-store';
 import { buildTraccarAuthHeader, TraccarClient, TraccarRequestError } from '@/services/gps/traccar/traccar-client';
 import { asDeviceId, type GpsDevice, type Vehicle, type VehicleId } from '@/types/core';
 
@@ -41,6 +43,7 @@ export interface TraccarConnectionTest {
   message: string;
   externalDeviceId?: string;
   lastPositionAt?: string | null;
+  model?: string;
   /** Primer paso que fallo, para que la UI marque exactamente donde se corto. */
   failedStep?: TraccarProbeStep;
 }
@@ -140,11 +143,28 @@ export async function testTraccarConnection(input: {
     };
   }
 
-  const positions = await resolved.client.getPositions(device.id).catch(() => []);
-  const latest = positions.filter((p) => p.valid).sort((a, b) => Date.parse(b.fixTime) - Date.parse(a.fixTime))[0];
-  const lastPositionAt = latest?.fixTime ?? null;
+  if (device.disabled) return {
+    ok: false, serverReachable: true, deviceFound: true, hasPosition: false,
+    message: 'El dispositivo esta deshabilitado en Traccar. Habilitalo antes de conectarlo.',
+    failedStep: 'device',
+  };
+  let positions;
+  try {
+    positions = await resolved.client.getPositions(device.id);
+  } catch {
+    return { ok: false, serverReachable: true, deviceFound: true, hasPosition: false,
+      message: 'El dispositivo existe, pero no fue posible consultar sus posiciones. Revisa permisos y conexion del servidor.',
+      failedStep: 'position' };
+  }
+  const link = { traccarDeviceId: device.id, imei: identifier,
+    vehicleId: 'probe' as VehicleId, internalDeviceId: 'probe' };
+  const latest = positions.filter((p) => p.deviceId === device.id)
+    .map((p) => mapTraccarPosition(p, link)).filter((p) => p?.valid)
+    .sort((a, b) => Date.parse(b!.timestamp) - Date.parse(a!.timestamp))[0];
+  const lastPositionAt = latest?.timestamp ?? null;
   const age = lastPositionAt ? Date.now() - Date.parse(lastPositionAt) : Infinity;
-  const hasPosition = Number.isFinite(age) && age >= -60_000 && age <= 180_000;
+  const maxAgeSeconds = getOperationalSettings().gps.signalLostSeconds;
+  const hasPosition = Number.isFinite(age) && age >= -60_000 && age < maxAgeSeconds * 1000;
 
   return {
     ok: true,
@@ -153,10 +173,12 @@ export async function testTraccarConnection(input: {
     hasPosition,
     message: hasPosition
       ? 'Servidor conectado, dispositivo encontrado y transmitiendo posicion.'
-      : lastPositionAt ? 'Dispositivo encontrado, pero la ultima posicion tiene mas de tres minutos. Revisa señal, permisos y ahorro de bateria.'
+      : age < -60_000 ? 'Dispositivo encontrado, pero su reloj esta adelantado. Revisa la sincronizacion de hora del equipo.'
+      : lastPositionAt ? `Dispositivo encontrado, pero la ultima posicion supera el umbral de ${maxAgeSeconds} segundos. Revisa señal y frecuencia de envio.`
       : 'Servidor conectado y dispositivo encontrado, pero todavia no reporta ninguna posicion.',
     externalDeviceId: String(device.id),
     lastPositionAt,
+    model: device.model ?? undefined,
     failedStep: hasPosition ? undefined : 'position',
   };
 }
@@ -239,7 +261,7 @@ export async function connectVehicleTraccarDevice(
   const serverUrl = input.serverUrl?.trim() || null;
   const test = await testTraccarConnection({ identifier, serverUrl: serverUrl ?? undefined });
 
-  if (!test.deviceFound) {
+  if (!test.ok || !test.externalDeviceId) {
     return { ok: false, error: test.message, test };
   }
 
@@ -248,11 +270,13 @@ export async function connectVehicleTraccarDevice(
   if (!isSupabaseConfigured()) {
     const vehicle = await getVehicleByIdFromStore(vehicleId);
     if (!vehicle) return { ok: false, error: 'Vehiculo no encontrado.', test };
+    const duplicate = (await listVehicles()).find((v) => v.id !== vehicleId && v.device?.imei === identifier);
+    if (duplicate) return { ok: false, error: `El identificador "${identifier}" ya esta asociado a otro vehiculo.`, test };
 
     const device: GpsDevice = {
       id: vehicle.device?.id ?? asDeviceId(`mem-device-${vehicleId}`),
       imei: identifier,
-      model: vehicle.device?.model ?? '',
+      model: test.model ?? '',
       provider: 'traccar',
       serverUrl: serverUrl ?? undefined,
       externalId: test.externalDeviceId,
@@ -267,11 +291,13 @@ export async function connectVehicleTraccarDevice(
   // Reutiliza el dispositivo ya asociado a este vehiculo si existe (mismo
   // uuid), para no acumular filas huerfanas en `dispositivos_gps` cada vez
   // que se corrige un identificador.
-  const { data: vehicleRow } = await supabase
+  const { data: vehicleRow, error: vehicleError } = await supabase
     .from('vehiculos')
     .select('dispositivo_id')
     .eq('id', vehicleId)
     .maybeSingle<{ dispositivo_id: string | null }>();
+
+  if (vehicleError || !vehicleRow) return { ok: false, error: 'No fue posible encontrar el vehiculo para asociar el GPS.', test };
 
   const devicePayload = {
     imei: identifier,
@@ -280,6 +306,8 @@ export async function connectVehicleTraccarDevice(
     proveedor_id_externo: test.externalDeviceId ?? null,
     habilitado: true,
     ultima_conexion_at: now,
+    modelo: test.model ?? '',
+    instalado_at: now,
   };
 
   const { data: deviceRow, error: deviceError } = vehicleRow?.dispositivo_id

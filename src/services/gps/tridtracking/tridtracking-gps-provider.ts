@@ -1,6 +1,8 @@
 import 'server-only';
 
+import { normalizeGpsHistory } from '@/lib/gps-history';
 import { getServerEnv } from '@/config/env';
+import { listVehicles } from '@/services/fleet/vehicle-store';
 import { getOperationalSettings } from '@/services/settings/settings-store';
 import type {
   DeviceStatus,
@@ -25,16 +27,13 @@ import {
   mapUnitToVehicle,
   toIsoUtc,
 } from './tridtracking-mapper';
-import type { TridAlert, TridUnit } from './tridtracking-types';
+import type { TridAlertList, TridPositionList, TridUnit } from './tridtracking-types';
 
 /**
  * Telemetria real desde 3DTracking (Client WebApi v1.0).
  *
- * La API no ofrece websocket ni streaming, asi que la suscripcion en vivo se
- * resuelve por sondeo. Se aprovecha `LastDateReceivedUtc` de
- * `latestpositionslist`, que devuelve SOLO lo reportado despues de esa marca:
- * el trafico se mantiene proporcional a lo que de verdad cambia, en vez de
- * traer la flota entera cada pocos segundos.
+ * La suscripcion usa instantaneas por sondeo. Las lecturas concurrentes
+ * comparten cache y no dependen de un cursor calculado desde el reloj GPS.
  *
  * Documentacion: https://apiv2.3dtracking.net/docs/v1/
  */
@@ -47,16 +46,15 @@ const ENDPOINTS = {
 } as const;
 
 /** Vida de la cache de unidades: el parque cambia de tanto en tanto. */
-const UNITS_TTL_MS = 5 * 60_000;
+const UNITS_TTL_MS = 60_000;
 
 /**
  * Clasifica la alerta del proveedor en el vocabulario interno.
  *
  * `GpsEventType` es una lista cerrada a proposito. Lo que no encaja se
- * traduce al evento mas cercano y conserva su texto original en `detail`,
- * en lugar de inventar una categoria nueva que ningun motor sabria tratar.
+ * descarta: una alerta desconocida no demuestra una recuperacion de señal.
  */
-function classifyAlert(nombre: string | null | undefined): GpsEvent['type'] {
+function classifyAlert(nombre: string | null | undefined): GpsEvent['type'] | null {
   const t = (nombre ?? '').toLowerCase();
 
   if (t.includes('geofence') || t.includes('zone') || t.includes('location')) {
@@ -72,7 +70,8 @@ function classifyAlert(nombre: string | null | undefined): GpsEvent['type'] {
   if (t.includes('power') || t.includes('corte')) return 'power_cut';
   if (t.includes('sos') || t.includes('panic')) return 'sos';
   if (t.includes('offline') || t.includes('disconnect')) return 'device_offline';
-  return 'device_online';
+  if (t.includes('online') || t.includes('connect')) return 'device_online';
+  return null;
 }
 
 export class TridTrackingGpsProvider implements GpsProvider {
@@ -86,6 +85,9 @@ export class TridTrackingGpsProvider implements GpsProvider {
 
   private readonly client: TridTrackingClient;
   private units: { data: TridUnit[]; expiresAt: number } | null = null;
+  private unitsPending: Promise<TridUnit[]> | null = null;
+  private latest: { data: TridUnit[]; expiresAt: number } | null = null;
+  private latestPending: Promise<TridUnit[]> | null = null;
 
   constructor() {
     const env = getServerEnv();
@@ -115,117 +117,132 @@ export class TridTrackingGpsProvider implements GpsProvider {
    * no dispara tres peticiones al proveedor.
    */
   private async fetchLatest(unitUid?: string): Promise<TridUnit[]> {
-    const data = await this.client.call<TridUnit[] | null>(ENDPOINTS.latest, {
-      ...(unitUid ? { UnitUid: unitUid } : {}),
-    });
-    return Array.isArray(data) ? data : [];
+    // Posiciones y salud de equipo comparten la misma instantanea. Las
+    // consultas concurrentes del mapa no abren lecturas duplicadas.
+    if (!this.latest || Date.now() >= this.latest.expiresAt) {
+      if (!this.latestPending) this.latestPending = (async () => {
+        const data = await this.client.call<TridUnit[] | null>(ENDPOINTS.latest);
+        if (data !== null && !Array.isArray(data)) throw new GpsProviderError('Formato de posiciones incompatible en 3DTracking.');
+        const units = data ?? [];
+        this.latest = { data: units, expiresAt: Date.now() + 2_000 };
+        return units;
+      })();
+      try { await this.latestPending; } finally { this.latestPending = null; }
+    }
+    const data = this.latest!.data;
+    return unitUid ? data.filter((unit) => unit.Uid === unitUid) : data;
   }
 
   private async getUnits(): Promise<TridUnit[]> {
     if (this.units && Date.now() < this.units.expiresAt) return this.units.data;
+    if (!this.unitsPending) this.unitsPending = (async () => {
+      const data = await this.client.call<TridUnit[] | null>(ENDPOINTS.units);
+      if (data !== null && !Array.isArray(data)) throw new GpsProviderError('Formato de flota incompatible en 3DTracking.');
+      const lista = data ?? [];
+      this.units = { data: lista, expiresAt: Date.now() + UNITS_TTL_MS };
+      return lista;
+    })();
+    try { return await this.unitsPending; } finally { this.unitsPending = null; }
+  }
 
-    const data = await this.client.call<TridUnit[] | null>(ENDPOINTS.units);
-    const lista = Array.isArray(data) ? data : [];
-    this.units = { data: lista, expiresAt: Date.now() + UNITS_TTL_MS };
-    return lista;
+  /** El IMEI une el UID del proveedor con el id de la flota propia. */
+  private async identities(): Promise<Map<string, Vehicle>> {
+    const [units, local] = await Promise.all([this.getUnits(), listVehicles()]);
+    const identities = new Map<string, Vehicle>();
+    for (const unit of units) {
+      const mapped = mapUnitToVehicle(unit);
+      if (!mapped) continue;
+      const matches = local.filter((vehicle) => mapped.device?.imei && vehicle.device?.imei === mapped.device.imei);
+      if (matches.length > 1) throw new GpsProviderError('Un IMEI de 3DTracking esta asociado a varios vehiculos.');
+      const known = matches[0];
+      identities.set(String(mapped.id), known ? { ...known, device: mapped.device } : mapped);
+    }
+    return identities;
+  }
+
+  private async unitUid(vehicleId: VehicleId): Promise<string> {
+    const identities = await this.identities();
+    return [...identities].find(([, vehicle]) => vehicle.id === vehicleId)?.[0] ?? String(vehicleId);
   }
 
   async getVehicles(): Promise<Vehicle[]> {
-    const unidades = await this.getUnits();
-    return unidades
-      .map(mapUnitToVehicle)
-      .filter((v): v is Vehicle => v !== null)
-      .sort((a, b) => a.plate.localeCompare(b.plate, 'es'));
+    return [...(await this.identities()).values()].sort((a, b) => a.plate.localeCompare(b.plate, 'es'));
   }
 
   async getAllCurrentPositions(): Promise<Position[]> {
-    const unidades = await this.fetchLatest();
-    return unidades.map(mapUnitToPosition).filter((p): p is Position => p !== null);
+    const [units, identities] = await Promise.all([this.fetchLatest(), this.identities()]);
+    return units.map(mapUnitToPosition).filter((p): p is Position => p !== null)
+      .map((p) => ({ ...p, vehicleId: identities.get(String(p.vehicleId))?.id ?? p.vehicleId, simulated: false }));
   }
 
   async getVehiclePosition(vehicleId: VehicleId): Promise<Position | null> {
-    const unidades = await this.fetchLatest(String(vehicleId));
-    const posiciones = unidades
-      .map(mapUnitToPosition)
-      .filter((p): p is Position => p !== null && p.vehicleId === vehicleId);
-    return posiciones[0] ?? null;
+    return (await this.getAllCurrentPositions()).find((p) => p.vehicleId === vehicleId) ?? null;
   }
 
-  /**
-   * Historial de posiciones.
-   *
-   * `positionslist` no acepta un rango de fechas: avanza por `StartId`, un
-   * cursor incremental. Se pagina hacia adelante y se recorta por fecha aqui,
-   * con un tope de paginas para que una ventana amplia no acabe descargando
-   * meses de historia y agotando el tiempo de la peticion.
-   */
+  /** Historial por hora UTC inicial y cursor StartId devuelto por la API. */
   async getPositionHistory(query: PositionHistoryQuery): Promise<Position[]> {
-    const desde = Date.parse(query.from);
-    const hasta = Date.parse(query.to);
-    const limite = query.limit ?? 1000;
-
-    const acumuladas: Position[] = [];
-    let startId = 0;
-    const MAX_PAGINAS = 20;
-
-    for (let pagina = 0; pagina < MAX_PAGINAS; pagina += 1) {
-      const lote = await this.client.call<TridUnit[] | null>(ENDPOINTS.history, {
-        Uid: String(query.vehicleId),
-        StartId: String(startId),
-      });
-      const unidades = Array.isArray(lote) ? lote : [];
-      if (unidades.length === 0) break;
-
-      for (const unidad of unidades) {
-        const posicion = mapUnitToPosition(unidad);
-        if (posicion === null) continue;
-        const t = Date.parse(posicion.timestamp);
-        if (t >= desde && t <= hasta) acumuladas.push(posicion);
-      }
-
-      if (acumuladas.length >= limite) break;
-      startId += unidades.length;
+    const from = Date.parse(query.from);
+    const to = Date.parse(query.to);
+    if (!Number.isFinite(from) || !Number.isFinite(to) || to < from) {
+      throw new GpsProviderError('Rango de historial GPS invalido.');
     }
-
-    return acumuladas
-      .sort((a, b) => Date.parse(a.timestamp) - Date.parse(b.timestamp))
-      .slice(-limite);
+    const uid = await this.unitUid(query.vehicleId);
+    const positions: Position[] = [];
+    let cursor: number | null = null;
+    for (let page = 0; page < 20; page += 1) {
+      const data: TridPositionList | null = await this.client.call<TridPositionList | null>(ENDPOINTS.history, {
+        Uid: uid,
+        ...(cursor === null
+          ? { StartHourUtc: new Date(Math.floor(from / 3_600_000) * 3_600_000).toISOString() }
+          : { StartId: String(cursor) }),
+      });
+      if (!data || (data.Position !== null && !Array.isArray(data.Position)) || typeof data.IsCurrent !== 'boolean') {
+        throw new GpsProviderError('Formato de historial incompatible en 3DTracking.');
+      }
+      for (const raw of data.Position ?? []) {
+        // El historial devuelve Position con Unit, no unidades con Position.
+        if (raw.Unit?.Uid !== uid) continue;
+        const position = mapUnitToPosition({ ...raw.Unit, Position: raw });
+        if (position && Date.parse(position.timestamp) >= from && Date.parse(position.timestamp) <= to) positions.push({ ...position, vehicleId: query.vehicleId, simulated: false });
+      }
+      if (data.IsCurrent) return normalizeGpsHistory(positions, query.limit);
+      if (!Number.isSafeInteger(data.StartId) || data.StartId! < 0 || data.StartId === cursor) {
+        throw new GpsProviderError('3DTracking no avanzo el cursor del historial.');
+      }
+      cursor = data.StartId!;
+    }
+    throw new GpsProviderError('El historial de 3DTracking supera 20 paginas. Acota el rango o usa el archivo local.');
   }
 
   async getVehicleEvents(query: VehicleEventsQuery): Promise<GpsEvent[]> {
-    const data = await this.client.call<TridAlert[] | null>(ENDPOINTS.alerts, {});
-    const alertas = Array.isArray(data) ? data : [];
-
-    const eventos: GpsEvent[] = [];
-    for (const alerta of alertas) {
-      const vehicleId = (alerta.UnitUid ?? '').trim();
-      const timestamp = toIsoUtc(alerta.DateTimeUtc);
-      if (vehicleId === '' || timestamp === null) continue;
+    const [data, units, identities] = await Promise.all([
+      this.client.call<TridAlertList | null>(ENDPOINTS.alerts), this.getUnits(), this.identities(),
+    ]);
+    if (data !== null && !Array.isArray(data.AlertList)) throw new GpsProviderError('Formato de alertas incompatible en 3DTracking.');
+    const events: GpsEvent[] = [];
+    for (const alert of data?.AlertList ?? []) {
+      // Vehicle es el nombre de la unidad; solo resolverlo si es univoco.
+      const matches = units.filter((unit) => unit.Name?.trim() === alert.Vehicle?.trim() || unit.Uid === alert.Vehicle);
+      if (matches.length !== 1) continue;
+      const unitId = matches[0]!.Uid?.trim();
+      const vehicleId = unitId ? identities.get(unitId)?.id ?? unitId : null;
+      const timestamp = toIsoUtc(alert.CreatedDate);
+      const type = classifyAlert(`${alert.AlertType ?? ''} ${alert.AlertName ?? ''}`);
+      if (!vehicleId || !timestamp || !type) continue;
       if (query.vehicleId && vehicleId !== String(query.vehicleId)) continue;
       if (query.from && Date.parse(timestamp) < Date.parse(query.from)) continue;
       if (query.to && Date.parse(timestamp) > Date.parse(query.to)) continue;
-
-      eventos.push({
-        id: (alerta.Uid ?? `${vehicleId}-${timestamp}`).trim(),
+      events.push({ id: alert.AlertUID ?? `${vehicleId}-${timestamp}-${type}`,
         vehicleId: vehicleId as VehicleId,
-        deviceId: vehicleId as GpsEvent['deviceId'],
-        type: classifyAlert(alerta.AlertTypeName ?? alerta.AlertType),
-        timestamp,
-        ...(typeof alerta.Latitude === 'number' && typeof alerta.Longitude === 'number'
-          ? { position: { lat: alerta.Latitude, lng: alerta.Longitude } }
-          : {}),
-        ...(alerta.Description ? { detail: alerta.Description } : {}),
-      });
+        deviceId: (matches[0]!.Imei || vehicleId) as GpsEvent['deviceId'], type, timestamp,
+        ...(alert.AlertMessage ? { detail: alert.AlertMessage } : {}) });
     }
-
-    return eventos
-      .sort((a, b) => Date.parse(b.timestamp) - Date.parse(a.timestamp))
-      .slice(0, query.limit ?? 200);
+    return events.sort((a, b) => Date.parse(b.timestamp) - Date.parse(a.timestamp)).slice(0, query.limit ?? 200);
   }
 
   async getDeviceStatus(vehicleId?: VehicleId): Promise<DeviceStatus[]> {
     const settings = getOperationalSettings();
-    const unidades = await this.fetchLatest(vehicleId ? String(vehicleId) : undefined);
+    const [unidades, identities] = await Promise.all([this.fetchLatest(), this.identities()]);
     const now = new Date();
 
     return unidades
@@ -237,56 +254,31 @@ export class TridTrackingGpsProvider implements GpsProvider {
         }),
       )
       .filter((d): d is DeviceStatus => d !== null)
+      .map((d) => ({ ...d, vehicleId: identities.get(String(d.vehicleId))?.id ?? d.vehicleId }))
       .filter((d) => !vehicleId || d.vehicleId === vehicleId);
   }
 
   /**
-   * Sondeo en vivo.
-   *
-   * `LastDateReceivedUtc` hace que cada consulta devuelva solo lo reportado
-   * desde la anterior. La marca se avanza con la posicion mas reciente
-   * RECIBIDA, no con el reloj local: si el servidor va desfasado respecto a
-   * nosotros, usar la hora local dejaria fuera posiciones legitimas.
+   * Instantaneas completas por sondeo: incluye registros reenviados despues
+   * de un corte y evita depender de un cursor con reloj de fix antiguo.
    */
   subscribeToPositions(handlers: PositionSubscriptionHandlers): Unsubscribe {
-    const env = getServerEnv();
-    let cancelado = false;
-    let ultimaMarca: string | null = null;
+    let closed = false;
     let timer: ReturnType<typeof setTimeout> | null = null;
-
     handlers.onTransportChange?.('polling');
-
-    const sondear = async (): Promise<void> => {
-      if (cancelado) return;
-
+    const poll = async (): Promise<void> => {
+      if (closed) return;
       try {
-        const unidades = await this.client.call<TridUnit[] | null>(ENDPOINTS.latest, {
-          ...(ultimaMarca ? { LastDateReceivedUtc: ultimaMarca } : {}),
-        });
-        const lista = Array.isArray(unidades) ? unidades : [];
-        const posiciones = lista.map(mapUnitToPosition).filter((p): p is Position => p !== null);
-
-        if (posiciones.length > 0) {
-          const masReciente = posiciones.reduce((max, p) =>
-            Date.parse(p.timestamp) > Date.parse(max.timestamp) ? p : max,
-          );
-          ultimaMarca = masReciente.timestamp;
-          handlers.onPositions(posiciones);
-        }
+        const positions = await this.getAllCurrentPositions();
+        if (!closed) handlers.onPositions(positions);
       } catch (error) {
-        handlers.onError?.(error instanceof Error ? error : new Error(String(error)));
+        if (!closed) handlers.onError?.(error instanceof Error ? error : new Error(String(error)));
       } finally {
-        if (!cancelado) timer = setTimeout(() => void sondear(), env.GPS_REFRESH_INTERVAL_MS);
+        if (!closed) timer = setTimeout(() => void poll(), getServerEnv().GPS_REFRESH_INTERVAL_MS);
       }
     };
-
-    void sondear();
-
-    return () => {
-      cancelado = true;
-      if (timer) clearTimeout(timer);
-      handlers.onTransportChange?.('disconnected');
-    };
+    void poll();
+    return () => { closed = true; if (timer) clearTimeout(timer); handlers.onTransportChange?.('disconnected'); };
   }
 
   /** Diagnostico de conectividad para la pantalla de configuracion. */

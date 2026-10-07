@@ -90,6 +90,8 @@ export function buildDeviceIndex(links: DeviceVehicleLink[]): Map<number, Device
 
 function numberAttribute(attributes: Record<string, unknown> | undefined, key: string): number | undefined {
   const value = attributes?.[key];
+  if (typeof value !== 'number' && typeof value !== 'string') return undefined;
+  if (typeof value === 'string' && !value.trim()) return undefined;
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : undefined;
 }
@@ -137,10 +139,14 @@ const EVENT_TYPE_MAP: Record<string, GpsEventType> = {
   ignitionOff: 'ignition_off',
   geofenceEnter: 'geofence_enter',
   geofenceExit: 'geofence_exit',
-  alarm: 'sos',
   powerCut: 'power_cut',
   hardBraking: 'harsh_braking',
   hardAcceleration: 'harsh_acceleration',
+};
+
+const ALARM_TYPE_MAP: Record<string, GpsEventType> = {
+  sos: 'sos', powerCut: 'power_cut', hardBraking: 'harsh_braking',
+  hardAcceleration: 'harsh_acceleration', overspeed: 'overspeed',
 };
 
 export function mapTraccarEvent(
@@ -148,17 +154,21 @@ export function mapTraccarEvent(
   link: DeviceVehicleLink,
   position?: { lat: number; lng: number },
 ): GpsEvent | null {
-  const type = EVENT_TYPE_MAP[raw.type];
+  const alarm = raw.attributes?.['alarm'];
+  const type = raw.type === 'alarm' && typeof alarm === 'string'
+    ? ALARM_TYPE_MAP[alarm] : EVENT_TYPE_MAP[raw.type];
   // Traccar emite muchos tipos que la operacion de Fenice no usa. Se descartan
   // aqui en vez de propagarlos como ruido al centro de alertas.
   if (!type) return null;
+  const time = Date.parse(raw.eventTime);
+  if (!Number.isFinite(time)) return null;
 
   return {
     id: `traccar-${raw.id}`,
     vehicleId: link.vehicleId,
     deviceId: asDeviceId(link.internalDeviceId),
     type,
-    timestamp: new Date(raw.eventTime).toISOString(),
+    timestamp: new Date(time).toISOString(),
     position,
     geofenceId: raw.geofenceId ? (String(raw.geofenceId) as GpsEvent['geofenceId']) : undefined,
     detail: typeof raw.attributes?.['alarm'] === 'string' ? String(raw.attributes['alarm']) : undefined,
@@ -169,10 +179,11 @@ export function mapTraccarDeviceStatus(
   raw: TraccarDevice,
   link: DeviceVehicleLink,
   now: Date = new Date(),
+  position: Position | null = null,
 ): DeviceStatus {
-  const lastPositionAt: IsoDateTime | null = raw.lastUpdate
-    ? new Date(raw.lastUpdate).toISOString()
-    : null;
+  // lastUpdate mide comunicacion con Traccar; puede ser un heartbeat o el
+  // reenvio de un fix antiguo. La salud GPS se calcula sobre el fix real.
+  const lastPositionAt: IsoDateTime | null = position?.valid ? position.timestamp : null;
 
   const secondsSinceLastPosition = lastPositionAt
     ? Math.max(0, Math.round((now.getTime() - new Date(lastPositionAt).getTime()) / 1000))
@@ -190,7 +201,6 @@ export function mapTraccarDeviceStatus(
     connection,
     lastPositionAt,
     secondsSinceLastPosition,
-    protocol: 'teltonika',
-    model: raw.model ?? 'Teltonika FMC130',
+    model: raw.model ?? undefined,
   };
 }

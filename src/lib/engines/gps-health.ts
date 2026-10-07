@@ -18,7 +18,7 @@ import type {
 export function secondsSince(iso: IsoDateTime | null, now: Date = new Date()): number | null {
   if (!iso) return null;
   const ms = new Date(iso).getTime();
-  if (Number.isNaN(ms)) return null;
+  if (Number.isNaN(ms) || ms - now.getTime() > 60_000) return null;
   return Math.max(0, Math.round((now.getTime() - ms) / 1000));
 }
 

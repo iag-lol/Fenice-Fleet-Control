@@ -49,8 +49,9 @@ const CLOSED_STATUSES: ReadonlySet<WorkOrderStatus> = new Set<WorkOrderStatus>([
 ]);
 
 /** Etiqueta anonimizada del vehiculo: nunca la patente completa. */
-function publicVehicleLabel(plate: string, fleetCode: string): string {
-  return `${fleetCode} · ${plate.slice(0, 2)}••${plate.slice(-2)}`;
+function publicVehicleLabel(plate: string, _fleetCode: string): string {
+  // En unidades importadas el codigo de flota puede ser la propia patente.
+  return `${plate.slice(0, 2)}••${plate.slice(-2)}`;
 }
 
 export interface TrackingLookup {
@@ -103,7 +104,7 @@ export async function loadTrackingSession(
   let progress: number;
 
   if (closed) {
-    progress = 1;
+    progress = status === 'cancelada' ? 0 : 1;
   } else if (status === 'en_cliente') {
     progress = PROGRESS_AT_DESTINATION;
   } else if (SHARE_POSITION_STATUSES.has(status)) {
@@ -141,13 +142,18 @@ export async function loadTrackingSession(
   let trajectory: TrackingSession['trajectory'] = null;
 
   if (trackingAllowed && workOrder.vehicleId && SHARE_POSITION_STATUSES.has(status)) {
-    const [vehicles, position] = await Promise.all([
+    const [vehicles, gpsVehicles, position] = await Promise.all([
       operations.getVehicles(),
-      gps.getVehiclePosition(workOrder.vehicleId),
+      gps.getVehicles().catch(() => []),
+      gps.getVehiclePosition(workOrder.vehicleId).catch(() => null),
     ]);
 
-    const record = vehicles.find((v) => v.id === workOrder.vehicleId) ?? null;
+    const record = [...vehicles, ...gpsVehicles].find((v) => v.id === workOrder.vehicleId) ?? null;
     const connection = evaluateConnectionState(position?.timestamp ?? null, settings.gps, now);
+    const fixMs = position ? Date.parse(position.timestamp) : NaN;
+    const usablePosition = position?.valid && isUsableCoordinate(position) &&
+      now.getTime() - Date.parse(position.timestamp) >= -60000 &&
+      (connection.state === 'online' || connection.state === 'stale') ? position : null;
 
     if (record) {
       vehicle = {
@@ -155,14 +161,19 @@ export async function loadTrackingSession(
         // Si la senal esta perdida no se publica una posicion vieja como si
         // fuera actual: se informa la ultima actualizacion y nada mas.
         position:
-          position && connection.state !== 'offline' ? { lat: position.lat, lng: position.lng } : null,
+          usablePosition ? { lat: usablePosition.lat, lng: usablePosition.lng } : null,
         heading: position?.heading ?? 0,
         lastUpdateAt: position?.timestamp ?? null,
-        moving: (position?.speed ?? 0) > settings.gps.movingSpeedThresholdKmh,
+        moving: !!usablePosition && connection.state === 'online' && usablePosition.speed > settings.gps.movingSpeedThresholdKmh,
+        speedKmh: usablePosition?.speed,
+        connection: connection.state,
+        freshUntil: Number.isFinite(fixMs) ? new Date(fixMs + settings.gps.staleSeconds * 1000).toISOString() : null,
+        positionExpiresAt: Number.isFinite(fixMs) ? new Date(fixMs + settings.gps.signalLostSeconds * 1000).toISOString() : null,
       };
     }
 
-    if (position && isUsableCoordinate(workOrder.coordinates)) {
+    if (usablePosition && connection.state === 'online' && isUsableCoordinate(workOrder.coordinates)) {
+      const position = usablePosition;
       const route = workOrder.routeId ? await operations.getRouteById(workOrder.routeId) : null;
       const result = await estimateEta({
         origin: { lat: position.lat, lng: position.lng },
@@ -226,7 +237,7 @@ export async function loadTrackingSession(
    * mientras el seguimiento ya se corto dejaria al cliente sin entender por
    * que desaparecio el mapa.
    */
-  const delivered = closed || workOrder.deliveryConfirmation !== 'none';
+  const delivered = status !== 'cancelada' && (closed || workOrder.deliveryConfirmation !== 'none');
 
   return {
     orderNumber: workOrder.orderNumber,
@@ -245,6 +256,7 @@ export async function loadTrackingSession(
     trajectory: trackingAllowed ? trajectory : null,
     deliveredAt: delivered ? workOrder.actualArrivalAt : null,
     trackingAllowed,
+    simulated: gps.info.simulated || operations.info.simulated,
     lastUpdateAt: now.toISOString(),
   };
 }

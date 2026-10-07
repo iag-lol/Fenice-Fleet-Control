@@ -1,7 +1,7 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { EstimatedRoutingProvider, planDrivingRoute } from '@/services/eta/eta-service';
-import { destinationPoint } from '@/lib/geo';
+import { EstimatedRoutingProvider, OsrmRoutingProvider, planDrivingRoute } from '@/services/eta/eta-service';
+import { destinationPoint, polylineLengthMeters } from '@/lib/geo';
 import type { LatLng } from '@/types/core';
 
 /**
@@ -11,6 +11,8 @@ import type { LatLng } from '@/types/core';
  */
 
 const provider = new EstimatedRoutingProvider();
+vi.mock('@/config/env', () => ({ getServerEnv: () => ({ ROUTING_PROVIDER: process.env.ROUTING_PROVIDER ?? 'estimated', OSRM_BASE_URL: process.env.OSRM_BASE_URL }) }));
+afterEach(() => { vi.unstubAllGlobals(); vi.unstubAllEnvs(); });
 const NOW = new Date('2026-08-27T12:00:00.000Z');
 
 const ORIGIN: LatLng = { lat: -33.45, lng: -70.7 };
@@ -22,6 +24,27 @@ const CORRIDOR: LatLng[] = [
 ];
 
 describe('EstimatedRoutingProvider', () => {
+  it('descarta un corredor lejano aunque las proyecciones avancen', async () => {
+    const result = await provider.estimate({ origin: { lat: -33.44, lng: -70.7 }, destination: { lat: -33.44, lng: -70.66 }, path: CORRIDOR, now: NOW });
+    expect(result.basis).toContain('directa');
+    expect(result.distanceKm).toBeGreaterThan(4);
+  });
+  it('incluye acceso y salida cuando ambos puntos están cerca del corredor', async () => {
+    const on = await provider.estimate({ origin: CORRIDOR[0]!, destination: CORRIDOR[1]!, path: CORRIDOR, now: NOW });
+    const offset = await provider.estimate({ origin: { ...CORRIDOR[0]!, lat: -33.449 }, destination: { ...CORRIDOR[1]!, lat: -33.449 }, path: CORRIDOR, now: NOW });
+    expect(offset.basis).toContain('corredor');
+    expect(offset.distanceKm! - on.distanceKm!).toBeGreaterThan(.2);
+  });
+  it('no inventa el avance en un corredor que vuelve sobre la misma calle', async () => {
+    const result = await provider.estimate({ origin: CORRIDOR[1]!, destination: CORRIDOR[2]!, path: [...CORRIDOR, ...[...CORRIDOR].reverse()], now: NOW });
+    expect(result.basis).toContain('directa');
+  });
+  it('maneja coordenadas inválidas y parámetros numéricos no finitos', async () => {
+    expect((await provider.estimate({ origin: { lat: NaN, lng: 0 }, destination: ORIGIN })).minutes).toBeNull();
+    const result = await provider.estimate({ origin: ORIGIN, destination: CORRIDOR[2]!, currentSpeedKmh: NaN, remainingStops: -9, now: NOW });
+    expect(result.minutes).toBeGreaterThan(0);
+    expect(Number.isFinite(Date.parse(result.arrivalAt!))).toBe(true);
+  });
   it('estima un ETA coherente para una entrega cercana', async () => {
     const result = await provider.estimate({
       origin: ORIGIN,
@@ -153,6 +176,18 @@ describe('EstimatedRoutingProvider', () => {
 });
 
 describe('planDrivingRoute', () => {
+  it('rechaza paradas inválidas en vez de eliminarlas y cambiar la ruta', async () => {
+    await expect(planDrivingRoute([ORIGIN, { lat: 0, lng: 0 }, CORRIDOR[2]!])).rejects.toThrow('coordenadas inválidas');
+  });
+  it('valida geometría y distancia del proveedor antes de usar calles reales', async () => {
+    vi.stubEnv('ROUTING_PROVIDER', 'osrm');
+    vi.stubEnv('OSRM_BASE_URL', 'https://routing.example.test');
+    const valid = { code: 'Ok', routes: [{ duration: 300, distance: polylineLengthMeters(CORRIDOR), geometry: { coordinates: CORRIDOR.map((p) => [p.lng, p.lat]) } }] };
+    vi.stubGlobal('fetch', vi.fn(async () => Response.json(valid)));
+    expect((await planDrivingRoute([CORRIDOR[0]!, CORRIDOR[3]!])).source).toBe('routing_provider');
+    vi.stubGlobal('fetch', vi.fn(async () => Response.json({ ...valid, routes: [{ ...valid.routes[0], distance: 5 }] })));
+    expect((await planDrivingRoute([CORRIDOR[0]!, CORRIDOR[3]!])).source).toBe('direct');
+  });
   // Sin ROUTING_PROVIDER=osrm configurado (no lo esta en las pruebas), debe
   // degradar a conectar las paradas en linea recta, nunca inventar una curva.
   it('conecta las paradas en linea recta cuando no hay proveedor de ruteo configurado', async () => {
@@ -176,5 +211,20 @@ describe('planDrivingRoute', () => {
     expect(result.source).toBe('direct');
     expect(result.distanceKm).toBe(0);
     expect(result.durationMinutes).toBe(0);
+  });
+});
+
+describe('OSRM ETA', () => {
+  it('rechaza respuestas no exitosas o distancias y duraciones incoherentes', async () => {
+    const osrm = new OsrmRoutingProvider('https://routing.example.test');
+    for (const data of [
+      { code: 'NoRoute', routes: [{ distance: 5000, duration: 300 }] },
+      { code: 'Ok', routes: [{ distance: -1, duration: 300 }] },
+      { code: 'Ok', routes: [{ distance: 5000, duration: -1 }] },
+      { code: 'Ok', routes: [{ distance: 5, duration: 300 }] },
+    ]) {
+      vi.stubGlobal('fetch', vi.fn(async () => Response.json(data)));
+      expect(await osrm.estimate({ origin: ORIGIN, destination: CORRIDOR[2]!, now: NOW })).toBeNull();
+    }
   });
 });

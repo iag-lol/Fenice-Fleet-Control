@@ -198,6 +198,9 @@ export function ClientDetailView({ clientId }: { clientId: string }) {
                   <ErrorBoundary section="el mapa del cliente">
                     <FleetMap
                       className="absolute inset-0"
+                      autoFit
+                      autoFitKey={clientId}
+                      isolated
                     layerOverride={{ clientes: true, camiones: false, rutas: false, geocercas: false, calor: false, pedidos: false, alertas: false, comunas: false }}
                       vehicles={[]}
                       clients={[

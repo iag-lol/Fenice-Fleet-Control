@@ -65,6 +65,8 @@ const SECURITY_HEADERS = [
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  // Un servidor de revision puede compilar sin tocar los artefactos de produccion.
+  distDir: process.env.NEXT_DIST_DIR || '.next',
   poweredByHeader: false,
   outputFileTracingExcludes: { '*': ['./.fenice/**/*'] },
   eslint: { dirs: ['src'] },

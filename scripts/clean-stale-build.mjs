@@ -24,7 +24,11 @@ import { existsSync, rmSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 const force = process.argv.includes('--force');
-const nextDir = resolve(process.cwd(), '.next');
+const buildDirectory = process.env.NEXT_DIST_DIR || '.next';
+if (!/^\.next(?:-[a-z0-9-]+)?$/.test(buildDirectory)) {
+  throw new Error('NEXT_DIST_DIR debe ser .next o una carpeta .next-<nombre> dentro del proyecto.');
+}
+const nextDir = resolve(process.cwd(), buildDirectory);
 
 if (force || existsSync(resolve(nextDir, 'BUILD_ID'))) {
   rmSync(nextDir, { recursive: true, force: true });

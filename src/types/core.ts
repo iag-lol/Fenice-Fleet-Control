@@ -69,6 +69,8 @@ export type IgnitionState = 'on' | 'off' | 'unknown';
  * Los campos opcionales reflejan que no todo dispositivo los reporta.
  */
 export interface Position {
+  /** A rejected GPS fix preceded this sample; do not bridge across it. */
+  historyGapBefore?: boolean;
   simulated?: boolean;
   /** Ajuste visual inferido. lat/lng y timestamp siguen siendo la medicion original. */
   roadMatch?: { fromTimestamp: IsoDateTime; confidence: number; path: LatLng[] };
@@ -729,6 +731,10 @@ export interface TrackingSession {
     heading: number;
     lastUpdateAt: IsoDateTime | null;
     moving: boolean;
+    speedKmh?: number;
+    connection?: DeviceConnectionState;
+    freshUntil?: IsoDateTime | null;
+    positionExpiresAt?: IsoDateTime | null;
   } | null;
   eta: {
     minutes: number | null;
@@ -766,6 +772,7 @@ export interface TrackingSession {
    * lugar de creer que el seguimiento se rompio.
    */
   trackingAllowed: boolean;
+  simulated?: boolean;
   lastUpdateAt: IsoDateTime;
 }
 

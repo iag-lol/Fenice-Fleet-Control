@@ -36,11 +36,10 @@ export class TraccarGpsProvider implements GpsProvider {
     id: 'traccar',
     label: 'CONECTADO',
     simulated: false,
-    preferredTransport: 'websocket',
+    preferredTransport: 'polling',
   };
 
   private readonly client: TraccarClient;
-  private readonly websocketUrl: string | null;
 
   /** Cache del enlace dispositivo Traccar <-> vehiculo interno. */
   private linkCache: { links: DeviceVehicleLink[]; expiresAt: number } | null = null;
@@ -66,7 +65,6 @@ export class TraccarGpsProvider implements GpsProvider {
     }
 
     this.client = new TraccarClient({ baseUrl: env.TRACCAR_BASE_URL, authHeader });
-    this.websocketUrl = env.TRACCAR_WEBSOCKET_URL ?? null;
   }
 
   /**
@@ -83,23 +81,18 @@ export class TraccarGpsProvider implements GpsProvider {
     const devices = await this.client.getDevices();
     const vehicles = await this.getVehicles();
 
-    const byExternalId = new Map(
-      vehicles.filter((v) => v.device?.externalId).map((v) => [v.device!.externalId!, v]),
-    );
-    const byImei = new Map(vehicles.filter((v) => v.device).map((v) => [v.device!.imei, v]));
-
     const links: DeviceVehicleLink[] = [];
-
     for (const device of devices) {
-      const vehicle = byExternalId.get(String(device.id)) ?? byImei.get(device.uniqueId);
+      if (device.disabled) continue;
+      // El IMEI es la identidad del equipo. Un id numerico guardado puede
+      // cambiar si se recrea el dispositivo o se migra el servidor.
+      const vehicle = vehicles.find((v) => v.device?.imei === device.uniqueId &&
+        (!v.device.provider || v.device.provider === 'traccar') &&
+        (!v.device.serverUrl || v.device.serverUrl.replace(/\/+$/, '') ===
+          getServerEnv().TRACCAR_BASE_URL?.replace(/\/+$/, '')));
       if (!vehicle?.device) continue;
-
-      links.push({
-        traccarDeviceId: device.id,
-        imei: device.uniqueId,
-        vehicleId: vehicle.id,
-        internalDeviceId: vehicle.device.id,
-      });
+      links.push({ traccarDeviceId: device.id, imei: device.uniqueId,
+        vehicleId: vehicle.id, internalDeviceId: vehicle.device.id });
     }
 
     this.linkCache = { links, expiresAt: Date.now() + 60_000 };
@@ -153,34 +146,23 @@ export class TraccarGpsProvider implements GpsProvider {
 
   async getVehicleEvents(query: VehicleEventsQuery): Promise<GpsEvent[]> {
     const links = await this.getLinks();
-    const index = buildDeviceIndex(links);
-
-    const params: Record<string, string> = {
-      from: new Date(query.from ?? Date.now() - 86_400_000).toISOString(),
-      to: new Date(query.to ?? Date.now()).toISOString(),
-    };
-
-    if (query.vehicleId) {
-      const link = links.find((l) => l.vehicleId === query.vehicleId);
-      if (!link) return [];
-      params['deviceId'] = String(link.traccarDeviceId);
-    }
-
-    const raw = await this.client.request<TraccarEvent[]>('/reports/events', params);
-
-    return raw
-      .map((event) => {
-        const link = index.get(event.deviceId);
-        return link ? mapTraccarEvent(event, link) : null;
-      })
-      .filter((e): e is GpsEvent => e !== null)
-      .slice(0, query.limit ?? 100);
+    const selected = query.vehicleId ? links.filter((l) => l.vehicleId === query.vehicleId) : links;
+    const events = await Promise.all(selected.map(async (link) => {
+      const raw = await this.client.request<TraccarEvent[]>('/reports/events', {
+        deviceId: String(link.traccarDeviceId),
+        from: new Date(query.from ?? Date.now() - 86_400_000).toISOString(),
+        to: new Date(query.to ?? Date.now()).toISOString(),
+      });
+      return raw.filter((event) => event.deviceId === link.traccarDeviceId)
+        .map((event) => mapTraccarEvent(event, link)).filter((e): e is GpsEvent => e !== null);
+    }));
+    return events.flat().sort((a, b) => b.timestamp.localeCompare(a.timestamp)).slice(0, query.limit ?? 100);
   }
 
   async getDeviceStatus(vehicleId?: VehicleId): Promise<DeviceStatus[]> {
     const links = await this.getLinks();
     const index = buildDeviceIndex(links);
-    const devices = await this.client.getDevices();
+    const [devices, positions] = await Promise.all([this.client.getDevices(), this.getAllCurrentPositions()]);
     const now = new Date();
 
     return devices
@@ -188,109 +170,32 @@ export class TraccarGpsProvider implements GpsProvider {
         const link = index.get(device.id);
         if (!link) return null;
         if (vehicleId && link.vehicleId !== vehicleId) return null;
-        return mapTraccarDeviceStatus(device, link, now);
+        return mapTraccarDeviceStatus(device, link, now, positions.find((p) => p.vehicleId === link.vehicleId) ?? null);
       })
       .filter((s): s is DeviceStatus => s !== null);
   }
 
   /**
-   * Construye la URL del socket autenticada por token. Devuelve `null` cuando
-   * no hay forma segura de autenticar, lo que fuerza el modo polling.
-   */
-  private buildSocketUrl(): string | null {
-    if (!this.websocketUrl) return null;
-
-    const token = getServerEnv().TRACCAR_TOKEN;
-    if (!token) return null;
-
-    try {
-      const url = new URL(this.websocketUrl);
-      url.searchParams.set('token', token);
-      return url.toString();
-    } catch {
-      return null;
-    }
-  }
-
-  /**
-   * Suscripcion en vivo por WebSocket con degradacion automatica a polling.
-   *
-   * Traccar publica `/api/socket`, que emite `{positions, devices, events}`.
-   * Si el socket no esta configurado o falla, se consulta por intervalo sin
-   * que el consumidor note la diferencia.
+   * Sondeo autenticado. Traccar exige cookie de sesion para /api/socket;
+   * agregar un token a esa URL no autentica el WebSocket estandar de Node.
    */
   subscribeToPositions(handlers: PositionSubscriptionHandlers): Unsubscribe {
     let closed = false;
-    let socket: WebSocket | null = null;
-    let pollTimer: ReturnType<typeof setInterval> | null = null;
-
-    const startPolling = (): void => {
-      if (closed || pollTimer) return;
-      handlers.onTransportChange?.('polling');
-
-      const poll = async (): Promise<void> => {
-        try {
-          handlers.onPositions(await this.getAllCurrentPositions());
-        } catch (error) {
-          handlers.onError?.(error instanceof Error ? error : new Error(String(error)));
-        }
-      };
-
-      void poll();
-      pollTimer = setInterval(() => void poll(), getServerEnv().GPS_REFRESH_INTERVAL_MS);
-    };
-
-    // El WebSocket estandar no admite cabeceras. Traccar acepta el token JWT
-    // por query string en `/api/socket`, que es la via soportada para
-    // autenticar el socket sin cookie de sesion. Sin token, se usa polling.
-    const socketUrl = this.buildSocketUrl();
-
-    if (!socketUrl) {
-      startPolling();
-    } else {
+    let pending = false;
+    handlers.onTransportChange?.('polling');
+    const poll = async (): Promise<void> => {
+      if (closed || pending) return;
+      pending = true;
       try {
-        socket = new WebSocket(socketUrl);
-
-        socket.addEventListener('open', () => handlers.onTransportChange?.('websocket'));
-
-        socket.addEventListener('message', (event: MessageEvent) => {
-          void (async () => {
-            try {
-              const payload = JSON.parse(String(event.data)) as { positions?: TraccarPosition[] };
-              if (!payload.positions?.length) return;
-
-              const links = await this.getLinks();
-              const index = buildDeviceIndex(links);
-              const positions = payload.positions
-                .map((p) => {
-                  const link = index.get(p.deviceId);
-                  return link ? mapTraccarPosition(p, link) : null;
-                })
-                .filter((p): p is Position => p !== null);
-
-              if (positions.length > 0) handlers.onPositions(positions);
-            } catch (error) {
-              handlers.onError?.(error instanceof Error ? error : new Error(String(error)));
-            }
-          })();
-        });
-
-        socket.addEventListener('error', () => startPolling());
-        socket.addEventListener('close', () => {
-          if (!closed) startPolling();
-        });
+        const positions = await this.getAllCurrentPositions();
+        if (!closed) handlers.onPositions(positions);
       } catch (error) {
-        handlers.onError?.(error instanceof Error ? error : new Error(String(error)));
-        startPolling();
-      }
-    }
-
-    return () => {
-      closed = true;
-      if (pollTimer) clearInterval(pollTimer);
-      socket?.close();
-      handlers.onTransportChange?.('disconnected');
+        if (!closed) handlers.onError?.(error instanceof Error ? error : new Error(String(error)));
+      } finally { pending = false; }
     };
+    void poll();
+    const timer = setInterval(() => void poll(), getServerEnv().GPS_REFRESH_INTERVAL_MS);
+    return () => { closed = true; clearInterval(timer); handlers.onTransportChange?.('disconnected'); };
   }
 
   /** Diagnostico rapido: usado por `/api/system/gps` y por la pantalla de configuracion de GPS. */

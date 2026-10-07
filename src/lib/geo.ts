@@ -225,6 +225,18 @@ export function polylineLengthMeters(path: LatLng[]): number {
   return total;
 }
 
+/** Invalid vertices break a line instead of joining the points on either side. */
+export function usablePathSegments(path: LatLng[]): LatLng[][] {
+  const segments: LatLng[][] = [];
+  let segment: LatLng[] = [];
+  for (const point of path) {
+    if (isUsableCoordinate(point)) segment.push(point);
+    else { if (segment.length >= 2) segments.push(segment); segment = []; }
+  }
+  if (segment.length >= 2) segments.push(segment);
+  return segments;
+}
+
 /**
  * Punto-en-poligono por ray casting. El poligono se asume cerrado
  * implicitamente (el ultimo vertice se une al primero).

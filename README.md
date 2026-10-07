@@ -29,9 +29,20 @@ contratado cambiando una variable — ver
 
 ---
 
+## Piloto GPS del FMC130
+
+El primer camión es **RBDC59** y reportará a **3DTracking**. La preparación,
+configuración y pauta de aceptación del viernes 9 de octubre de 2026 están
+en [la guía del piloto](docs/FMC130-PRUEBAS-RBDC59.md).
+
+- `npm run gps:test`: pruebas del flujo GPS.
+- `npm run gps:check -- --plate RBDC59`: diagnóstico de la cuenta y posición.
+- `npm run gps:check -- --plate RBDC59 --history`: incluye recorrido reciente.
+- `npm run gps:record`: grabador para conservar muestras sin operadores conectados.
+
 ## Instalación
 
-Requiere **Node.js 20 o superior**.
+Requiere **Node.js 24 según `.nvmrc`** (mínimo compatible: 20.19).
 
 ```bash
 npm install
@@ -184,6 +195,8 @@ src/
 ---
 
 ## El mapa
+
+El [explorador de recorridos GPS](docs/GPS-RECORRIDOS.md) combina trazado por velocidad, reproducción temporal, gráfico, eventos, continuidad y exportación CSV/GeoJSON. Se abre desde **Analizar recorrido** en la ficha del vehículo y desde la jornada de una ruta. El seguimiento público dispone de un mapa con encuadre propio y una vista móvil que prioriza el trayecto.
 
 El mapa **no es un adorno dentro de una tarjeta**: ocupa toda la superficie
 disponible y es el centro de la aplicación.

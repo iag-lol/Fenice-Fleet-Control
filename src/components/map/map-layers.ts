@@ -1,6 +1,6 @@
 import type { GeoJSONSource, LngLatBoundsLike, Map as MapLibreMap } from 'maplibre-gl';
 
-import { circleToPolygon, isUsableCoordinate, pointAlongPolyline, polylineLengthMeters, sliceCorridor } from '@/lib/geo';
+import { circleToPolygon, isUsableCoordinate, pointAlongPolyline, polylineLengthMeters, sliceCorridor, usablePathSegments } from '@/lib/geo';
 import { closedRing } from '@/lib/map-navigation';
 import type { Geofence, HeatmapPoint, LatLng } from '@/types/core';
 import type {
@@ -26,6 +26,7 @@ export const SOURCE = {
   routesPlanned: 'src-routes-planned',
   routesExecuted: 'src-routes-executed',
   routeStops: 'src-route-stops',
+  routeEndpoints: 'src-route-endpoints',
   geofences: 'src-geofences',
   traffic: 'src-traffic',
   alerts: 'src-alerts',
@@ -46,6 +47,11 @@ export const LAYER = {
   geofenceLabel: 'lyr-geofence-label',
   traffic: 'lyr-traffic',
   routePlanned: 'lyr-route-planned',
+  routePlannedCasing: 'lyr-route-planned-casing',
+  routeExecutedCasing: 'lyr-route-executed-casing',
+  routeDirections: 'lyr-route-directions',
+  routeEndpoints: 'lyr-route-endpoints',
+  routeEndpointLabels: 'lyr-route-endpoint-labels',
   routeExecuted: 'lyr-route-executed',
   routeStops: 'lyr-route-stops',
   routeStopLabels: 'lyr-route-stop-labels',
@@ -318,6 +324,10 @@ export function registerLayers(map: MapLibreMap): void {
 
   // --- Rutas ---------------------------------------------------------------
   map.addSource(SOURCE.routesPlanned, { type: 'geojson', data: EMPTY });
+  map.addLayer({ id: LAYER.routePlannedCasing, type: 'line', source: SOURCE.routesPlanned,
+    layout: { 'line-cap': 'round', 'line-join': 'round' },
+    paint: { 'line-color': '#ffffff', 'line-width': ['interpolate', ['linear'], ['zoom'], 9, 4, 14, 8],
+      'line-opacity': ['case', ['get', 'covered'], 0, 0.82] } });
   map.addLayer({
     id: LAYER.routePlanned,
     type: 'line',
@@ -356,13 +366,17 @@ export function registerLayers(map: MapLibreMap): void {
   });
 
   map.addSource(SOURCE.routesExecuted, { type: 'geojson', data: EMPTY });
+  map.addLayer({ id: LAYER.routeExecutedCasing, type: 'line', source: SOURCE.routesExecuted,
+    layout: { 'line-cap': 'round', 'line-join': 'round' },
+    paint: { 'line-color': '#ffffff', 'line-width': ['interpolate', ['linear'], ['zoom'], 9, 5, 14, 9],
+      'line-opacity': ['case', ['get', 'context'], 0.45, 0.94] } });
   map.addLayer({
     id: LAYER.routeExecuted,
     type: 'line',
     source: SOURCE.routesExecuted,
     layout: { 'line-cap': 'round', 'line-join': 'round' },
     paint: {
-      'line-color': ['case', ['get', 'highlighted'], '#0b2f4f', '#1d4e73'],
+      'line-color': ['case', ['get', 'context'], '#94a3b8', ['coalesce', ['get', 'color'], ['case', ['get', 'highlighted'], '#0891b2', '#1d4e73']]],
       'line-width': [
         'interpolate',
         ['linear'],
@@ -372,9 +386,23 @@ export function registerLayers(map: MapLibreMap): void {
         14,
         ['case', ['get', 'highlighted'], 5.5, 4.2],
       ],
-      'line-opacity': ['case', ['get', 'highlighted'], 0.98, 0.86],
+      'line-opacity': ['case', ['get', 'context'], 0.38, ['get', 'preview'], 0.35, ['case', ['get', 'highlighted'], 0.98, 0.86]],
     },
   });
+
+  map.addLayer({ id: LAYER.routeDirections, type: 'symbol', source: SOURCE.routesExecuted,
+    filter: ['all', ['==', ['get', 'highlighted'], true], ['!=', ['get', 'context'], true]],
+    layout: { 'symbol-placement': 'line', 'symbol-spacing': 95, 'text-field': '›',
+      'text-size': 22, 'text-font': [BOLD_FONT], 'text-keep-upright': false, 'text-allow-overlap': true },
+    paint: { 'text-color': '#ffffff', 'text-halo-color': '#0e7490', 'text-halo-width': 0.5 } });
+  map.addSource(SOURCE.routeEndpoints, { type: 'geojson', data: EMPTY });
+  map.addLayer({ id: LAYER.routeEndpoints, type: 'circle', source: SOURCE.routeEndpoints,
+    paint: { 'circle-radius': 7, 'circle-color': ['case', ['get', 'start'], '#14b8a6', '#172f4a'],
+      'circle-stroke-color': '#ffffff', 'circle-stroke-width': 3 } });
+  map.addLayer({ id: LAYER.routeEndpointLabels, type: 'symbol', source: SOURCE.routeEndpoints,
+    layout: { 'text-field': ['case', ['get', 'start'], 'INICIO', 'FIN'], 'text-font': [BOLD_FONT],
+      'text-size': 10, 'text-offset': [0, 1.7], 'text-allow-overlap': false },
+    paint: { 'text-color': '#172f4a', 'text-halo-color': '#ffffff', 'text-halo-width': 2 } });
 
   map.addSource(SOURCE.routeStops, { type: 'geojson', data: EMPTY });
   map.addLayer({
@@ -434,9 +462,9 @@ export function registerLayers(map: MapLibreMap): void {
     layout: { visibility: 'none' },
     paint: {
       'circle-radius': [
-        '+',
-        ['interpolate', ['linear'], ['zoom'], 10, 7, 15, 12],
-        ['case', ['get', 'selected'], 3, 0],
+        'interpolate', ['linear'], ['zoom'],
+        10, ['case', ['get', 'selected'], 10, 7],
+        15, ['case', ['get', 'selected'], 15, 12],
       ],
       'circle-color': [
         'match',
@@ -488,6 +516,8 @@ export function registerLayers(map: MapLibreMap): void {
         ['get', 'eventType'],
         'speeding',
         '#dc2626',
+        'signal_gap',
+        '#d97706',
         'stop',
         '#b45309',
         'ignition_on',
@@ -510,6 +540,8 @@ export function registerLayers(map: MapLibreMap): void {
         ['get', 'eventType'],
         'speeding',
         'V',
+        'signal_gap',
+        '?',
         'stop',
         'P',
         'ignition_on',
@@ -731,10 +763,10 @@ export function updateRoutes(
   const planned: FeatureCollection = {
     type: 'FeatureCollection',
     features: routes
-      .map((r) => ({ route: r, points: r.plannedPath.filter(isUsableCoordinate) }))
+      .flatMap((r) => usablePathSegments(r.plannedPath).map((points) => ({ route: r, points })))
       .filter(({ points }) => points.length >= 2)
       .flatMap(({ route: r, points }) =>
-        splitPlannedPath(points, r.plannedProgressMeters).map(({ coordinates, covered }) => ({
+        splitPlannedPath(points, r.plannedPath.every(isUsableCoordinate) ? r.plannedProgressMeters : null).map(({ coordinates, covered }) => ({
           type: 'Feature' as const,
           geometry: {
             type: 'LineString' as const,
@@ -753,20 +785,25 @@ export function updateRoutes(
   const executed: FeatureCollection = {
     type: 'FeatureCollection',
     features: routes
-      .flatMap((r) => (r.executedSegments ?? [r.executedPath]).map((segment) => ({ route: r, points: segment.filter(isUsableCoordinate) })))
+      .flatMap((route): { route: RouteGeometry; points: LatLng[]; color: string | null }[] => route.speedSections
+        ? route.speedSections.flatMap((section) => usablePathSegments(section.path).map((points) => ({ route, points, color: section.color })))
+        : (route.executedSegments ?? [route.executedPath]).flatMap((segment) => usablePathSegments(segment).map((points) => ({ route, points, color: null }))))
       .filter(({ points }) => points.length >= 2)
-      .map(({ route: r, points }) => ({
-        type: 'Feature',
-        geometry: {
-          type: 'LineString',
-          coordinates: points.map((p) => [p.lng, p.lat]),
-        },
-        properties: {
-          routeId: r.routeId,
-          highlighted: highlightedRouteId === r.routeId,
-        },
+      .map(({ route, points, color }) => ({
+        type: 'Feature', geometry: { type: 'LineString', coordinates: points.map((p) => [p.lng, p.lat]) },
+        properties: { routeId: route.routeId, highlighted: highlightedRouteId === route.routeId,
+          context: route.visualRole === 'context', preview: route.visualRole === 'preview', color },
       })),
   };
+  const endpoints: FeatureCollection = { type: 'FeatureCollection', features: routes.flatMap((route) => {
+    if (!route.showEndpoints) return [];
+    const points = (route.executedSegments?.flat() ?? route.executedPath).filter(isUsableCoordinate);
+    if (points.length < 2) return [];
+    return [points[0]!, points.at(-1)!].map((point, i) => ({ type: 'Feature' as const,
+      geometry: { type: 'Point' as const, coordinates: [point.lng, point.lat] },
+      properties: { routeId: route.routeId, start: i === 0 } }));
+  }) };
+  setData(map, SOURCE.routeEndpoints, endpoints);
 
   const stops: FeatureCollection = {
     type: 'FeatureCollection',
@@ -797,9 +834,14 @@ export function updateRoutes(
 
 export interface TrajectoryEventInput {
   id: string;
-  eventType: 'stop' | 'speeding' | 'ignition_on' | 'ignition_off';
+  eventType: 'stop' | 'speeding' | 'ignition_on' | 'ignition_off' | 'signal_gap';
   lat: number;
   lng: number;
+  at?: string;
+  endedAt?: string | null;
+  title?: string;
+  detail?: string;
+  vehiclePlate?: string;
 }
 
 export function updateTrajectoryEvents(map: MapLibreMap, events: TrajectoryEventInput[]): void {
@@ -922,19 +964,14 @@ export function updateCommunes(map: MapLibreMap, communes: CommuneFeatureInput[]
   });
 }
 
-export function updateFollowTrail(map: MapLibreMap, path: LatLng[]): void {
+export function updateFollowTrail(map: MapLibreMap, paths: LatLng[][]): void {
   setData(map, SOURCE.followTrail, {
     type: 'FeatureCollection',
-    features:
-      path.length >= 2
-        ? [
-            {
-              type: 'Feature',
-              geometry: { type: 'LineString', coordinates: path.map((p) => [p.lng, p.lat]) },
-              properties: {},
-            },
-          ]
-        : [],
+    features: paths.flatMap(usablePathSegments).map((path) => ({
+      type: 'Feature',
+      geometry: { type: 'LineString', coordinates: path.map((p) => [p.lng, p.lat]) },
+      properties: {},
+    })),
   });
 }
 

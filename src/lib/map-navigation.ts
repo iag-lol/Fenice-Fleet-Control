@@ -1,6 +1,6 @@
 import { circleToPolygon, isUsableCoordinate } from '@/lib/geo';
 import type { BoundingBox, Geofence, LatLng } from '@/types/core';
-import type { MapSnapshot } from '@/types/views';
+import type { RouteGeometry, MapSnapshot } from '@/types/views';
 
 /** Excludes absent GPS fixes so they cannot pull the camera away from the operation. */
 export function boundsForPoints(points: LatLng[]): BoundingBox | null {
@@ -37,4 +37,12 @@ export function closedRing(points: LatLng[]): number[][] {
   const last = points[points.length - 1]!;
   if (first.lat !== last.lat || first.lng !== last.lng) ring.push([first.lng, first.lat]);
   return ring;
+}
+
+/** El encuadre de una ficha incluye todas sus curvas y la posicion actual, aunque se aparte de la ruta. */
+export function vehicleOverviewPoints(routes: RouteGeometry[], position: LatLng | null): LatLng[] {
+  return [
+    ...(position ? [position] : []),
+    ...routes.flatMap((r) => [...r.plannedPath, ...r.executedPath, ...(r.executedSegments?.flat() ?? []), ...r.stops]),
+  ].filter(isUsableCoordinate);
 }

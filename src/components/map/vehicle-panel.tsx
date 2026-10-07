@@ -54,6 +54,7 @@ import {
 import { cn } from '@/lib/cn';
 import { findDeviceCapabilities } from '@/config/gps-device-capabilities';
 import { useLiveFleet } from '@/hooks/use-live-fleet';
+import { vehicleOverviewPoints } from '@/lib/map-navigation';
 import { useMapStore } from '@/stores/map-store';
 import type { VehicleDetail } from '@/types/views';
 
@@ -66,6 +67,7 @@ const TRAJECTORY_EVENT_ICON: Record<TrajectoryEventType, typeof Square> = {
   speeding: AlertTriangle,
   ignition_on: Power,
   ignition_off: PowerOff,
+  signal_gap: AlertTriangle,
 };
 
 const TRAJECTORY_EVENT_TONE: Record<TrajectoryEventType, string> = {
@@ -73,6 +75,7 @@ const TRAJECTORY_EVENT_TONE: Record<TrajectoryEventType, string> = {
   speeding: 'text-status-warning',
   ignition_on: 'text-status-active',
   ignition_off: 'text-ink-faint',
+  signal_gap: 'text-status-warning',
 };
 
 /**
@@ -88,7 +91,6 @@ export function VehiclePanel({ vehicleId }: { vehicleId: string }) {
   const followVehicle = useMapStore((s) => s.followVehicle);
   const following = useMapStore((s) => s.followingVehicleId);
   const highlightRoute = useMapStore((s) => s.highlightRoute);
-  const highlightedRouteId = useMapStore((s) => s.highlightedRouteId);
   const [tab, setTab] = useState<PanelTab>('informacion');
   const [moreOpen, setMoreOpen] = useState(false);
 
@@ -205,14 +207,19 @@ export function VehiclePanel({ vehicleId }: { vehicleId: string }) {
             variant="secondary"
             size="sm"
             icon={<RouteIcon className="h-3.5 w-3.5" />}
-            onClick={() => route && highlightRoute(highlightedRouteId === route.routeId ? null : route.routeId)}
-            disabled={!route}
+            onClick={() => {
+              const routes = [...(route ? [route] : []), ...(trajectory ? [trajectory.route] : [])];
+              const points = vehicleOverviewPoints(routes, position?.valid ? position : null);
+              highlightRoute(trajectory?.route.routeId ?? route?.routeId ?? null);
+              if (points.length) useMapStore.getState().fitPoints(points);
+            }}
+            disabled={!route && !trajectory && !position?.valid}
           >
-            {route && highlightedRouteId === route.routeId ? 'Quitar ruta' : 'Ver ruta'}
+            Ver ruta completa
           </Button>
 
           <LinkButton
-            href={`/flota/${vehicleId}`}
+            href={`/flota/${vehicleId}#historial-gps`}
             variant="secondary"
             size="sm"
             icon={<History className="h-3.5 w-3.5" />}

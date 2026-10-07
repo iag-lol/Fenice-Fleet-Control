@@ -211,3 +211,8 @@ describe('normalizePosition', () => {
     expect(result?.address).toBeUndefined();
   });
 });
+
+it('no considera activo un GPS con el reloj adelantado varios minutos', () => {
+  const now = new Date('2026-10-07T12:00:00Z');
+  expect(evaluateConnectionState('2026-10-07T12:05:00Z', gps, now).state).toBe('unknown');
+});

@@ -24,6 +24,7 @@ export interface TridAuthResponse {
 }
 
 export interface TridPosition {
+  Unit?: { Uid?: string | null; Name?: string | null; Imei?: string | null } | null;
   Latitude?: number | null;
   Longitude?: number | null;
   Address?: string | null;
@@ -61,6 +62,11 @@ export interface TridUnit {
 }
 
 export interface TridAlert {
+  AlertUID?: string | null;
+  AlertName?: string | null;
+  Vehicle?: string | null;
+  CreatedDate?: string | null;
+  AlertMessage?: string | null;
   Uid?: string | null;
   UnitUid?: string | null;
   AlertType?: string | null;
@@ -69,4 +75,21 @@ export interface TridAlert {
   DateTimeUtc?: string | null;
   Latitude?: number | null;
   Longitude?: number | null;
+}
+
+/** Envoltorio comun publicado en /openapi/v1.json. */
+export interface TridResponse<T> {
+  Status?: TridStatus | null;
+  Result?: T | null;
+}
+
+export interface TridPositionList {
+  Position?: TridPosition[] | null;
+  StartId?: number | null;
+  IsCurrent?: boolean;
+}
+
+export interface TridAlertList {
+  AlertList?: TridAlert[] | null;
+  StartUID?: string | null;
 }

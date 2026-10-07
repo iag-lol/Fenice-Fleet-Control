@@ -8,6 +8,14 @@ export const sample = (second: number, lng = -70.66): Position => ({
   speed: 30, heading: 90, ignition: 'on', valid: true,
 });
 describe('GPS evidence and road geometry', () => {
+  it('rechaza ajustes remotos, métricas no finitas y datos de otro vehículo', () => {
+    const a = sample(0), b = sample(20, -70.659);
+    const roadMatch = { fromTimestamp: a.timestamp, confidence: .95, path: [a, b] };
+    expect(roadPathForTransition(a, { ...b, roadMatch: { ...roadMatch, confidence: NaN } })).toBeNull();
+    expect(roadPathForTransition(a, { ...b, roadMatch: { ...roadMatch, path: [{ ...a, lat: -33.44 }, b] } })).toBeNull();
+    expect(roadPathForTransition(a, { ...b, vehicleId: 'v2' as Position['vehicleId'], roadMatch })).toBeNull();
+    expect(roadPathForTransition(a, { ...b, historyGapBefore: true, roadMatch })).toBeNull();
+  });
   it('follows the corner instead of its diagonal', () => {
     const path = [{ lat: -33.45, lng: -70.66 }, { lat: -33.45, lng: -70.659 }, { lat: -33.449, lng: -70.659 }];
     for (const t of [.1, .3, .5, .8]) {

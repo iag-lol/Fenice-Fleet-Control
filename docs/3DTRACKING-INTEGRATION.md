@@ -1,171 +1,72 @@
-# Integracion con 3DTracking
+# Integración con 3DTracking
 
-Telemetria GPS real desde **3DTracking Client WebApi v1.0**
-(https://apiv2.3dtracking.net/docs/v1/).
+La flota usa 3DTracking Client WebApi v1.0. El primer FMC130 se instalará en RBDC59. Para la preparación del equipo y la aceptación en terreno, seguir [la guía del piloto](FMC130-PRUEBAS-RBDC59.md).
 
----
+## Configuración del servidor
 
-## 1. Activar
-
-```bash
+```dotenv
 GPS_PROVIDER=3dtracking
 TRIDTRACKING_BASE_URL=https://apiv2.3dtracking.net
-TRIDTRACKING_USERNAME=<usuario>
-TRIDTRACKING_PASSWORD=<clave>
+TRIDTRACKING_USERNAME=<usuario API>
+TRIDTRACKING_PASSWORD=<clave API>
 TRIDTRACKING_TIMEOUT_MS=15000
+GPS_LIVE_TRANSPORT=polling
+GPS_REFRESH_INTERVAL_MS=15000
+GPS_HISTORY_DIR=.fenice/gps-history
+DEMO_MODE=false
+NEXT_PUBLIC_DEMO_MODE=false
 ```
 
-No hay que tocar ni una linea de codigo: toda la aplicacion consume la
-interfaz `GpsProvider`, nunca una implementacion concreta.
+Las credenciales permanecen en el servidor. El navegador consulta `/api/gps/*` de Fleet Control. Los mensajes de error censuran las credenciales y las peticiones no siguen redirecciones hacia otro servidor.
 
-### Comprobar que funciona
+## Contrato oficial de respuestas
 
-```bash
-curl -s http://localhost:3000/api/system/gps | jq
-```
+Los endpoints responden con `{ Status, Result }`. El cliente comprueba errores de `Status` incluso con HTTP 200 y entrega el contenido de `Result` al proveedor. El formato esperado procede del [OpenAPI oficial](https://apiv2.3dtracking.net/openapi/v1.json).
 
-```json
-{
-  "provider": "3dtracking",
-  "credencialesPresentes": true,
-  "ok": true,
-  "message": "Sesion establecida con 3DTracking.",
-  "latencyMs": 25,
-  "vehiculos": 3,
-  "posiciones": 3,
-  "posicionesValidas": 2,
-  "ultimaPosicionAt": "2026-09-02T13:58:12.089Z"
-}
-```
-
-`posicionesValidas` menor que `posiciones` no es un fallo: significa que
-algun equipo reporta **sin fijacion satelital**. Ver §4.
-
----
-
-## 2. Seguridad: credenciales en la URL
-
-Esta API pide `UserIdGuid` y `SessionId` como **parametros de consulta** en
-cada llamada, no como cabeceras.
-
-Consecuencias que gobiernan el diseño de la integracion:
-
-- Todo el cliente es `server-only`. **Jamas** se importa desde un componente
-  de navegador. Si llegara, las credenciales quedarian en el historial del
-  usuario y en cualquier cabecera `Referer`.
-- Toda URL que pueda acabar en un registro pasa por `redactUrl()`, que
-  sustituye `SessionId`, `UserIdGuid`, `username` y `password` por `***`.
-- El navegador nunca habla con 3DTracking: pide a `/api/gps/positions` de
-  esta aplicacion, que es quien consulta al proveedor.
-
----
-
-## 3. Sesion
-
-`POST|GET /api/v1.0/authentication/userauthenticate?username=&password=`
-devuelve `{ Status, Result: { UserIdGuid, SessionId } }`.
-
-- La sesion se **cachea** y se renueva cada 30 minutos. La API no publica su
-  vida util, asi que se renueva por precaucion antes de que caduque.
-- Las llamadas concurrentes **comparten una unica autenticacion en curso**. Al
-  arrancar, varias pantallas piden posiciones a la vez; abrir cinco sesiones
-  simultaneas es la forma tipica de que un proveedor bloquee la cuenta.
-- Ante un fallo se renueva la sesion y se reintenta **una sola vez**. Mas
-  reintentos convertirian unas credenciales erroneas en un bucle de peticiones.
-
----
-
-## 4. Traduccion de datos
-
-Toda la logica delicada vive en `tridtracking-mapper.ts`, que es puro y se
-prueba sin red ni credenciales.
-
-| Problema | Como se resuelve | Por que importa |
+| Uso | Endpoint | Contenido de Result |
 |---|---|---|
-| `SpeedMeasure` varia por cuenta (km/h, mph, nudos, m/s) | Se normaliza siempre a km/h | 62 mph leidos como 62 km/h dispararian solas las alertas de exceso de velocidad |
-| Fechas UTC **sin sufijo de zona** | Se les añade `Z` antes de interpretarlas | En Chile se leerian con 3-4 h de desfase: el sistema creeria que toda la flota lleva horas sin reportar |
-| `Ignition` es texto libre, no booleano | `on` / `off` / `unknown` | Suponer "apagado" inventaria detenciones que nadie observo |
-| Coordenada `(0,0)` | `valid: false`, y el mapa **no la dibuja** | El (0,0) es el Golfo de Guinea: pondria camiones chilenos en el Atlantico |
-| `Heading` fuera de rango | Se normaliza a 0-359 | |
-| Unidad sin nombre | Cae al IMEI | El camion sigue siendo identificable en pantalla |
+| Autenticación | `/api/v1.0/authentication/userauthenticate` | UserIdGuid y SessionId |
+| Flota | `/api/v1.0/units/unit/list` | Lista de Unit |
+| Posiciones actuales | `/api/v1.0/units/latestpositionslist` | Lista de UnitLatestPosition con Position |
+| Historial | `/api/v1.0/data/positionslist` | Position, StartId e IsCurrent |
+| Alertas | `/api/v1.0/alerts/alerts/list` | AlertList y StartUID |
 
-Un vehiculo sin fijacion **sigue apareciendo en los listados** con su estado
-de conexion. Solo se omite del mapa: "reporta pero sin GPS" no es lo mismo
-que "no reporta", y esa diferencia se explica en la ficha, no en el mapa.
+La sesión se reutiliza y se renueva preventivamente cada 30 minutos. Las llamadas concurrentes comparten autenticación; una sesión expirada permite un solo reintento. Los errores de red o HTTP 500 no abren sesiones nuevas automáticamente. El diagnóstico reutiliza la sesión vigente.
 
-### Lo que el GPS NO sabe
+## Posiciones y salud GPS
 
-Capacidad del estanque, compartimentos, planta y patente formal son datos del
-ERP de Fenice. Se dejan **vacios**, nunca supuestos: inventar litros llevaria
-a planificar cargas imposibles.
+Las lecturas concurrentes de posición y estado comparten una instantánea durante dos segundos. La suscripción consulta instantáneas completas cada `GPS_REFRESH_INTERVAL_MS`; al cerrarla no entrega resultados de solicitudes pendientes.
 
----
+No se usa `LastDateReceivedUtc` en este piloto. El contrato permite ese filtro, pero requiere una fecha de recepción con formato específico; usar el instante del fix como cursor podía omitir registros reenviados tras un corte. Las instantáneas completas evitan ese error.
 
-## 5. Union del parque
+`tridtracking-mapper.ts` normaliza velocidad a km/h, rumbo, ignición y fechas UTC. Un fix nulo, fuera de rango o cercano a `(0,0)` queda marcado inválido y no se dibuja. La salud del equipo prefiere `Position.GPSTimeUtc` a `LastReportedTimeUTC`: recibir hoy un fix de ayer no demuestra ubicación actual.
 
-`mergeFleet()` combina el parque del ERP con el que conoce la telemetria:
+El IMEI enlaza el UID de 3DTracking con el id local de un camión cuando ya existe en la flota propia. Posiciones, estados, eventos e historial conservan esa identidad local; las peticiones de historial usan el UID externo. Los camiones que solo existen en 3DTracking aparecen con sus datos disponibles, sin inventar capacidad, compartimentos ni planta.
 
-- El **ERP manda** cuando el vehiculo esta en ambos.
-- Un camion que reporta y **no** figura en el ERP se muestra igual, porque
-  existe y esta circulando.
-- El **IMEI** une ambos mundos cuando cada sistema usa su propio codigo.
+## Recuperación del historial
 
-Sin esto, conectar el GPS antes que la base de Fenice dejaba el mapa vacio:
-llegaban posiciones de vehiculos que ningun listado incluia.
+La primera solicitud usa `Uid` y `StartHourUtc`, redondeado hacia abajo a la hora UTC inicial. Las siguientes usan el `StartId` devuelto por la respuesta, sin calcularlo por cantidad de filas. Cada elemento de `Result.Position` contiene `Unit`, que identifica el camión.
 
----
+La paginación continúa hasta `IsCurrent=true`, con un máximo de 20 páginas. Si el cursor no avanza, el formato es incompatible o se alcanza el máximo, se informa un error en lugar de entregar silenciosamente un recorrido incompleto. Se filtran el camión y las fechas y se conservan los extremos al reducir el número de muestras.
 
-## 6. Tiempo real
+El archivo local combina las posiciones del proveedor con las ya conservadas. Ejecutar `npm run gps:record` como proceso supervisado y usar un volumen persistente con respaldo. La clave del archivo distingue proveedor, servidor API y cuenta; cambiar de cuenta requiere conservar o migrar el archivo correspondiente.
 
-La API **no ofrece websocket ni streaming**. La suscripcion se resuelve por
-sondeo cada `GPS_REFRESH_INTERVAL_MS`.
+## Alertas
 
-Se aprovecha `LastDateReceivedUtc` de `latestpositionslist`, que devuelve solo
-lo reportado despues de esa marca: el trafico queda proporcional a lo que de
-verdad cambia. La marca avanza con la posicion **recibida** mas reciente, no
-con el reloj local — si el servidor va desfasado, usar la hora local dejaria
-fuera posiciones legitimas.
+`AlertList` usa `AlertUID`, `AlertName`, `AlertType`, `Vehicle`, `CreatedDate` y `AlertMessage`. El nombre o UID de `Vehicle` se enlaza únicamente cuando identifica una sola unidad. Las alertas desconocidas se descartan; no se convierten en recuperaciones de señal. Los eventos disponibles dependen de los permisos y reglas configurados en 3DTracking.
 
-Como el transporte es sondeo, conviene `GPS_LIVE_TRANSPORT=polling`.
-
----
-
-## 7. Endpoints usados
-
-| Uso | Endpoint |
-|---|---|
-| Autenticacion | `/api/v1.0/authentication/userauthenticate` |
-| Parque | `/api/v1.0/units/unit/list` |
-| Posiciones actuales | `/api/v1.0/units/latestpositionslist` |
-| Historial | `/api/v1.0/data/positionslist` |
-| Alertas | `/api/v1.0/alerts/alerts/list` |
-
-El historial avanza por `StartId` (cursor incremental), **no** por rango de
-fechas: se pagina hacia adelante y se recorta por fecha, con un tope de 20
-paginas para que una ventana amplia no descargue meses de historia.
-
----
-
-## 8. Si algo falla
-
-Un proveedor mal configurado **no tumba la aplicacion** y **no degrada al
-simulador**. Se usa `UnavailableGpsProvider`: devuelve vacio y explica el
-motivo en `/api/system/gps`.
-
-Degradar al simulador seria mucho peor que un mapa vacio: la operacion veria
-camiones inventados moviendose y los tomaria por reales.
-
----
-
-## 9. Al terminar la prueba
-
-La API es temporal. Para desconectarla:
+## Comprobaciones de puesta en marcha
 
 ```bash
-GPS_PROVIDER=mock          # o dejar 3dtracking sin credenciales
-TRIDTRACKING_USERNAME=
-TRIDTRACKING_PASSWORD=
+npm run gps:test
+npm run gps:check -- --plate RBDC59
+npm run gps:check -- --plate RBDC59 --imei <IMEI_REAL> --history
 ```
 
-Nada mas cambia. Conviene ademas rotar la clave en 3DTracking, porque estuvo
-en las variables de entorno del despliegue.
+En Configuración se puede probar 3DTracking por patente y verificar opcionalmente IMEI y recorrido. El endpoint interno `POST /api/gps/3dtracking/probar-conexion` es de solo lectura, exige permiso de flota y comprueba origen de la solicitud.
+
+`GET /api/system/gps` distingue una sesión válida de una consulta fallida de flota o posiciones. Tener una sesión no basta para demostrar que el camión transmite. Sin credenciales se muestra sin conexión y no se activa un simulador.
+
+La validación de software usa respuestas de prueba con el formato oficial. La validación en terreno debe repetir posición, ignición, detenciones, pérdida de señal, reconexión y recorrido con el FMC130 real.
+
+Referencia: [documentación oficial v1](https://apiv2.3dtracking.net/docs/v1/).

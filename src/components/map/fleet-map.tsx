@@ -3,9 +3,13 @@
 import * as maplibregl from 'maplibre-gl';
 import type { Map as MapLibreMap, MapMouseEvent, RasterTileSource } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { registerMapIcons } from '@/components/map/map-icons';
+import { MapPinCard, type MapPin } from '@/components/map/map-pin-card';
+import { ActiveDeliveryDock } from '@/components/map/active-delivery-dock';
+import { cn } from '@/lib/cn';
+import { deliveryStillPresent } from '@/lib/engines/active-delivery';
 import {
   boundsToLngLatBounds,
   LAYER,
@@ -31,6 +35,7 @@ import {
 import { resolveMapStyle } from '@/components/map/map-style';
 import { OPERATION_CENTER } from '@/config/map-viewport';
 import { pointOnRoad, roadPathForTransition } from '@/lib/gps-motion';
+import { buildReplayTimeline } from '@/lib/engines/route-replay';
 import { startMapAnimationLoop } from '@/lib/map-animation-loop';
 import { isUsableCoordinate } from '@/lib/geo';
 import { geofencePoints } from '@/lib/map-navigation';
@@ -38,6 +43,7 @@ import { useMapStore, type MapLayerId } from '@/stores/map-store';
 import type { Geofence, HeatmapPoint, LatLng, Position } from '@/types/core';
 import type {
   AlertMapPoint,
+  ActiveDelivery,
   ClientMapPoint,
   RouteGeometry,
   WorkOrderMapPoint,
@@ -78,6 +84,8 @@ export interface FleetMapVehicle {
 }
 
 export interface FleetMapProps {
+  deliveryDockBottom?: number;
+  activeDeliveries?: ActiveDelivery[];
   vehicles: FleetMapVehicle[];
   clients: ClientMapPoint[];
   routes: RouteGeometry[];
@@ -123,6 +131,16 @@ export interface FleetMapProps {
    * NO se aplica al mapa operacional, cuya vista general es intencionada.
    */
   autoFit?: boolean;
+  /** Reencuadra al cambiar el contenido de la consulta, sin seguir cada reporte. */
+  autoFitKey?: string;
+  /** La ficha prioriza la vista completa del recorrido sobre la visita actual. */
+  fitFullRoute?: boolean;
+  /** Los mapas de consulta tienen camara y seleccion propias. */
+  isolated?: boolean;
+  highlightedRoute?: string | null;
+  /** En un recorrido historico la posicion ya viene calculada por el reproductor. */
+  playbackMode?: boolean;
+  viewModeOverride?: import('@/components/map/map-style').MapViewMode;
 }
 
 interface AnimatedVehicle {
@@ -166,7 +184,15 @@ function easeInOutQuad(t: number): number {
 }
 
 export function FleetMap({
+  deliveryDockBottom,
+  activeDeliveries = [],
   autoFit = false,
+  autoFitKey,
+  fitFullRoute = false,
+  isolated = false,
+  highlightedRoute,
+  playbackMode = false,
+  viewModeOverride,
   vehicles,
   clients,
   routes,
@@ -188,30 +214,64 @@ export function FleetMap({
 }: FleetMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
+  // Readiness belongs to this map instance, not to a previous style's render.
+  const initializedMapRef = useRef<MapLibreMap | null>(null);
   const cameraRef = useRef<{ center: [number, number]; zoom: number } | null>(null);
   const animatedRef = useRef<Map<string, AnimatedVehicle>>(new Map());
-  const trailRef = useRef<LatLng[]>([]);
+  const trailRef = useRef<LatLng[][]>([]);
+  const trailSampleRef = useRef<Position | null>(null);
   const stopAnimationRef = useRef<(() => void) | null>(null);
   const clusterAplicado = useRef(true);
   const inspectedCommuneCode = useMapStore((s) => s.inspectedCommuneCode);
   const [ready, setReady] = useState(false);
   const [styleError, setStyleError] = useState<string | null>(null);
+  const [hoveredPin, setHoveredPin] = useState<MapPin | null>(null);
+  const [deliveryVehicleId, setDeliveryVehicleId] = useState<string | null>(null);
+  const pinIndex = useMemo(() => ({
+    clients: new Map(clients.map((client) => [client.clientId, client])),
+    events: new Map(trajectoryEvents.map((event) => [event.id, event])),
+    deliveries: new Map(routes.flatMap((route) => route.stops.map((stop) => [stop.workOrderId, { stop, routeCode: route.code }] as const))),
+  }), [clients, trajectoryEvents, routes]);
 
   const layers = useMapStore((s) => s.layers);
-  const trafficEnabled = useMapStore((s) => s.trafficEnabled);
+  const globalTrafficEnabled = useMapStore((s) => s.trafficEnabled);
+  const trafficEnabled = isolated ? false : globalTrafficEnabled;
   const clusterClients = useMapStore((s) => s.clusterClients);
-  const selection = useMapStore((s) => s.selection);
-  const select = useMapStore((s) => s.select);
-  const following = useMapStore((s) => s.followingVehicleId);
-  const focus = useMapStore((s) => s.focus);
-  const highlightedRouteId = useMapStore((s) => s.highlightedRouteId);
+  const globalSelection = useMapStore((s) => s.selection);
+  const globalSelect = useMapStore((s) => s.select);
+  const globalFollowing = useMapStore((s) => s.followingVehicleId);
+  const globalFocus = useMapStore((s) => s.focus);
+  const globalHighlight = useMapStore((s) => s.highlightedRouteId);
+  const selection = isolated ? null : globalSelection;
+  const select = useCallback((value: Parameters<typeof globalSelect>[0]) => {
+    if (!isolated) globalSelect(value);
+  }, [isolated, globalSelect]);
+  const following = isolated ? null : globalFollowing;
+  const focus = isolated ? null : globalFocus;
+  const highlightedRouteId = highlightedRoute !== undefined ? highlightedRoute : isolated ? null : globalHighlight;
 
   const selectedClientId = selection?.type === 'client' ? selection.id : null;
   const selectedVehicleId = selection?.type === 'vehicle' ? selection.id : null;
+  const highlightedVehicleId = selectedVehicleId ?? deliveryVehicleId;
+  const locateDeliveryVehicle = useCallback((vehicleId: string) => {
+    const position = vehicles.find((vehicle) => vehicle.vehicleId === vehicleId)?.position;
+    if (!position?.valid || !isUsableCoordinate(position)) return;
+    setDeliveryVehicleId(vehicleId);
+    if (!isolated) {
+      useMapStore.getState().focusOn({ lat: position.lat, lng: position.lng }, 15.5);
+      return;
+    }
+    const map = mapRef.current;
+    if (map && initializedMapRef.current === map) map.flyTo({ center: [position.lng, position.lat], zoom: 15.5, duration: 900, essential: true });
+  }, [vehicles, isolated]);
+  const inspectedDeliveryVehicle = following ?? selectedVehicleId;
+  const presentDeliveries = activeDeliveries.filter((delivery) => (!inspectedDeliveryVehicle || inspectedDeliveryVehicle === delivery.vehicleId) &&
+    deliveryStillPresent(delivery, vehicles.find((v) => v.vehicleId === delivery.vehicleId)?.position));
   const selectedGeofenceId = selection?.type === 'geofence' ? selection.id : null;
   const selectedAlertId = selection?.type === 'alert' ? selection.id : null;
 
-  const viewMode = useMapStore((s) => s.viewMode);
+  const globalViewMode = useMapStore((s) => s.viewMode);
+  const viewMode = viewModeOverride ?? (isolated ? 'standard' : globalViewMode);
   const resolved = useMemo(() => resolveMapStyle(viewMode), [viewMode]);
 
   // --- Inicializacion ------------------------------------------------------
@@ -238,6 +298,7 @@ export function FleetMap({
 
     if (!minimalControls) {
       map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'bottom-right');
+      if (!isolated) {
       map.addControl(
         new maplibregl.GeolocateControl({
           positionOptions: { enableHighAccuracy: true },
@@ -245,15 +306,18 @@ export function FleetMap({
         }),
         'bottom-right',
       );
+      }
       map.addControl(new maplibregl.ScaleControl({ maxWidth: 90, unit: 'metric' }), 'bottom-left');
     }
 
     const onLoad = (): void => {
+      if (mapRef.current !== map) return;
       try {
         setStyleError(null);
         clusterAplicado.current = true;
         registerMapIcons(map);
         registerLayers(map);
+        initializedMapRef.current = map;
         setReady(true);
       } catch (error) {
         setStyleError(error instanceof Error ? error.message : String(error));
@@ -278,6 +342,7 @@ export function FleetMap({
      */
     const soltarSeguimiento = (event: { originalEvent?: unknown }): void => {
       if (!event.originalEvent) return;
+      if (isolated) return;
       if (useMapStore.getState().followingVehicleId === null) return;
       useMapStore.getState().followVehicle(null);
     };
@@ -292,6 +357,8 @@ export function FleetMap({
     });
 
     return () => {
+      if (initializedMapRef.current === map) initializedMapRef.current = null;
+      setHoveredPin(null);
       stopAnimationRef.current?.();
       resizeObserver.disconnect();
       const center = map.getCenter();
@@ -303,18 +370,18 @@ export function FleetMap({
     // El estilo se recrea al cambiar de modo de vista: MapLibre descarta las
     // capas propias con el estilo, y volver a registrarlas es mas fiable que
     // intentar preservarlas.
-  }, [resolved.style, minimalControls]);
+  }, [resolved.style, minimalControls, isolated]);
 
   // El consumidor recibe el mapa solo cuando fuentes y capas ya existen.
   useEffect(() => {
-    if (!ready || !mapRef.current) return;
+    if (!ready || !mapRef.current || initializedMapRef.current !== mapRef.current) return;
     onMapReady?.(mapRef.current);
   }, [ready, onMapReady]);
 
   // --- Interacciones -------------------------------------------------------
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || !ready) return;
+    if (!map || !ready || initializedMapRef.current !== map) return;
 
     // Resolve a single topmost operational entity. Independent delegated
     // listeners also selected the commune underneath every truck or client.
@@ -325,12 +392,12 @@ export function FleetMap({
       LAYER.clientLabels,
       LAYER.clientClusters,
       LAYER.clientClusterCount,
+      LAYER.trajectoryEvents,
+      LAYER.trajectoryEventLabels,
       LAYER.workOrders,
       LAYER.routeStops,
       LAYER.routeStopLabels,
       LAYER.alerts,
-      LAYER.trajectoryEvents,
-      LAYER.trajectoryEventLabels,
       LAYER.geofenceLine,
       LAYER.geofenceMarkers,
       LAYER.geofenceLabel,
@@ -347,7 +414,22 @@ export function FleetMap({
       });
       return priority.flatMap((id) => features.filter((f) => f.layer.id === id))[0];
     };
+    const showPin = (event: MapMouseEvent) => {
+      const pinLayers = [LAYER.trajectoryEvents, LAYER.trajectoryEventLabels, LAYER.clientPoints, LAYER.clientLabels, LAYER.routeStops, LAYER.routeStopLabels];
+      const features = map.queryRenderedFeatures(event.point, { layers: pinLayers.filter((id) => Boolean(map.getLayer(id))) });
+      const feature = pinLayers.flatMap((id) => features.filter((f) => f.layer.id === id))[0];
+      const props = feature?.properties;
+      let pin: MapPin | null = null;
+      const eventData = pinIndex.events.get(props?.['trajectoryEventId']);
+      const client = pinIndex.clients.get(props?.['clientId']);
+      const delivery = pinIndex.deliveries.get(props?.['workOrderId']);
+      if (eventData) pin = { kind: 'event', data: eventData };
+      else if (client) pin = { kind: 'client', data: client };
+      else if (delivery) pin = { kind: 'delivery', data: delivery.stop, routeCode: delivery.routeCode };
+      setHoveredPin((previous) => previous?.data === pin?.data ? previous : pin);
+    };
     const onClick = (event: MapMouseEvent): void => {
+      showPin(event); // Tap exposes the same card on touch screens.
       const feature = hitAt(event);
       if (!feature) return;
       const props = feature.properties;
@@ -358,7 +440,7 @@ export function FleetMap({
           .getClusterExpansionZoom(Number(props['cluster_id']))
           .then((zoom) => {
             if (mapRef.current !== map || feature.geometry.type !== 'Point') return;
-            useMapStore.setState({ followingVehicleId: null });
+            if (!isolated) useMapStore.setState({ followingVehicleId: null });
             map.easeTo({
               center: feature.geometry.coordinates as [number, number],
               zoom: Math.min(zoom + 0.2, 17),
@@ -399,11 +481,12 @@ export function FleetMap({
     };
     let hoveredCommune: string | number | null = null;
     const clearHover = () => {
-      if (hoveredCommune !== null && map.getSource(SOURCE.communes))
+      if (initializedMapRef.current === map && hoveredCommune !== null && map.getSource(SOURCE.communes))
         map.setFeatureState({ source: SOURCE.communes, id: hoveredCommune }, { hover: false });
       hoveredCommune = null;
     };
     const onMove = (event: MapMouseEvent) => {
+      showPin(event);
       const feature = hitAt(event);
       map.getCanvas().style.cursor = feature ? 'pointer' : '';
       const next =
@@ -419,6 +502,7 @@ export function FleetMap({
         map.setFeatureState({ source: SOURCE.communes, id: next }, { hover: true });
     };
     const onLeave = () => {
+      setHoveredPin(null);
       clearHover();
       map.getCanvas().style.cursor = '';
     };
@@ -438,6 +522,8 @@ export function FleetMap({
     onSelectWorkOrder,
     onSelectCommune,
     onSelectTrajectoryEvent,
+    isolated,
+    pinIndex,
   ]);
 
   // --- Animacion de vehiculos ----------------------------------------------
@@ -470,10 +556,7 @@ export function FleetMap({
       const existing = animated.get(vehicle.vehicleId);
 
       if (!existing) {
-        const road = vehicle.position.roadMatch;
-        const lastRoadPoint = road?.path.at(-1);
-        const initialTarget = road && road.confidence >= 0.8 && road.path.length >= 2 &&
-          isUsableCoordinate(lastRoadPoint) ? pointOnRoad(road.path, 1) : target;
+        const initialTarget = target;
         animated.set(vehicle.vehicleId, {
           sample: vehicle.position,
           path: null,
@@ -491,7 +574,7 @@ export function FleetMap({
       } else if (existing.sample.lat !== target.lat || existing.sample.lng !== target.lng) {
         // Posicion realmente nueva: el intervalo desde el ultimo cambio de
         // target es la mejor estimacion de cuanto tardara el proximo reporte.
-        const path = roadPathForTransition(existing.sample, vehicle.position);
+        const path = playbackMode ? null : roadPathForTransition(existing.sample, vehicle.position);
         existing.path = path;
         existing.sample = vehicle.position;
         existing.animateUntil = now + Math.min(30_000, Math.max(0, 30_000 - (Date.now() - Date.parse(vehicle.position.timestamp))));
@@ -523,12 +606,12 @@ export function FleetMap({
     for (const key of [...animated.keys()]) {
       if (!seen.has(key)) animated.delete(key);
     }
-  }, [vehicles]);
+  }, [vehicles, playbackMode]);
 
   useEffect(() => {
     if (!ready) return;
     const map = mapRef.current;
-    if (!map) return;
+    if (!map || initializedMapRef.current !== map) return;
 
     let followedCenter: { lat: number; lng: number } | null = null;
 
@@ -564,7 +647,7 @@ export function FleetMap({
           status: state.status,
           moving: state.moving,
           animationFrame: animateTruck ? Math.floor(now / 180) % 4 : 0,
-          selected: vehicleId === selectedVehicleId,
+          selected: vehicleId === highlightedVehicleId,
         });
       }
 
@@ -581,16 +664,6 @@ export function FleetMap({
             essential: true,
           });
 
-          const trail = trailRef.current;
-          const last = trail[trail.length - 1];
-          if (
-            !last ||
-            Math.hypot(last.lat - state.current.lat, last.lng - state.current.lng) > 0.00008
-          ) {
-            trail.push({ lat: state.current.lat, lng: state.current.lng });
-            if (trail.length > 300) trail.shift();
-            updateFollowTrail(map, trail);
-          }
         }
       }
 
@@ -601,61 +674,83 @@ export function FleetMap({
       stop();
       if (stopAnimationRef.current === stop) stopAnimationRef.current = null;
     };
-  }, [ready, following, selectedVehicleId, vehicles]);
+  }, [ready, following, highlightedVehicleId, vehicles]);
 
   // Limpiar la estela al dejar de seguir.
   useEffect(() => {
     trailRef.current = [];
+    trailSampleRef.current = null;
     const map = mapRef.current;
-    if (map && ready) updateFollowTrail(map, []);
+    if (map && ready && initializedMapRef.current === map) updateFollowTrail(map, []);
   }, [following, ready]);
+
+  // The live trail uses complete validated vertices, never animation-frame chords.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !ready || initializedMapRef.current !== map || !following) return;
+    const position = vehicles.find((vehicle) => vehicle.vehicleId === following)?.position;
+    if (!position || !position.valid || !isUsableCoordinate(position)) {
+      if (trailSampleRef.current) trailRef.current.push([]);
+      trailSampleRef.current = null;
+      return;
+    }
+    const previous = trailSampleRef.current;
+    if (previous && Date.parse(position.timestamp) <= Date.parse(previous.timestamp)) return;
+    if (previous) {
+      const transition = buildReplayTimeline([previous, position]);
+      trailRef.current.push(transition?.continuousPaths[0] ?? []);
+      if (trailRef.current.length > 300) trailRef.current.shift();
+      updateFollowTrail(map, trailRef.current);
+    }
+    trailSampleRef.current = position;
+  }, [ready, following, vehicles]);
 
   // --- Datos de capas ------------------------------------------------------
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || !ready) return;
+    if (!map || !ready || initializedMapRef.current !== map) return;
     updateClients(map, clients, selectedClientId);
   }, [ready, clients, selectedClientId]);
 
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || !ready) return;
+    if (!map || !ready || initializedMapRef.current !== map) return;
     updateRoutes(map, routes, highlightedRouteId);
   }, [ready, routes, highlightedRouteId]);
 
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || !ready) return;
+    if (!map || !ready || initializedMapRef.current !== map) return;
     updateGeofences(map, geofences, selectedGeofenceId);
   }, [ready, geofences, selectedGeofenceId]);
 
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || !ready) return;
+    if (!map || !ready || initializedMapRef.current !== map) return;
     updateAlerts(map, alerts, selectedAlertId);
   }, [ready, alerts, selectedAlertId]);
 
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || !ready) return;
+    if (!map || !ready || initializedMapRef.current !== map) return;
     updateWorkOrders(map, workOrders);
   }, [ready, workOrders]);
 
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || !ready) return;
+    if (!map || !ready || initializedMapRef.current !== map) return;
     updateTrajectoryEvents(map, trajectoryEvents);
   }, [ready, trajectoryEvents]);
 
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || !ready) return;
+    if (!map || !ready || initializedMapRef.current !== map) return;
     updateCommunes(map, communes);
   }, [ready, communes]);
 
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || !ready) return;
+    if (!map || !ready || initializedMapRef.current !== map) return;
     communes
       .filter((c) => c.boundary.length >= 3)
       .forEach((c) =>
@@ -668,7 +763,7 @@ export function FleetMap({
 
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || !ready) return;
+    if (!map || !ready || initializedMapRef.current !== map) return;
     updateHeatmap(map, heatmapPoints);
   }, [ready, heatmapPoints]);
 
@@ -684,7 +779,7 @@ export function FleetMap({
   useEffect(() => {
     if (!ready || !trafficEnabled) return;
     const map = mapRef.current;
-    if (!map) return;
+    if (!map || initializedMapRef.current !== map) return;
 
     const refresh = (): void => {
       const source = map.getSource(SOURCE.traffic) as RasterTileSource | undefined;
@@ -700,7 +795,7 @@ export function FleetMap({
 
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || !ready) return;
+    if (!map || !ready || initializedMapRef.current !== map) return;
 
     setLayerVisibility(
       map,
@@ -714,7 +809,7 @@ export function FleetMap({
     );
     setLayerVisibility(
       map,
-      [LAYER.routePlanned, LAYER.routeExecuted, LAYER.routeStops, LAYER.routeStopLabels],
+      [LAYER.routePlannedCasing, LAYER.routePlanned, LAYER.routeExecutedCasing, LAYER.routeExecuted, LAYER.routeDirections, LAYER.routeEndpoints, LAYER.routeEndpointLabels, LAYER.routeStops, LAYER.routeStopLabels],
       effectiveLayers.rutas,
     );
     setLayerVisibility(
@@ -742,9 +837,27 @@ export function FleetMap({
    * otra cosa.
    */
   const autoFitDone = useRef(false);
+  const fittedKey = useRef(autoFitKey);
   useEffect(() => {
+    if (fittedKey.current !== autoFitKey) {
+      fittedKey.current = autoFitKey;
+      autoFitDone.current = false;
+    }
     const map = mapRef.current;
-    if (!map || !ready || !autoFit || autoFitDone.current) return;
+    if (!map || !ready || initializedMapRef.current !== map || !autoFit || autoFitDone.current) return;
+
+    // A live delivery scene must keep both the truck and its client in view.
+    // Fit once per visit, preserving manual camera changes during the stay.
+    const focusVehicleId = fitFullRoute ? null : following ?? (isolated && presentDeliveries.length === 1 ? presentDeliveries[0]!.vehicleId : null);
+    const focusedPosition = focusVehicleId ? vehicles.find((v) => v.vehicleId === focusVehicleId)?.position : null;
+    if (focusedPosition && focusedPosition.valid && isUsableCoordinate(focusedPosition)) {
+      const bounds = new maplibregl.LngLatBounds([focusedPosition.lng, focusedPosition.lat], [focusedPosition.lng, focusedPosition.lat]);
+      const delivery = presentDeliveries.find((entry) => entry.vehicleId === focusVehicleId);
+      if (delivery) bounds.extend([delivery.lng, delivery.lat]);
+      autoFitDone.current = true;
+      map.fitBounds(bounds, { padding: 48, maxZoom: 15.5, duration: 0 });
+      return;
+    }
 
     const puntos: [number, number][] = [];
     for (const vehicle of vehicles) {
@@ -755,7 +868,7 @@ export function FleetMap({
       }
     }
     for (const route of routes) {
-      for (const p of [...route.plannedPath, ...route.executedPath, ...route.stops]) {
+      for (const p of [...route.plannedPath, ...route.executedPath, ...(route.executedSegments?.flat() ?? []), ...route.stops]) {
         if (isUsableCoordinate(p)) puntos.push([p.lng, p.lat]);
       }
     }
@@ -794,7 +907,7 @@ export function FleetMap({
       ],
       { padding: 64, maxZoom: 15.5, duration: 0 },
     );
-  }, [ready, autoFit, vehicles, routes, clients, workOrders, alerts, geofences]);
+  }, [ready, autoFit, autoFitKey, fitFullRoute, vehicles, routes, clients, workOrders, alerts, geofences, following, isolated, presentDeliveries]);
 
   /**
    * Cambio de agrupamiento.
@@ -807,7 +920,7 @@ export function FleetMap({
    */
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || !ready || clusterAplicado.current === clusterClients) return;
+    if (!map || !ready || initializedMapRef.current !== map || clusterAplicado.current === clusterClients) return;
 
     clusterAplicado.current = clusterClients;
     try {
@@ -831,7 +944,7 @@ export function FleetMap({
   // --- Encuadre solicitado -------------------------------------------------
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || !ready || !focus) return;
+    if (!map || !ready || initializedMapRef.current !== map || !focus) return;
 
     if (focus.bounds) {
       const padding = Math.min(
@@ -839,7 +952,12 @@ export function FleetMap({
         map.getContainer().clientWidth / 5,
         map.getContainer().clientHeight / 5,
       );
-      map.fitBounds(boundsToLngLatBounds(focus.bounds), { padding, maxZoom: 16, duration: 700 });
+      map.fitBounds(boundsToLngLatBounds(focus.bounds), {
+        padding: selection?.type === 'vehicle'
+          ? { top: padding, right: padding, left: padding, bottom: Math.min(160, map.getContainer().clientHeight / 3) }
+          : padding,
+        maxZoom: 16, duration: 700,
+      });
       return;
     }
     map.flyTo({
@@ -848,11 +966,15 @@ export function FleetMap({
       duration: 900,
       essential: true,
     });
-  }, [ready, focus]);
+  }, [ready, focus, selection?.type]);
 
   return (
-    <div className={className}>
+    <div className={cn('relative', className)}>
       <div ref={containerRef} className="h-full w-full" data-testid="fleet-map" />
+      {ready && mapRef.current && hoveredPin ? <MapPinCard map={mapRef.current} pin={hoveredPin} /> : null}
+      {ready && !playbackMode && presentDeliveries.length > 0 ? <ActiveDeliveryDock deliveries={presentDeliveries} bottom={deliveryDockBottom}
+        onLocateVehicle={locateDeliveryVehicle}
+        observedAt={(vehicleId) => vehicles.find((v) => v.vehicleId === vehicleId)?.position?.timestamp} /> : null}
 
       {styleError ? (
         <div className="pointer-events-none absolute inset-x-3 top-3 rounded-md border border-status-dormant/30 bg-surface-900/95 px-3 py-2 text-xs text-status-dormant">

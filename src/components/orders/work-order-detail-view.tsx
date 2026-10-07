@@ -16,6 +16,7 @@ import {
   WorkOrderStatusBadge,
 } from '@/components/common/status';
 import { FleetMap } from '@/components/map/fleet-map';
+import { WorkOrderDownload } from '@/components/orders/work-order-download';
 import { Button, LinkButton } from '@/components/ui/button';
 import { Card, CardBody, CardHeader } from '@/components/ui/card';
 import { FeatureGate } from '@/components/product/feature-gate';
@@ -120,6 +121,7 @@ export function WorkOrderDetailView({ workOrderId }: { workOrderId: string }) {
         }
         actions={
           <>
+            <WorkOrderDownload workOrderId={workOrder.id} number={workOrder.number} />
             {workOrder.coordinates ? (
               <Button
                 variant="secondary"

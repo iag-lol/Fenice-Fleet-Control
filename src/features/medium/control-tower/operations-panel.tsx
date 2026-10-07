@@ -596,8 +596,6 @@ export function OperationsPanel({
                       type="button"
                       onClick={() => {
                         onSelectVehicle(snap.vehicle.id);
-                        if (live && isUsableCoordinate(live))
-                          focusOn({ lat: live.lat, lng: live.lng }, 14.5);
                       }}
                       className="w-full px-3 py-2.5 text-left transition-colors hover:bg-surface-800"
                     >

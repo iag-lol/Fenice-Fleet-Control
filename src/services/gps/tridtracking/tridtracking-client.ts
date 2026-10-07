@@ -1,6 +1,6 @@
 import 'server-only';
 
-import type { TridAuthResponse } from './tridtracking-types';
+import type { TridAuthResponse, TridResponse } from './tridtracking-types';
 
 /**
  * Cliente HTTP de 3DTracking.
@@ -59,6 +59,14 @@ export class TridTrackingClient {
   private readonly sessionTtlMs: number;
   private readonly doFetch: typeof fetch;
 
+  private safeMessage(message: string): string {
+    let safe = redactUrl(message);
+    for (const secret of [this.options.username, this.options.password, this.session?.sessionId, this.session?.userIdGuid]) {
+      if (secret) safe = safe.replaceAll(secret, '***').replaceAll(encodeURIComponent(secret), '***');
+    }
+    return safe;
+  }
+
   constructor(private readonly options: TridClientOptions) {
     this.baseUrl = options.baseUrl.replace(/\/+$/, '');
     this.timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
@@ -81,6 +89,7 @@ export class TridTrackingClient {
         headers: { Accept: 'application/json' },
         signal: controller.signal,
         cache: 'no-store',
+        redirect: 'error',
       });
 
       if (!response.ok) {
@@ -100,7 +109,7 @@ export class TridTrackingClient {
         );
       }
       throw new TridTrackingError(
-        `No fue posible contactar con 3DTracking: ${error instanceof Error ? error.message : String(error)}`,
+        `No fue posible contactar con 3DTracking: ${this.safeMessage(error instanceof Error ? error.message : String(error))}`,
       );
     } finally {
       clearTimeout(timer);
@@ -130,14 +139,14 @@ export class TridTrackingClient {
 
       if (userIdGuid === '' || sessionId === '') {
         throw new TridTrackingError(
-          payload.Status?.Message?.trim() ||
-            '3DTracking no devolvio una sesion. Revisa usuario y contraseña.',
+          this.safeMessage(payload.Status?.Message?.trim() ||
+            '3DTracking no devolvio una sesion. Revisa usuario y contraseña.'),
           payload.Status?.ErrorCode ?? null,
         );
       }
       if (resultado !== '' && resultado !== 'success' && resultado !== 'ok') {
         throw new TridTrackingError(
-          payload.Status?.Message?.trim() || `Autenticacion rechazada (${resultado}).`,
+          this.safeMessage(payload.Status?.Message?.trim() || `Autenticacion rechazada (${resultado}).`),
           payload.Status?.ErrorCode ?? null,
         );
       }
@@ -162,29 +171,40 @@ export class TridTrackingClient {
   /**
    * Llamada autenticada, con un reintento si la sesion caduco.
    *
-   * La API no distingue con claridad "sesion expirada" de otros errores, asi
-   * que ante un fallo se renueva la sesion UNA vez y se reintenta. Mas de un
-   * reintento convertiria unas credenciales erroneas en un bucle de peticiones.
+   * Los errores de autenticacion o sesion permiten una renovacion. Los
+   * errores de red, formato y servidor no abren sesiones adicionales.
    */
   async call<T>(path: string, params: Record<string, string> = {}): Promise<T> {
-    const intentar = async (session: Session): Promise<T> =>
-      this.request<T>(path, {
+    const intentar = async (session: Session): Promise<T> => {
+      const payload = await this.request<TridResponse<T>>(path, {
         ...params,
         UserIdGuid: session.userIdGuid,
         SessionId: session.sessionId,
       });
+      if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+        throw new TridTrackingError(`Respuesta de 3DTracking incompatible en ${path}.`, 'FORMAT');
+      }
+      const result = (payload.Status?.Result ?? '').trim().toLowerCase();
+      if (result !== '' && result !== 'success' && result !== 'ok') {
+        throw new TridTrackingError(this.safeMessage(payload.Status?.Message || `3DTracking rechazo ${path}.`),
+          payload.Status?.ErrorCode ?? null);
+      }
+      if (!('Result' in payload)) throw new TridTrackingError(`Respuesta de 3DTracking sin Result en ${path}.`, 'FORMAT');
+      return payload.Result as T;
+    };
 
     const session = await this.getSession();
     try {
       return await intentar(session);
     } catch (error) {
-      this.session = null;
-      const renovada = await this.authenticate();
-      try {
-        return await intentar(renovada);
-      } catch {
-        throw error;
-      }
+      const expired = error instanceof TridTrackingError &&
+        (error.status === 401 || error.status === 403 ||
+          /session|auth|token|expir|unauthor/i.test(`${error.code ?? ''} ${error.message}`));
+      if (!expired) throw error;
+      // Una respuesta de la sesion anterior no debe invalidar una sesion
+      // que otra peticion concurrente acaba de renovar.
+      if (this.session === session) this.session = null;
+      return intentar(await this.getSession());
     }
   }
 
@@ -192,7 +212,7 @@ export class TridTrackingClient {
   async healthCheck(): Promise<{ ok: boolean; message: string; latencyMs: number | null }> {
     const inicio = Date.now();
     try {
-      await this.authenticate();
+      await this.getSession();
       return {
         ok: true,
         message: 'Sesion establecida con 3DTracking.',

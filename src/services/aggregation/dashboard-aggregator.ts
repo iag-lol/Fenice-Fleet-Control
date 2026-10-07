@@ -9,6 +9,7 @@ import {
 } from '@/services/aggregation/fleet-aggregator';
 import { loadClientContext, toClientMapPoints } from '@/services/aggregation/client-aggregator';
 import { getOperationsProvider } from '@/services/registry';
+import { loadActiveDeliveries } from './active-delivery-aggregator';
 import type { VehicleSnapshot, WorkOrder } from '@/types/core';
 import type {
   AlertMapPoint,
@@ -231,6 +232,7 @@ export async function loadMapSnapshot(): Promise<MapSnapshot> {
 
   return {
     generatedAt: now.toISOString(),
+    activeDeliveries: await loadActiveDeliveries(context, drivers, now),
     vehicles,
     clients: toClientMapPoints(clientContext.snapshots),
     routes: context.routes.map((route) =>

@@ -22,6 +22,7 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import {
   isScoped,
+  resolveMapScope,
   scopePoints,
   scopeRoutes,
   scopeVehicles,
@@ -50,8 +51,8 @@ import { cn } from '@/lib/cn';
 import { useMapStore } from '@/stores/map-store';
 import { mapQuery, communesQuery, systemModeQuery } from '@/hooks/use-control-data';
 import { useVehicleTrajectory, type TrajectoryEventType } from '@/hooks/use-vehicle-trajectory';
-import { operationPoints } from '@/lib/map-navigation';
-import { formatTimeWithSeconds } from '@/lib/format';
+import { operationPoints, vehicleOverviewPoints } from '@/lib/map-navigation';
+import { formatDistance, formatDuration, formatTimeWithSeconds } from '@/lib/format';
 import type { TerritoryAnalysis } from '@/types/views';
 
 const DEFAULT_MAX_LEGAL_SPEED_KMH = 60;
@@ -64,6 +65,7 @@ const TRAJECTORY_EVENT_STYLE: Record<
   speeding: { icon: AlertTriangle, label: 'Exceso de velocidad', tone: 'text-status-dormant' },
   ignition_on: { icon: Power, label: 'Encendido', tone: 'text-status-active' },
   ignition_off: { icon: PowerOff, label: 'Apagado', tone: 'text-ink-faint' },
+  signal_gap: { icon: AlertTriangle, label: 'Sin continuidad GPS', tone: 'text-status-warning' },
 };
 
 const CommunePanel = dynamic(() => import('@/components/map/commune-panel').then((m) => m.CommunePanel), {
@@ -94,6 +96,8 @@ const WorkOrderPanel = dynamic(() => import('@/components/map/work-order-panel')
  * como panel lateral en escritorio y hoja inferior en movil.
  */
 export interface OperationalMapProps {
+  /** Space occupied by the mobile operation button and bottom navigation. */
+  mobileDockClearance?: number;
   /**
    * En escritorio la torre aloja cualquier ficha en su columna derecha.
    * En ese caso el mapa no debe crear un segundo panel flotante encima.
@@ -103,6 +107,7 @@ export interface OperationalMapProps {
 
 export const OperationalMap = memo(function OperationalMap({
   detailExternal = false,
+  mobileDockClearance = 0,
 }: OperationalMapProps) {
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [detailOpen, setDetailOpen] = useState(false);
@@ -144,6 +149,12 @@ export const OperationalMap = memo(function OperationalMap({
   const scopeToCommune = useMapStore((s) => s.scopeToCommune);
 
   const { data: snapshot, isLoading, isError, error, refetch } = useQuery(mapQuery);
+  const presenceFingerprint = (livePayload?.vehicles ?? []).map((v) => `${v.vehicle.id}:${v.insideGeofenceId ?? ''}:${(v.position?.speed ?? 0) < 3}`).join('|');
+  const previousPresence = useRef<string | null>(null);
+  useEffect(() => {
+    if (previousPresence.current !== null && previousPresence.current !== presenceFingerprint) void refetch();
+    previousPresence.current = presenceFingerprint;
+  }, [presenceFingerprint, refetch]);
 
   // El mismo estado que alimenta el indicador del header: distingue una
   // integracion sin configurar (permanente, se arregla en el servidor) de un
@@ -218,22 +229,18 @@ export const OperationalMap = memo(function OperationalMap({
   /**
    * Enfoque activo.
    *
-   * Concentra el mapa en lo que el operador esta mirando. Se puede apagar
-   * desde el propio mapa, para que nunca sea una desaparicion inexplicable.
+   * La ficha muestra siempre solo su vehiculo; rutas y comunas conservan
+   * el interruptor de aislamiento para la vista general.
    */
   const scope: ScopeInput = useMemo(() => {
-    if (!isolate) {
-      return { vehicleId: null, routeId: null, communeBoundary: null };
-    }
     const comuna = scopedCommuneCode
       ? (communesData?.communes.find((c) => c.code === scopedCommuneCode) ?? null)
       : null;
-
-    return {
+    return resolveMapScope({
       vehicleId: currentSelection?.type === 'vehicle' ? currentSelection.id : null,
       routeId: highlightedRouteId,
       communeBoundary: comuna?.boundary ?? null,
-    };
+    }, isolate);
   }, [isolate, scopedCommuneCode, communesData, currentSelection, highlightedRouteId]);
 
   const scopeActivo = isScoped(scope);
@@ -286,6 +293,36 @@ export const OperationalMap = memo(function OperationalMap({
     [routesEnfocadas, selectedTrajectory],
   );
 
+  // Encuadrar al abrir/cambiar la ficha y una vez al recibir su historial.
+  // La clave no cambia con los reportes GPS: el operador conserva su camara.
+  const fittedVehicleScene = useRef<string | null>(null);
+  useEffect(() => {
+    if (!snapshot) return;
+    if (!selectedVehicleId) {
+      if (fittedVehicleScene.current !== null) {
+        fittedVehicleScene.current = null;
+        const points = [
+          ...vehiculosEnfocados.flatMap((v) => v.position ? [v.position] : []),
+          ...vehicleOverviewPoints(routesEnfocadas, null),
+        ];
+        if (points.length) useMapStore.getState().fitPoints(points);
+      }
+      return;
+    }
+    const key = `${selectedVehicleId}:${selectedTrajectory ? 'history' : trajectoryLoading ? 'loading' : 'ready'}`;
+    if (fittedVehicleScene.current === key) return;
+    if (following) {
+      fittedVehicleScene.current = key;
+      return;
+    }
+    const position = vehicles.find((v) => v.vehicleId === selectedVehicleId)?.position ?? null;
+    const points = vehicleOverviewPoints(routesConTrayecto, position?.valid ? position : null);
+    if (!points.length) return;
+    fittedVehicleScene.current = key;
+    useMapStore.getState().fitPoints(points);
+  }, [snapshot, selectedVehicleId, selectedTrajectory, trajectoryLoading, following,
+    vehicles, routesConTrayecto, routesEnfocadas, vehiculosEnfocados]);
+
   /**
    * Cuanto del corredor planificado ya quedo atras, para difuminarlo en el
    * mapa. Se proyecta la posicion EN VIVO del vehiculo sobre su propio
@@ -314,6 +351,11 @@ export const OperationalMap = memo(function OperationalMap({
       (selectedTrajectory?.events ?? []).map((event) => ({
         id: event.id,
         eventType: event.type,
+        at: event.at,
+        endedAt: event.endedAt,
+        title: event.title,
+        detail: event.detail,
+        vehiclePlate: selectedTrajectory?.route.vehiclePlate ?? undefined,
         lat: event.position.lat,
         lng: event.position.lng,
       })),
@@ -519,16 +561,22 @@ export const OperationalMap = memo(function OperationalMap({
       ) : (
         <ErrorBoundary section="el mapa operacional">
           <FleetMap
+            deliveryDockBottom={mobileDockClearance > 0 ? Math.max(mobileDockClearance,
+              selectedEvent ? 224 : following ? 150 : scopeActivo || currentSelection?.type === 'vehicle' || highlightedRouteId || scopedCommuneCode ? 144 : 32)
+              : selectedEvent || following || scopeActivo || currentSelection?.type === 'vehicle' || highlightedRouteId || scopedCommuneCode ? 80 : 32}
+            activeDeliveries={snapshot.activeDeliveries}
+            autoFitKey={following ? `${following}:${snapshot.activeDeliveries?.find((delivery) => delivery.vehicleId === following)?.workOrderId ?? 'recorrido'}` : undefined}
             className="absolute inset-0 sm:top-[72px] lg:top-[80px]"
             autoFit
-            vehicles={layers.camiones ? vehiculosEnfocados : []}
+            vehicles={selectedVehicleId || layers.camiones ? vehiculosEnfocados : []}
+            layerOverride={selectedVehicleId ? { camiones: true, rutas: true } : undefined}
             clients={clientesEnfocados}
             routes={routesConProgreso}
-            geofences={snapshot.geofences}
-            alerts={snapshot.alerts}
+            geofences={selectedVehicleId ? [] : snapshot.geofences}
+            alerts={selectedVehicleId ? [] : snapshot.alerts}
             workOrders={pedidosEnfocados}
-            communes={communeFeatures}
-            heatmapPoints={heatmapPoints}
+            communes={selectedVehicleId ? [] : communeFeatures}
+            heatmapPoints={selectedVehicleId ? [] : heatmapPoints}
             trajectoryEvents={trajectoryEventPoints}
             onSelectVehicle={openDetail}
             onSelectClient={openDetail}
@@ -718,13 +766,13 @@ export const OperationalMap = memo(function OperationalMap({
               // El trayecto del dia del vehiculo seleccionado tambien resalta
               // via `highlightedRouteId`, pero no es una "ruta" que mostrar
               // aparte: seria un chip redundante con el del propio vehiculo.
-              highlightedRouteId && highlightedRouteId !== selectedTrajectory?.route.routeId
+              !selectedVehicleId && highlightedRouteId && highlightedRouteId !== selectedTrajectory?.route.routeId
                 ? (snapshot?.routes.find((r) => r.routeId === highlightedRouteId)?.code ??
                   highlightedRouteId)
                 : null
             }
             communeName={
-              scopedCommuneCode
+              !selectedVehicleId && scopedCommuneCode
                 ? (communesData?.communes.find((c) => c.code === scopedCommuneCode)?.name ?? null)
                 : null
             }
@@ -739,6 +787,11 @@ export const OperationalMap = memo(function OperationalMap({
             onClearRoute={() => highlightRoute(null)}
             onClearCommune={() => scopeToCommune(null)}
           />
+          {selectedTrajectory ? <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 rounded-md bg-surface-900/90 px-2 py-1.5 text-[10px] text-ink-muted">
+            <span>Recorrido <strong className="numeric text-ink">{formatDistance(selectedTrajectory.totalMeters)}</strong></span>
+            <span>Movimiento <strong className="numeric text-ink">{formatDuration(selectedTrajectory.summary.movingSeconds)}</strong></span>
+            <span>Continuidad <strong className="numeric text-ink">{Math.round(selectedTrajectory.summary.coverage * 100)} %</strong></span>
+          </div> : null}
           {selectedVehicleId && trajectoryLoading ? (
             <p className="mt-1.5 text-2xs text-ink-faint">Cargando trayecto del dia...</p>
           ) : selectedVehicleId && trajectoryError ? (

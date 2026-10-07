@@ -1,6 +1,6 @@
 import { normalizeGpsHistory } from '@/lib/gps-history';
-import { pointOnRoad, roadPathForTransition } from '@/lib/gps-motion';
-import { haversineMeters } from '@/lib/geo';
+import { joinContinuousPaths, pointOnRoad, roadPathForTransition } from '@/lib/gps-motion';
+import { haversineMeters, polylineLengthMeters, pointAlongPolyline } from '@/lib/geo';
 import type { LatLng, Position } from '@/types/core';
 
 /**
@@ -23,7 +23,7 @@ export interface ReplayFrame {
   /** Instante representado. */
   timestamp: string;
   position: LatLng;
-  /** km/h interpolados entre las dos muestras que rodean el instante. */
+  /** km/h de la ultima muestra observada. */
   speed: number;
   heading: number;
   ignition: Position['ignition'];
@@ -44,14 +44,18 @@ export interface ReplayTimeline {
   /** Metros acumulados hasta cada muestra. Evita recalcular en cada cuadro. */
   cumulativeMeters: number[];
   totalMeters: number;
+  /** Una geometria por transicion; vacia cuando no existe continuidad. */
+  continuousPaths: LatLng[][];
+  roadMatchedMeters: number;
 }
 
 /** Velocidad por debajo de la cual se considera detenido. */
 const STOPPED_SPEED_KMH = 3;
 
-function isContinuous(a: Position, b: Position): boolean {
+export function isContinuous(a: Position, b: Position): boolean {
   const seconds = (Date.parse(b.timestamp) - Date.parse(a.timestamp)) / 1000;
-  return seconds > 0 && seconds <= 60 && haversineMeters(a, b) / seconds <= 55;
+  return a.valid && b.valid && a.vehicleId === b.vehicleId && a.deviceId === b.deviceId && !b.historyGapBefore &&
+    seconds > 0 && seconds <= 60 && haversineMeters(a, b) / seconds <= 55;
 }
 
 /**
@@ -70,14 +74,21 @@ export function buildReplayTimeline(positions: Position[]): ReplayTimeline | nul
 
   const cumulativeMeters: number[] = [0];
   let total = 0;
+  let roadMatchedMeters = 0;
+  const continuousPaths: LatLng[][] = [];
 
   for (let i = 1; i < samples.length; i += 1) {
     const previous = samples[i - 1]!;
     const current = samples[i]!;
-    total += isContinuous(previous, current) ? haversineMeters(
-      { lat: previous.lat, lng: previous.lng },
-      { lat: current.lat, lng: current.lng },
-    ) : 0;
+    const road = isContinuous(previous, current) ? roadPathForTransition(previous, current) : null;
+    const stationaryDrift = previous.speed <= 0.5 && current.speed <= 0.5 && haversineMeters(previous, current) <= 15;
+    const path = isContinuous(previous, current)
+      ? stationaryDrift ? [{ lat: previous.lat, lng: previous.lng }, { lat: previous.lat, lng: previous.lng }]
+        : road ?? [{ lat: previous.lat, lng: previous.lng }, { lat: current.lat, lng: current.lng }]
+      : [];
+    continuousPaths.push(path);
+    total += polylineLengthMeters(path);
+    if (road && !stationaryDrift) roadMatchedMeters += polylineLengthMeters(path);
     cumulativeMeters.push(total);
   }
 
@@ -91,6 +102,8 @@ export function buildReplayTimeline(positions: Position[]): ReplayTimeline | nul
     samples,
     cumulativeMeters,
     totalMeters: total,
+    continuousPaths,
+    roadMatchedMeters,
   };
 }
 
@@ -111,9 +124,8 @@ function findSampleIndex(timeline: ReplayTimeline, atMs: number): number {
 /**
  * Estado del vehiculo en un instante.
  *
- * Entre dos muestras se interpola: sin eso el camion daria saltos de decenas
- * de metros cada vez que llega un dato, y la reproduccion no serviria para
- * juzgar si el vehiculo se detuvo donde dice.
+ * Solo interpola sobre evidencia vial validada. Sin ajuste, conserva la
+ * ultima medicion observada hasta que llegue la siguiente.
  */
 export function frameAt(timeline: ReplayTimeline, atMs: number): ReplayFrame {
   const { samples, cumulativeMeters } = timeline;
@@ -128,28 +140,22 @@ export function frameAt(timeline: ReplayTimeline, atMs: number): ReplayFrame {
   const span = nextMs - currentMs;
   const t = span > 0 ? (clamped - currentMs) / span : 0;
 
-  const signalGap = next !== null && span > 60_000;
-  const road = next ? roadPathForTransition(current, next) : null;
+  const signalGap = next !== null && !isContinuous(current, next);
+  const road = next && !signalGap && !(current.speed <= 0.5 && next.speed <= 0.5 && haversineMeters(current, next) <= 15)
+    ? roadPathForTransition(current, next) : null;
   // Sin evidencia vial se conserva la ultima muestra, sin dibujar un vuelo
   // recto por edificios. Los cortes de transmision quedan visibles.
-  const position = road && t > 0 ? pointOnRoad(road, t) : { lat: current.lat, lng: current.lng };
+  const position = road ? pointOnRoad(road, t) : { lat: current.lat, lng: current.lng };
   const speed = current.speed;
   const traveledPath = samples.slice(0, index + 1).map((p) => ({ lat: p.lat, lng: p.lng }));
   if (road && t > 0) traveledPath.push(position);
-  const traveledSegments: LatLng[][] = [];
-  let segment: LatLng[] = [];
-  for (let i = 0; i <= index; i++) {
-    const sample = samples[i]!;
-    const previous = samples[i - 1];
-    if (previous && !isContinuous(previous, sample)) {
-      if (segment.length >= 2) traveledSegments.push(segment);
-      segment = [];
-    }
-    segment.push({ lat: sample.lat, lng: sample.lng });
+  const paths = timeline.continuousPaths.slice(0, index);
+  if (road && t > 0) {
+    const along = pointAlongPolyline(road, polylineLengthMeters(road) * t);
+    if (along) paths.push([...road.slice(0, along.segmentIndex + 1), position]);
   }
-  if (road && t > 0) segment.push(position);
-  if (segment.length >= 2) traveledSegments.push(segment);
-  const segmentMeters = road && t > 0 ? haversineMeters(current, position) : 0;
+  const traveledSegments = joinContinuousPaths(paths);
+  const segmentMeters = road && t > 0 ? polylineLengthMeters(road) * t : 0;
 
   return {
     signalGap,
@@ -158,7 +164,7 @@ export function frameAt(timeline: ReplayTimeline, atMs: number): ReplayFrame {
     timestamp: new Date(clamped).toISOString(),
     position,
     speed,
-    heading: current.heading,
+    heading: road && 'heading' in position ? Number(position.heading) : current.heading,
     ignition: current.ignition,
     traveledPath,
     traveledMeters: (cumulativeMeters[index] ?? 0) + segmentMeters,
@@ -194,6 +200,14 @@ export function findStops(timeline: ReplayTimeline, minSeconds = 180): ReplaySto
 
   for (let i = 0; i < samples.length; i += 1) {
     const sample = samples[i]!;
+    const previous = samples[i - 1];
+    if (anchor !== null && previous && (!isContinuous(previous, sample) || haversineMeters(samples[anchor]!, sample) > 50)) {
+      const start = samples[anchor]!;
+      const seconds = (Date.parse(previous.timestamp) - Date.parse(start.timestamp)) / 1000;
+      if (seconds >= minSeconds) stops.push({ startedAt: start.timestamp, endedAt: previous.timestamp,
+        durationSeconds: Math.round(seconds), position: { lat: start.lat, lng: start.lng } });
+      anchor = null;
+    }
     const isStopped = sample.speed < STOPPED_SPEED_KMH;
 
     if (isStopped && anchor === null) anchor = i;
@@ -278,6 +292,14 @@ export function findSpeedingEvents(
 
   for (let i = 0; i < samples.length; i += 1) {
     const sample = samples[i]!;
+    const previous = samples[i - 1];
+    if (anchor !== null && previous && !isContinuous(previous, sample)) {
+      const start = samples[anchor]!;
+      const seconds = (Date.parse(previous.timestamp) - Date.parse(start.timestamp)) / 1000;
+      if (seconds >= minSeconds) events.push({ startedAt: start.timestamp, endedAt: previous.timestamp,
+        durationSeconds: Math.round(seconds), maxSpeedKmh: Math.round(maxSpeed), position: { lat: start.lat, lng: start.lng } });
+      anchor = null; maxSpeed = 0;
+    }
     const isSpeeding = sample.speed > limitKmh;
 
     if (isSpeeding) {

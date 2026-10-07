@@ -299,6 +299,7 @@ export class MockOperationsProvider implements ExternalOperationsProvider {
           stops,
           status: routeComplete ? 'completada' : 'en_curso',
           executedPath: history.map((p) => ({ lat: p.lat, lng: p.lng })),
+          startedAt: history[0]?.timestamp ?? null,
           completedAt: routeComplete ? now.toISOString() : null,
         },
         workOrders,

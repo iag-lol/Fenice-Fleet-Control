@@ -1,7 +1,7 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 import {
   buildReplayTimeline,
@@ -10,6 +10,7 @@ import {
   findStops,
   frameAt,
 } from '@/lib/engines/route-replay';
+import { analyzeJourney, type JourneySummary } from '@/lib/engines/journey-analysis';
 import type { LatLng, Position } from '@/types/core';
 import type { RouteGeometry } from '@/types/views';
 
@@ -27,7 +28,7 @@ import type { RouteGeometry } from '@/types/views';
  * evidencia vial: ver route-replay.ts).
  */
 
-export type TrajectoryEventType = 'stop' | 'speeding' | 'ignition_on' | 'ignition_off';
+export type TrajectoryEventType = 'stop' | 'speeding' | 'ignition_on' | 'ignition_off' | 'signal_gap';
 
 export interface TrajectoryEvent {
   id: string;
@@ -44,6 +45,7 @@ export interface VehicleTrajectory {
   events: TrajectoryEvent[];
   sampleCount: number;
   totalMeters: number;
+  summary: JourneySummary;
 }
 
 function startOfDay(date: Date): Date {
@@ -63,8 +65,9 @@ export function useVehicleTrajectory(
   vehiclePlate: string | null,
   maxLegalSpeedKmh: number,
 ) {
-  const from = useMemo(() => startOfDay(new Date()).toISOString(), []);
-  const to = useMemo(() => endOfDay(new Date()).toISOString(), []);
+  const [from, setFrom] = useState(() => startOfDay(new Date()).toISOString());
+  const to = useMemo(() => endOfDay(new Date(from)).toISOString(), [from]);
+  useEffect(() => { const timer = setInterval(() => setFrom(startOfDay(new Date()).toISOString()), 60000); return () => clearInterval(timer); }, []);
 
   const query = useQuery({
     queryKey: ['vehicle-trajectory', vehicleId, from],
@@ -90,6 +93,7 @@ export function useVehicleTrajectory(
     if (!timeline) return null;
 
     const frame = frameAt(timeline, timeline.endMs);
+    const summary = analyzeJourney(timeline, maxLegalSpeedKmh);
 
     const events: TrajectoryEvent[] = [];
 
@@ -129,6 +133,8 @@ export function useVehicleTrajectory(
       });
     }
 
+    for (const gap of summary.gaps) events.push({ id: `gap:${gap.from}`, type: 'signal_gap', at: gap.from, endedAt: gap.to, position: gap.position, title: 'Intervalo sin continuidad GPS', detail: `${Math.round(gap.seconds / 60)} min sin muestras continuas` });
+
     events.sort((a, b) => Date.parse(a.at) - Date.parse(b.at));
 
     return {
@@ -142,11 +148,14 @@ export function useVehicleTrajectory(
         plannedPath: [],
         executedPath: frame.traveledPath,
         executedSegments: frame.traveledSegments,
+        speedSections: summary.speedSections,
+        showEndpoints: true,
         stops: [],
       },
       events,
       sampleCount: timeline.samples.length,
       totalMeters: frame.traveledMeters,
+      summary,
     };
   }, [vehicleId, vehiclePlate, maxLegalSpeedKmh, query.data]);
 

@@ -2,6 +2,7 @@
 
 import { useQuery } from '@tanstack/react-query';
 import {
+  AlertTriangle,
   ArrowLeft,
   Fuel,
   MapPin,
@@ -139,9 +140,12 @@ export function VehicleDetailView({ vehicleId }: { vehicleId: string }) {
               size="sm"
               icon={<Satellite className="h-3.5 w-3.5" />}
               onClick={() => setGpsDialogOpen(true)}
+              disabled={vehicle.device?.provider === '3dtracking'}
             >
-              {vehicle.device ? 'GPS: Traccar' : 'Conectar GPS'}
+              {vehicle.device?.provider === '3dtracking' ? 'GPS: 3DTracking' : vehicle.device?.provider === 'traccar' ? 'GPS: Traccar' : 'Conectar GPS'}
             </Button>
+
+            <LinkButton href="#historial-gps" size="sm" variant="primary" icon={<RouteIcon className="h-3.5 w-3.5" />}>Analizar recorrido</LinkButton>
 
             <Button
               variant="secondary"
@@ -180,6 +184,7 @@ export function VehicleDetailView({ vehicleId }: { vehicleId: string }) {
       />
 
       <div className="space-y-4">
+        {data.telemetryWarnings?.length ? <div role="status" className="flex gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800"><AlertTriangle className="h-4 w-4 shrink-0" /><div>{data.telemetryWarnings.map((message) => <p key={message}>{message}</p>)}</div></div> : null}
         {/* --- Cifras de la jornada --- */}
         <Card>
           <CardBody className="grid grid-cols-2 gap-4 sm:grid-cols-4 lg:grid-cols-7">
@@ -229,7 +234,10 @@ export function VehicleDetailView({ vehicleId }: { vehicleId: string }) {
             )}
           >
               <ErrorBoundary section="el mapa del vehiculo">
-                <FleetMap
+                <FleetMap isolated highlightedRoute={route?.routeId ?? null}
+                  activeDeliveries={data.activeDelivery ? [data.activeDelivery] : []}
+                  autoFitKey={vehicleId}
+                  fitFullRoute
                   className="absolute inset-0"
                   autoFit
                     layerOverride={{ camiones: true, rutas: true, clientes: false, geocercas: false, calor: false, pedidos: false, alertas: false, comunas: false }}
@@ -254,6 +262,8 @@ export function VehicleDetailView({ vehicleId }: { vehicleId: string }) {
             </ErrorBoundary>
           </div>
         </Card>
+
+        <VehicleHistory vehicle={vehicle} plannedRoute={data.route ?? undefined} />
 
         {/* --- Cámaras: módulo preparado para los futuros streams del vehículo. --- */}
         <VehicleCameras
@@ -449,7 +459,6 @@ export function VehicleDetailView({ vehicleId }: { vehicleId: string }) {
         </div>
       </div>
 
-      <div className="mt-6"><VehicleHistory vehicle={vehicle} /></div>
 
       <ConnectGpsDialog
         open={gpsDialogOpen}

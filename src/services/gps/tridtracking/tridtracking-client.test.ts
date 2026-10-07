@@ -42,7 +42,7 @@ describe('credenciales en la URL', () => {
 describe('autenticacion', () => {
   it('adjunta la sesion obtenida a cada llamada', async () => {
     const fetchMock = vi.fn(async (url: string) =>
-      String(url).includes('userauthenticate') ? respuesta(AUTH_OK) : respuesta([{ Uid: 'u1' }]),
+      String(url).includes('userauthenticate') ? respuesta(AUTH_OK) : respuesta({ Status: { Result: 'Success' }, Result: [{ Uid: 'u1' }] }),
     ) as unknown as typeof fetch;
 
     await cliente(fetchMock).call('/api/v1.0/units/unit/list');
@@ -54,7 +54,7 @@ describe('autenticacion', () => {
 
   it('reutiliza la sesion en lugar de autenticar en cada llamada', async () => {
     const fetchMock = vi.fn(async (url: string) =>
-      String(url).includes('userauthenticate') ? respuesta(AUTH_OK) : respuesta([]),
+      String(url).includes('userauthenticate') ? respuesta(AUTH_OK) : respuesta({ Status: { Result: 'Success' }, Result: [] }),
     ) as unknown as typeof fetch;
 
     const c = cliente(fetchMock);
@@ -72,7 +72,7 @@ describe('autenticacion', () => {
     // bloquee la cuenta.
     const fetchMock = vi.fn(async (url: string) => {
       await new Promise((r) => setTimeout(r, 5));
-      return String(url).includes('userauthenticate') ? respuesta(AUTH_OK) : respuesta([]);
+      return String(url).includes('userauthenticate') ? respuesta(AUTH_OK) : respuesta({ Status: { Result: 'Success' }, Result: [] });
     }) as unknown as typeof fetch;
 
     const c = cliente(fetchMock);
@@ -120,7 +120,7 @@ describe('sesion caducada', () => {
       llamadasDatos += 1;
       // El primer intento falla como si la sesion hubiese expirado.
       if (llamadasDatos === 1) return respuesta(null, false, 401);
-      return respuesta([{ Uid: 'u1' }]);
+      return respuesta({ Status: { Result: 'Success' }, Result: [{ Uid: 'u1' }] });
     }) as unknown as typeof fetch;
 
     const datos = await cliente(fetchMock).call<{ Uid: string }[]>('/api/v1.0/units/unit/list');
@@ -128,7 +128,7 @@ describe('sesion caducada', () => {
     expect(llamadasDatos).toBe(2);
   });
 
-  it('no entra en bucle cuando las credenciales son erroneas de verdad', async () => {
+  it('no renueva la sesion ante un error 500 del proveedor', async () => {
     let intentos = 0;
     const fetchMock = vi.fn(async (url: string) => {
       if (String(url).includes('userauthenticate')) return respuesta(AUTH_OK);
@@ -137,7 +137,7 @@ describe('sesion caducada', () => {
     }) as unknown as typeof fetch;
 
     await expect(cliente(fetchMock).call('/api/v1.0/units/unit/list')).rejects.toThrow(/500/);
-    expect(intentos).toBe(2);
+    expect(intentos).toBe(1);
   });
 });
 
@@ -157,5 +157,29 @@ describe('diagnostico', () => {
     const fetchMock = vi.fn(async () => respuesta(AUTH_OK)) as unknown as typeof fetch;
     const estado = await cliente(fetchMock).healthCheck();
     expect(estado.ok).toBe(true);
+  });
+});
+
+describe('contrato oficial Status y Result', () => {
+  it('detecta errores del proveedor aunque HTTP responda 200', async () => {
+    const fetchMock = vi.fn(async (url: string) => String(url).includes('userauthenticate') ? respuesta(AUTH_OK) : respuesta({ Status: { Result: 'Failure', ErrorCode: 'PERMISSION', Message: 'Sin acceso a la flota' }, Result: null })) as unknown as typeof fetch;
+    await expect(cliente(fetchMock).call('/api/v1.0/units/unit/list')).rejects.toThrow('Sin acceso a la flota');
+  });
+  it('renueva una sesion expirada informada dentro de Status', async () => {
+    let attempts = 0;
+    const fetchMock = vi.fn(async (url: string) => String(url).includes('userauthenticate') ? respuesta(AUTH_OK) : respuesta(++attempts === 1 ? { Status: { Result: 'Failure', ErrorCode: 'SESSION_EXPIRED', Message: 'Session expired' }, Result: null } : { Status: { Result: 'Success' }, Result: [1] })) as unknown as typeof fetch;
+    expect(await cliente(fetchMock).call('/positions')).toEqual([1]);
+    expect(attempts).toBe(2);
+  });
+  it('no filtra credenciales si fetch incluye la URL en su error', async () => {
+    const fetchMock = vi.fn(async (url: string) => { throw new Error('Error '+url); }) as unknown as typeof fetch;
+    const result = await cliente(fetchMock).healthCheck();
+    expect(result.message).not.toContain('password=secreta');
+    expect(result.message).not.toContain('username=usuario');
+  });
+  it('no abre una sesion nueva en cada diagnostico', async () => {
+    const fetchMock = vi.fn(async () => respuesta(AUTH_OK)) as unknown as typeof fetch;
+    const c = cliente(fetchMock); await c.healthCheck(); await c.healthCheck();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });

@@ -130,8 +130,7 @@ describe('reproduccion de ruta', () => {
       pos(0, -33.45, -70.66, 40),
       pos(2, -33.45, -70.65, 0),
       pos(3, -33.45, -70.65, 40), // detencion de 1 minuto: se descarta
-      pos(10, -33.44, -70.64, 0),
-      pos(25, -33.44, -70.64, 0),
+      ...Array.from({ length: 16 }, (_, i) => pos(10 + i, -33.44, -70.64, 0)),
       pos(26, -33.44, -70.64, 30), // detencion de 15 minutos: se conserva
     ])!;
 
@@ -143,8 +142,7 @@ describe('reproduccion de ruta', () => {
   it('cierra una detencion que sigue abierta al final de la jornada', () => {
     const timeline = buildReplayTimeline([
       pos(0, -33.45, -70.66, 40),
-      pos(5, -33.45, -70.65, 0),
-      pos(30, -33.45, -70.65, 0),
+      ...Array.from({ length: 26 }, (_, i) => pos(5 + i, -33.45, -70.65, 0)),
     ])!;
 
     const stops = findStops(timeline, 180);

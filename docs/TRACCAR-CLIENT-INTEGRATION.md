@@ -38,9 +38,9 @@ vehículo.
    - `http://190.100.50.20:5055` (puerto del protocolo OsmAnd/Traccar Client)
 4. Activa **Enable service** / el interruptor principal.
 
-El teléfono empieza a enviar su posición al servidor. Traccar lo registra
-como un **dispositivo nuevo** con ese `uniqueId` la primera vez que recibe una
-posición suya — no hace falta "darlo de alta" manualmente en Traccar.
+Dar de alta el dispositivo en Traccar con ese mismo `uniqueId` y confirmar
+que la cuenta de integración tiene acceso. El envío de una posición no
+sustituye ese registro, salvo una configuración explícita de registro automático del servidor.
 
 ---
 
@@ -116,6 +116,6 @@ El teléfono es solo el dispositivo de prueba. Para pasar a hardware real:
   normal — toda la flota en un único servidor Traccar — no se ve afectado.
 - La consulta a estos dispositivos vinculados es por sondeo periódico (cada
   pocos segundos), no WebSocket: es la vía usada específicamente por esta
-  asociación manual. El proveedor GPS global (`GPS_PROVIDER=traccar`) sí usa
-  WebSocket con degradación automática a sondeo, como ya documenta
+  asociación manual. El proveedor GPS global (`GPS_PROVIDER=traccar`) también usa
+  sondeo REST autenticado, como ya documenta
   [`GPS-INTEGRATION.md`](./GPS-INTEGRATION.md).
