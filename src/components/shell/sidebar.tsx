@@ -11,6 +11,7 @@ import { getVisibleNavGroups, isActivePath } from '@/components/shell/navigation
 import { PlanBadge } from '@/components/product/plan-badge';
 import { useIsTabletRange } from '@/hooks/use-media-query';
 import { cn } from '@/lib/cn';
+import { useSidebarStore } from '@/stores/sidebar-store';
 
 interface MeResponse {
   authenticated: boolean;
@@ -95,34 +96,20 @@ export function Sidebar() {
   const pathname = usePathname();
   const isControlTower = pathname?.startsWith('/control') ?? false;
   const isTabletRange = useIsTabletRange();
-  const [collapsedPreference, setCollapsedPreference] = useState(false);
-  const [hydrated, setHydrated] = useState(false);
+  const collapsedPreference = useSidebarStore((state) => state.collapsedPreference);
+  const hydrated = useSidebarStore((state) => state.hydrated);
+  const hydratePreference = useSidebarStore((state) => state.hydratePreference);
+  const togglePreference = useSidebarStore((state) => state.togglePreference);
+  const [animateWidth, setAnimateWidth] = useState(false);
   const collapsed = isTabletRange || collapsedPreference;
 
-  useEffect(() => {
-    try {
-      const stored = window.localStorage.getItem('fenice.sidebar.collapsed');
-      if (stored !== null) {
-        setCollapsedPreference(stored === '1');
-      }
-    } catch {
-      // Almacenamiento no disponible: se usa el valor por defecto.
-    }
-    setHydrated(true);
-  }, []);
+  useEffect(() => { hydratePreference(); }, [hydratePreference]);
 
   const toggle = useCallback((): void => {
     if (isTabletRange) return;
-    setCollapsedPreference((current) => {
-      const next = !current;
-      try {
-        window.localStorage.setItem('fenice.sidebar.collapsed', next ? '1' : '0');
-      } catch {
-        // Sin persistencia: el cambio sigue aplicando en esta sesion.
-      }
-      return next;
-    });
-  }, [isTabletRange]);
+    setAnimateWidth(true);
+    togglePreference();
+  }, [isTabletRange, togglePreference]);
 
   useEffect(() => {
     const onHeaderToggle = (): void => toggle();
@@ -132,6 +119,7 @@ export function Sidebar() {
 
   return (
     <aside
+      data-collapsed={collapsed}
       className={cn(
         'app-sidebar hidden h-app shrink-0 flex-col overflow-x-hidden border-r border-white/10 bg-[#0d2430] text-white shadow-[4px_0_18px_rgba(20,35,46,0.06)] md:flex',
         // El ancho de tablet debe estar resuelto por CSS desde el primer
@@ -142,7 +130,7 @@ export function Sidebar() {
           : isControlTower
             ? 'w-[196px] md:w-[60px] xl:w-[196px]'
             : 'w-[218px] md:w-[60px] xl:w-[218px]',
-        !isTabletRange && hydrated && 'transition-[width] duration-200',
+        !isTabletRange && animateWidth && 'transition-[width] duration-200',
         !hydrated && 'invisible',
       )}
     >
@@ -172,6 +160,7 @@ export function Sidebar() {
                   <li key={item.href}>
                     <Link
                       href={item.href}
+                      aria-label={item.label}
                       title={collapsed ? item.label : undefined}
                       aria-current={active ? 'page' : undefined}
                       className={cn(

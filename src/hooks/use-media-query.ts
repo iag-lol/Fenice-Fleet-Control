@@ -1,27 +1,26 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useSyncExternalStore } from 'react';
 
 /**
- * Consulta de medios reactiva.
- *
- * Devuelve `false` en el primer render del servidor para no provocar un
- * desajuste de hidratacion; el valor real se aplica tras el montaje.
+ * El servidor conserva un snapshot estable para hidratar sin diferencias.
+ * La navegación de cliente lee matchMedia inmediatamente, sin un render
+ * provisional de escritorio en cada página de tablet.
  */
 export function useMediaQuery(query: string): boolean {
-  const [matches, setMatches] = useState(false);
-
-  useEffect(() => {
-    const list = window.matchMedia(query);
-    setMatches(list.matches);
-
-    const onChange = (event: MediaQueryListEvent): void => setMatches(event.matches);
-    list.addEventListener('change', onChange);
-    return () => list.removeEventListener('change', onChange);
-  }, [query]);
-
-  return matches;
+  const subscribe = useCallback(
+    (notify: () => void) => {
+      const list = window.matchMedia(query);
+      list.addEventListener('change', notify);
+      return () => list.removeEventListener('change', notify);
+    },
+    [query],
+  );
+  const snapshot = useCallback(() => window.matchMedia(query).matches, [query]);
+  return useSyncExternalStore(subscribe, snapshot, serverSnapshot);
 }
+
+const serverSnapshot = () => false;
 
 /** Punto de corte `md` de Tailwind. */
 export function useIsDesktop(): boolean {

@@ -351,6 +351,8 @@ cartera de clientes y el texto blanco sobre los botones sólidos.
 
 ## Responsive
 
+La barra lateral conserva la preferencia de apertura al navegar entre páginas. Contraída mantiene 60 px; la animación de ancho se activa solo desde el control de abrir/cerrar. En tablet, la consulta de medios se resuelve inmediatamente en la navegación de cliente, manteniendo la vista de iconos o el menú móvil de orientación vertical. [Comprobación visual de la barra contraída](docs/assets/sidebar-contraido-navegacion.jpg).
+
 Diseñada para operar desde el teléfono en terreno, no solo desde el escritorio.
 
 - Verificada desde **320 px** hasta pantallas grandes.
