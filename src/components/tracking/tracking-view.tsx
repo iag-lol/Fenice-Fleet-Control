@@ -25,7 +25,7 @@ import {
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import type { Map as MapLibreMap } from 'maplibre-gl';
-import { BrandMark } from '@/components/shell/brand';
+import Image from 'next/image';
 import { FleetMap } from '@/components/map/fleet-map';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -277,18 +277,15 @@ export function TrackingView({
       <header className="safe-top shrink-0 border-b border-[#dce7e1] bg-white/95">
         <div className="flex h-16 w-full items-center justify-between gap-3 px-4 md:px-6">
           <div className="flex min-w-0 items-center gap-3">
-            <BrandMark className="h-9 w-9 rounded-xl" />
-            <div>
-              <p className="text-[18px] font-bold tracking-tight text-[#173a38]">
-                FENICE
-                <span className="ml-2 text-[10px] font-normal uppercase tracking-[.2em] text-[#789087]">
-                  SpA
-                </span>
-              </p>
-              <p className="text-[10px] text-[#789087]">
-                Cada entrega, más cerca.
-              </p>
-            </div>
+            <Image
+              src="/brand/fenice-logo.png"
+              alt="Fenice SpA"
+              width={1379}
+              height={403}
+              sizes="(min-width: 640px) 205px, 172px"
+              priority
+              className="h-auto w-[172px] max-w-full object-contain sm:w-[205px]"
+            />
           </div>
           <div className="flex items-center gap-3">
             <span className="hidden items-center gap-1.5 text-[11px] text-[#6e837d] sm:flex">

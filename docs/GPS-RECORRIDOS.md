@@ -58,7 +58,7 @@ La ficha independiente también abre con el recorrido completo, sin reducirlo a 
 
 ## Seguimiento para el cliente
 
-El portal público `/seguimiento` y el enlace directo de cada entrega usan una pantalla dedicada a ubicación, destino, estado y llegada estimada. No muestran nombre comercial del cliente, ventas, saldos, productos, precios, historial de compras ni accesos a fichas internas. El mapa ocupa el área principal y solo recibe el vehículo asignado y el tramo previsto hacia ese domicilio. Dispone de encuadre del trayecto, seguimiento de cámara, zoom, vista satelital y ampliación con salida mediante Escape.
+El portal público `/seguimiento` y el enlace directo de cada entrega usan una pantalla dedicada a ubicación, destino, estado y llegada estimada. La cabecera presenta el logo oficial transparente de Fenice SpA, conservando colores y proporciones, con tamaño adaptable y carga prioritaria. Se verificó también en celular de 320 px sin desbordamiento horizontal. No muestran nombre comercial del cliente, ventas, saldos, productos, precios, historial de compras ni accesos a fichas internas. El mapa ocupa el área principal y solo recibe el vehículo asignado y el tramo previsto hacia ese domicilio. Dispone de encuadre del trayecto, seguimiento de cámara, zoom, vista satelital y ampliación con salida mediante Escape.
 
 En escritorio y tablet desde 768 px de ancho, la pantalla se adapta a la altura disponible sin scroll vertical ni horizontal. Se verificaron 1920 × 902, 1366 × 768, 1280 × 600, 1024 × 768 y 768 × 1024. En pantallas bajas se compacta el resumen para conservar mapa y publicidad visibles. En celular, el resumen precede al mapa de 480 px, seguido por el destino y las campañas; se permite scroll vertical y se evita el desbordamiento horizontal. Se comprobó 390 × 844. Al cambiar el tamaño del mapa se vuelve a encuadrar el vehículo y destino, sin hacerlo en cada lectura de GPS.
 
@@ -76,7 +76,7 @@ Con Supabase configurado, el servidor conserva configuración e imágenes en el 
 
 Validación: guardado/lectura y subida real de una imagen en el servidor local; pruebas de permisos, URLs, formatos, límites, contenido desactivado, persistencia local y contrato de Storage/fallos. La prueba remota de Storage queda pendiente de conectar las credenciales Supabase, ausentes en este entorno. Las campañas de la revisión viven en `.fenice/tracking-content-review`, separadas de la configuración real y excluidas de Git.
 
-Capturas: [portal en escritorio](assets/gps-portal-cliente-escritorio.jpg) y [portal en celular](assets/gps-portal-cliente-movil.jpg). Los datos de demostración se identifican en la pantalla y usan `NEXT_DIST_DIR=.next-review` con proveedores ficticios explícitos.
+Capturas: [portal en escritorio](assets/gps-portal-cliente-escritorio.jpg), [portal en celular](assets/gps-portal-cliente-movil.jpg), [logo oficial en escritorio](assets/gps-logo-fenice-escritorio.jpg) y [logo en celular](assets/gps-logo-fenice-movil.jpg). Los datos de demostración se identifican en la pantalla y usan `NEXT_DIST_DIR=.next-review` con proveedores ficticios explícitos.
 
 ## Requisitos de operación
 
