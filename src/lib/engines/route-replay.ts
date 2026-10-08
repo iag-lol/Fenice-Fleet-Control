@@ -58,6 +58,11 @@ export function isContinuous(a: Position, b: Position): boolean {
     seconds > 0 && seconds <= 60 && haversineMeters(a, b) / seconds <= 55;
 }
 
+/** Una diferencia grande entre lecturas detenidas no demuestra una marcha. */
+function uncertainStationaryDisplacement(a: Position, b: Position): boolean {
+  return a.speed <= 0.5 && b.speed <= 0.5 && haversineMeters(a, b) > 15;
+}
+
 /**
  * Prepara la linea de tiempo.
  *
@@ -82,7 +87,7 @@ export function buildReplayTimeline(positions: Position[]): ReplayTimeline | nul
     const current = samples[i]!;
     const road = isContinuous(previous, current) ? roadPathForTransition(previous, current) : null;
     const stationaryDrift = previous.speed <= 0.5 && current.speed <= 0.5 && haversineMeters(previous, current) <= 15;
-    const path = isContinuous(previous, current)
+    const path = isContinuous(previous, current) && !uncertainStationaryDisplacement(previous, current)
       ? stationaryDrift ? [{ lat: previous.lat, lng: previous.lng }, { lat: previous.lat, lng: previous.lng }]
         : road ?? [{ lat: previous.lat, lng: previous.lng }, { lat: current.lat, lng: current.lng }]
       : [];
@@ -140,7 +145,7 @@ export function frameAt(timeline: ReplayTimeline, atMs: number): ReplayFrame {
   const span = nextMs - currentMs;
   const t = span > 0 ? (clamped - currentMs) / span : 0;
 
-  const signalGap = next !== null && !isContinuous(current, next);
+  const signalGap = next !== null && (!isContinuous(current, next) || uncertainStationaryDisplacement(current, next));
   const road = next && !signalGap && !(current.speed <= 0.5 && next.speed <= 0.5 && haversineMeters(current, next) <= 15)
     ? roadPathForTransition(current, next) : null;
   // Sin evidencia vial se conserva la ultima muestra, sin dibujar un vuelo

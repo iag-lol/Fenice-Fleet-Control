@@ -26,6 +26,12 @@ function pos(
 }
 
 describe('reproduccion de ruta', () => {
+  it('no suma distancia ni conecta saltos grandes entre dos lecturas con velocidad cero', () => {
+    const timeline = buildReplayTimeline([pos(0, -33.45, -70.66, 0), pos(1, -33.452, -70.66, 0)])!;
+    expect(timeline.totalMeters).toBe(0);
+    expect(timeline.continuousPaths).toEqual([[]]);
+    expect(frameAt(timeline, BASE + 30000).signalGap).toBe(true);
+  });
   it('descarta las muestras que el equipo marco invalidas', () => {
     const sospechosa: Position = { ...pos(5, -20.0, -50.0, 40), valid: false };
     const timeline = buildReplayTimeline([
