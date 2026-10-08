@@ -132,7 +132,7 @@ describe('unidad a vehiculo', () => {
     const v = mapUnitToVehicle(unidad())!;
     expect(v.id).toBe('u-001');
     expect(v.plate).toBe('HDYB95');
-    expect(v.fleetCode).toBe('C-101');
+    expect(v.fleetCode).toBe(v.plate);
     expect(v.device?.imei).toBe('356938035643809');
     expect(v.device?.externalId).toBe('u-001');
     expect(v.active).toBe(true);

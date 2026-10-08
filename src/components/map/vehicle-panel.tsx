@@ -166,9 +166,9 @@ export function VehiclePanel({ vehicleId }: { vehicleId: string }) {
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
               <h3 className="text-base font-semibold tracking-tight text-ink">{vehicle.plate}</h3>
-              <span className="numeric rounded bg-brand-500/10 px-1.5 py-0.5 text-2xs text-brand-700">
+              {vehicle.fleetCode && vehicle.fleetCode !== vehicle.plate && !['no asignado', 'sin asignar', 'unassigned'].includes(vehicle.fleetCode.trim().toLowerCase()) ? <span className="numeric rounded bg-brand-500/10 px-1.5 py-0.5 text-2xs text-brand-700">
                 {vehicle.fleetCode}
-              </span>
+              </span> : null}
             </div>
             <p className="mt-0.5 truncate text-xs text-ink-faint">
               {[vehicle.brand, vehicle.model, vehicle.year > 0 ? vehicle.year : null].filter(Boolean).join(' · ') || 'Equipo GPS vinculado'}

@@ -129,8 +129,9 @@ export function mapUnitToVehicle(unit: TridUnit): Vehicle | null {
   return {
     id: uid as VehicleId,
     plate: toPlate(unit),
-    // El grupo del proveedor hace de codigo de flota cuando existe.
-    fleetCode: (unit.GroupName ?? '').trim() || toPlate(unit),
+    // GroupName describe un grupo, no un código ni la vinculación del GPS.
+    // El código propio se conserva cuando la identidad local ya existe.
+    fleetCode: toPlate(unit),
     brand: '',
     model: (unit.UnitType ?? '').trim(),
     year: 0,
