@@ -793,7 +793,7 @@ export const OperationalMap = memo(function OperationalMap({
             onClearCommune={() => scopeToCommune(null)}
           />
           {selectedTrajectory ? <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 rounded-md bg-surface-900/90 px-2 py-1.5 text-[10px] text-ink-muted">
-            {selectedTrajectory.summary.coverage === 0 ? <span className="text-status-warning">Recorrido por verificar · {selectedTrajectory.sampleCount} lecturas · {selectedTrajectory.summary.gaps.length} intervalos sin evidencia suficiente</span> : <>
+            {selectedTrajectory.summary.coverage === 0 ? <span className="text-status-warning">Recorrido por verificar</span> : <>
             <span>Distancia GPS estimada <strong className="numeric text-ink">{formatDistance(selectedTrajectory.totalMeters)}</strong></span>
             <span>Marcha observada <strong className="numeric text-ink">{formatDuration(selectedTrajectory.summary.movingSeconds)}</strong></span>
             <span>Consistencia GPS <strong className="numeric text-ink">{Math.round(selectedTrajectory.summary.coverage * 100)} %</strong></span></>}

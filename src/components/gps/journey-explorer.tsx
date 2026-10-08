@@ -523,7 +523,6 @@ export function JourneyExplorer({
           </button>
         </div>
       </div>
-      {timeline.evidence ? <div className="border-b border-status-warning/20 bg-status-warning/10 px-4 py-2 text-xs text-status-warning">Lecturas reportadas por el GPS, sin ajuste a calles. Los tramos punteados son aproximados; no acreditan una calle recorrida. {summary.gaps.length} intervalos sin evidencia suficiente se excluyen del recorrido y de los cálculos.</div> : null}
       <div className="grid grid-cols-3 divide-x divide-line border-b border-line bg-surface-850 sm:grid-cols-6">
         {(
           [

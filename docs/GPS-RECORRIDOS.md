@@ -4,7 +4,7 @@ La torre recibe posiciones por SSE y pasa a consultas HTTP si el stream falla, d
 
 ## Evidencia y precisión de los recorridos reales
 
-Las posiciones recibidas son lecturas del proveedor, no certificaciones de la ubicación física. `valid` indica que la coordenada es utilizable; no acredita precisión GNSS, una visita o una descarga. Si no se informa precisión, la ficha lo advierte. La última lectura conserva sus coordenadas y fecha originales, incluso cuando está antigua.
+Las posiciones recibidas son lecturas del proveedor, no certificaciones de la ubicación física. `valid` indica que la coordenada es utilizable; no acredita precisión GNSS, una visita o una descarga. La ficha utiliza estados breves de señal y actividad, sin avisos técnicos permanentes sobre las limitaciones del proveedor. La última lectura conserva sus coordenadas y fecha originales, incluso cuando está antigua.
 
 El historial real aplica una política conservadora: al menos tres fixes distintos durante 20 segundos, separados por un máximo de 60 segundos, del mismo vehículo y equipo, sin muestras descartadas entre ellos. Repetir una respuesta de la API no cuenta como observación nueva. Se excluyen velocidades no finitas, negativas o superiores a 160 km/h, y precisión reportada inválida o superior a 30 m.
 

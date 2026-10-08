@@ -310,7 +310,6 @@ export function VehiclePanel({ vehicleId }: { vehicleId: string }) {
           </span>
         }
       >
-        {position?.simulated !== true ? <p className="mb-3 rounded-md bg-status-warning/10 px-2.5 py-2 text-2xs text-status-warning">Ubicación reportada por el GPS. {position?.accuracy === undefined ? 'El proveedor no informa precisión; no acredita una visita ni una descarga.' : `Precisión reportada: ${position.accuracy} m.`}</p> : null}
         <DetailList
           className="gap-y-2.5"
           items={[
@@ -674,7 +673,6 @@ export function VehiclePanel({ vehicleId }: { vehicleId: string }) {
         />
       </Section>
 
-      {trajectory?.summary.unobservedSeconds ? <p className="rounded-md border border-status-warning/20 bg-status-warning/10 p-3 text-xs text-status-warning">{trajectory.summary.gaps.length} intervalos sin evidencia suficiente. No se dibujan ni suman movimiento, detenciones o distancia. Los registros recibidos se conservan en el historial GPS.</p> : null}
       {/* --- Trayecto del dia --- */}
       <Section title="Eventos del trayecto (00:00 - 23:59)">
         {trajectoryLoading ? (
