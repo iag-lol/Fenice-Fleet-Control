@@ -52,7 +52,7 @@ export interface VehicleActivityResult {
 export function resolveVehicleActivity(input: VehicleActivityInput): VehicleActivityResult {
   const { position, settings } = input;
 
-  // 1. Sin comunicacion: no se puede afirmar nada mas.
+  // 1. Sin posición reciente: no se puede afirmar la actividad actual.
   if (input.operationalStatus === 'offline' || position === null) {
     return {
       status: 'offline',
@@ -144,7 +144,7 @@ export const ACTIVITY_LABEL: Record<VehicleActivityStatus, string> = {
   stopped: 'Detenido',
   deviated: 'Fuera de ruta',
   warning: 'Alerta critica',
-  offline: 'Sin comunicacion',
+  offline: 'Sin GPS reciente',
 };
 
 /**

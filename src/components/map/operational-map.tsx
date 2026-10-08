@@ -521,7 +521,7 @@ export const OperationalMap = memo(function OperationalMap({
     },
     {
       key: 'sin-senal',
-      label: 'Sin señal',
+      label: 'Sin GPS reciente',
       value: vehicleCounts.offline,
       denominator: vehicleCounts.total,
       icon: WifiOff,
