@@ -112,6 +112,9 @@ export function VehicleDetailView({ vehicleId }: { vehicleId: string }) {
 
   const { vehicle, driver, snapshot, route, journey, eta, currentWorkOrder, nextWorkOrder } = data;
   const position = positions.get(vehicleId) ?? snapshot.position;
+  const vehicleLabel = vehicle.fleetCode && vehicle.fleetCode !== vehicle.plate
+    ? `${vehicle.plate} · ${vehicle.fleetCode}` : vehicle.plate;
+  const hasVehicleDetails = vehicle.capacityLiters > 0 || vehicle.year > 0 || vehicle.brand.trim() !== '';
 
   return (
     <>
@@ -121,12 +124,12 @@ export function VehicleDetailView({ vehicleId }: { vehicleId: string }) {
             <ArrowLeft className="h-3 w-3" /> Flota
           </Link>
         }
-        title={`${vehicle.plate} · ${vehicle.fleetCode}`}
+        title={vehicleLabel}
         description={
           <span className="flex flex-wrap items-center gap-2">
             <span className="flex items-center gap-1.5">
               <Fuel className="h-3.5 w-3.5 text-ink-faint" />
-              {VEHICLE_TYPE_LABEL[vehicle.type]} · {vehicle.brand} {vehicle.model} {vehicle.year}
+              {hasVehicleDetails ? [VEHICLE_TYPE_LABEL[vehicle.type], vehicle.brand, vehicle.model, vehicle.year > 0 ? String(vehicle.year) : ''].filter(Boolean).join(' · ') : 'Equipo GPS vinculado'}
             </span>
             <span className="text-ink-faint">{vehicle.depotName}</span>
             <VehicleStatusBadge status={snapshot.status} />
@@ -188,14 +191,14 @@ export function VehicleDetailView({ vehicleId }: { vehicleId: string }) {
         {/* --- Cifras de la jornada --- */}
         <Card>
           <CardBody className="grid grid-cols-2 gap-4 sm:grid-cols-4 lg:grid-cols-7">
-            <Stat label="Velocidad" value={formatSpeed(position?.speed ?? null)} tone="brand" />
+            <Stat label="Velocidad" value={formatSpeed(position?.speedKnown === false ? null : position?.speed ?? null)} tone="brand" />
             <Stat
               label="Capacidad estanque"
-              value={`${formatNumber(vehicle.capacityLiters)} L`}
+              value={vehicle.capacityLiters > 0 ? `${formatNumber(vehicle.capacityLiters)} L` : 'Sin dato'}
             />
-            <Stat label="Compartimentos" value={String(vehicle.compartments)} />
+            <Stat label="Compartimentos" value={vehicle.compartments > 0 ? String(vehicle.compartments) : 'Sin dato'} />
             <Stat label="Kilometros" value={formatKm(journey.distanceKm)} />
-            <Stat label="En movimiento" value={formatDuration(journey.movingSeconds)} />
+            <Stat label="En movimiento" value={journey.distanceKm === null ? '—' : formatDuration(journey.movingSeconds)} />
             <Stat
               label="Entregas"
               value={`${journey.deliveriesCompleted} / ${journey.deliveriesCompleted + journey.deliveriesPending}`}
@@ -267,7 +270,7 @@ export function VehicleDetailView({ vehicleId }: { vehicleId: string }) {
 
         {/* --- Cámaras: módulo preparado para los futuros streams del vehículo. --- */}
         <VehicleCameras
-          vehicleLabel={`${vehicle.plate} · ${vehicle.fleetCode}`}
+          vehicleLabel={vehicleLabel}
           onRefresh={() => void refetch()}
         />
 
@@ -464,7 +467,7 @@ export function VehicleDetailView({ vehicleId }: { vehicleId: string }) {
         open={gpsDialogOpen}
         onClose={() => setGpsDialogOpen(false)}
         vehicleId={vehicleId}
-        vehicleLabel={`${vehicle.plate} · ${vehicle.fleetCode}`}
+        vehicleLabel={vehicleLabel}
       />
 
       <VehicleDeleteDialog

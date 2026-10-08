@@ -47,3 +47,26 @@ it('does not append the same remote history every time an operator reopens a jou
   await wrapped.getPositionHistory(query);
   expect((await stat(file)).size).toBe(firstSize);
 });
+
+
+it('una corrección de velocidad sin cambio de coordenadas se conserva cuando falla la fuente', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'gps-archive-corrected-')); dirs.push(dir);
+  const sample: Position = { vehicleId: 'v1' as Position['vehicleId'], deviceId: 'd1' as Position['deviceId'],
+    timestamp: '2026-09-12T12:00:00Z', lat: -33.45, lng: -70.66, speed: 30, speedKnown: true,
+    heading: 90, ignition: 'on', valid: true };
+  let source = [sample]; let unavailable = false;
+  const { withPositionArchive } = await import('./position-archive');
+  const wrapped = withPositionArchive({
+    info: { id: '3dtracking', label: 'GPS', simulated: false, preferredTransport: 'polling' },
+    getVehicles: async () => [], getDeviceStatus: async () => [], getVehicleEvents: async () => [],
+    getAllCurrentPositions: async () => [], getVehiclePosition: async () => null,
+    getPositionHistory: async () => { if (unavailable) throw new Error('offline'); return source; },
+    subscribeToPositions: () => () => {},
+  }, new PositionArchive(dir, 'corrected'));
+  const query = { vehicleId: sample.vehicleId, from: '2026-09-12T00:00:00Z', to: '2026-09-13T00:00:00Z' };
+  await wrapped.getPositionHistory(query);
+  source = [{ ...sample, speed: 0, speedKnown: false }];
+  await wrapped.getPositionHistory(query);
+  unavailable = true;
+  expect(await wrapped.getPositionHistory(query)).toEqual(source);
+});

@@ -97,7 +97,10 @@ export function withPositionArchive(provider: GpsProvider, archive: PositionArch
       // veces la misma jornada no debe multiplicar el archivo indefinidamente.
       await record(source.filter((p) => {
         const saved = localByKey.get(`${p.vehicleId}:${p.timestamp}`);
-        return !saved || saved.lat !== p.lat || saved.lng !== p.lng;
+        // Las correcciones de velocidad/ignición también deben sobrevivir
+        // a una caída posterior, sin duplicar sólo anotaciones visuales.
+        const measured = (sample: Position) => JSON.stringify({ ...sample, motionEvidence: undefined, roadMatch: undefined });
+        return !saved || measured(saved) !== measured(p);
       }));
       // La fuente tiene prioridad al corregir una muestra ya archivada.
       const matchedByKey = new Map(localPositions.filter((p) => p.roadMatch)

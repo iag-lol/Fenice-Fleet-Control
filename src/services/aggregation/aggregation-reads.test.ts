@@ -122,7 +122,6 @@ it('la ficha no suma distancia ni tiempo de marcha durante un corte GPS', async 
   expect(detail?.journey.movingSeconds).toBe(0);
   expect(detail?.journey.stoppedSeconds).toBe(0);
   expect(detail?.journey.distanceKm).toBeNull();
-  expect(detail?.telemetryWarnings?.join()).toContain('sin evidencia suficiente');
 });
 
 it('mantiene disponible la ficha si solo fallan historial y eventos del proveedor', async () => {

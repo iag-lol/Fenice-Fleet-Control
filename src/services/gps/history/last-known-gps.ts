@@ -5,6 +5,7 @@ import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { evaluateConnectionState } from '@/lib/engines/gps-health';
 import { isUsableCoordinate } from '@/lib/geo';
+import { acquireGpsCacheLock } from './cache-lock';
 import { getOperationalSettings } from '@/services/settings/settings-store';
 import type { DeviceStatus, Position, Vehicle } from '@/types/core';
 import type { GpsProvider } from '@/services/gps/gps-provider';
@@ -41,15 +42,34 @@ export function withLastKnownGps(base: GpsProvider, directory: string, namespace
     } catch { /* Primera conexión o archivo incompleto: se consulta la fuente real. */ }
   })();
 
+  const mergeDiskPositions = async () => {
+    try {
+      const disk = JSON.parse(await readFile(filename, 'utf8')) as SavedFleet;
+      if (disk.version !== 1 || !Array.isArray(disk.positions)) return;
+      const latest = new Map(disk.positions.filter(usable).map((p) => [p.vehicleId, p]));
+      for (const p of saved.positions) {
+        const previous = latest.get(p.vehicleId);
+        if (!previous || Date.parse(p.timestamp) >= Date.parse(previous.timestamp)) latest.set(p.vehicleId, p);
+      }
+      saved.positions = [...latest.values()];
+      saved.positions = rememberedPositions();
+    } catch { /* Primera escritura o archivo incompleto: conservar la memoria. */ }
+  };
   const persist = async () => {
-    const payload = JSON.stringify(saved);
-    if (payload === serialized) return;
+    if (JSON.stringify(saved) === serialized) return;
     const write = writes.catch(() => {}).then(async () => {
       await mkdir(directory, { recursive: true, mode: 0o700 });
-      const temporary = `${filename}.${randomUUID()}.tmp`;
-      await writeFile(temporary, payload, { mode: 0o600 });
-      await rename(temporary, filename);
-      serialized = payload;
+      const release = await acquireGpsCacheLock(filename);
+      try {
+        // Otro proceso puede haber recibido un fix nuevo desde nuestra carga.
+        // Fusionar bajo bloqueo evita perderlo al guardar cambios de catálogo.
+        await mergeDiskPositions();
+        const payload = JSON.stringify(saved);
+        const temporary = `${filename}.${randomUUID()}.tmp`;
+        await writeFile(temporary, payload, { mode: 0o600 });
+        await rename(temporary, filename);
+        serialized = payload;
+      } finally { await release(); }
     });
     writes = write;
     try { await write; warnings.delete('storage'); }
@@ -83,6 +103,7 @@ export function withLastKnownGps(base: GpsProvider, directory: string, namespace
       return await remember(positions);
     } catch (error) {
       warnings.set('positions', 'La consulta GPS está temporalmente no disponible. Se conserva la última ubicación registrada.');
+      await mergeDiskPositions();
       if (!saved.positions.length) throw error;
       return rememberedPositions();
     }

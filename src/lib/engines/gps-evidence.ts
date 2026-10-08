@@ -18,7 +18,7 @@ export function buildEvidenceTimeline(positions: Position[]): ReplayTimeline | n
     const [a, b, c] = triple as [Position, Position, Position];
     const intervals = [b, c].map((p, j) => (Date.parse(p.timestamp) - Date.parse(triple[j]!.timestamp)) / 1000);
     if (triple.some((p) => !p.valid || p.vehicleId !== a.vehicleId || p.deviceId !== a.deviceId ||
-      !Number.isFinite(p.speed) || p.speed < 0 || p.speed > 160 ||
+      p.speedKnown === false || !Number.isFinite(p.speed) || p.speed < 0 || p.speed > 160 ||
       (p.accuracy !== undefined && (!Number.isFinite(p.accuracy) || p.accuracy < 0 || p.accuracy > 30))) ||
       b.historyGapBefore || c.historyGapBefore || intervals.some((s) => s <= 0 || s > 60) ||
       intervals[0]! + intervals[1]! < 20) continue;

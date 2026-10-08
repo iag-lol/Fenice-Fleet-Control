@@ -456,7 +456,6 @@ export async function loadVehicleDetail(vehicleId: VehicleId): Promise<VehicleDe
 
   // La ficha y el explorador aplican la misma continuidad de muestras.
   const replay = buildEvidenceTimeline(history);
-  if (replay?.evidence?.includes('uncertain')) telemetryWarnings.push('Hay intervalos GPS sin evidencia suficiente: no confirman movimiento, detención ni distancia.');
   const analysis = replay ? analyzeJourney(replay, settings.route.maxLegalSpeedKmh) : null;
 
   const deliveriesCompleted = vehicleWorkOrders.filter((w) =>

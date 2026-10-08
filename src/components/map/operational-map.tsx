@@ -864,7 +864,7 @@ export const OperationalMap = memo(function OperationalMap({
             </p>
             <p className="numeric truncate text-2xs text-ink-faint">
               {followedVehicle.position
-                ? `${Math.round(followedVehicle.position.speed)} km/h · rumbo ${Math.round(followedVehicle.position.heading)}°`
+                ? followedVehicle.position.speedKnown === false ? 'Velocidad no disponible' : `${Math.round(followedVehicle.position.speed)} km/h · rumbo ${Math.round(followedVehicle.position.heading)}°`
                 : 'Sin posicion disponible'}
             </p>
           </div>

@@ -182,3 +182,12 @@ La conexión de Client API confirmó RBDC59 e IMEI 865124073408991. Las lecturas
 La aplicación conserva el historial recibido, excluye esos intervalos de líneas, distancia, detenciones y visitas, y distingue posición reportada de actividad corroborada por muestras consecutivas. La prueba de regresión reproduce el patrón con coordenadas ficticias; no publica las ubicaciones reales. Ver [política de evidencia](GPS-RECORRIDOS.md).
 
 Pendiente de aceptación física: probar equipo fijo al aire libre, luego un recorrido conocido, comparar timestamps y dispersión, revisar instalación/alimentación y perfil FMC130 con el proveedor. Persisten intervalos largos entre fixes: la comunicación del equipo no reemplaza una medición GNSS reciente. No se ha confirmado ni modificado remotamente el perfil del hardware. No se debe aceptar el piloto como preciso hasta superar esta prueba.
+
+
+## Auditoría de integración — 8 de octubre de 2026
+
+La consulta de aceptación de software encontró RBDC59, coincidencia de IMEI 865124073408991, ignición conocida, posición reciente e historial de la última hora. Se revisaron las respuestas de GPS, mapa, flota, ficha, configuración, clientes, comunas, órdenes, rutas y publicidad, sin errores de carga. Las credenciales y el modo de simulación se comprobaron sin publicarlas.
+
+Se corrigieron tres fallos de confiabilidad: el uso de una comunicación como fecha de posición cuando faltaba `GPSTimeUtc`; velocidades ausentes o unidades no reconocidas interpretadas como cero/km/h; y una escritura del catálogo que podía reemplazar una ubicación más reciente guardada por el otro proceso. Las pruebas cubren fallos de red, reinicio, cambios de dispositivo, nueve identidades, escritura concurrente y recuperación de bloqueos abandonados. La auditoría de dependencias de producción no reportó vulnerabilidades.
+
+Pendientes concretos de la instalación definitiva: vincular el proyecto correcto de Supabase para persistencia de flota/configuración y login; mantener servidor y grabador bajo supervisión en el alojamiento definitivo; y confirmar con MCI el perfil, frecuencia, firmware y prueba física del FMC130. El grabador local está activo, pero no es un servicio remoto que continúe con el computador apagado. No se han creado dispositivos ficticios en la cuenta para sustituir los ocho equipos aún no recibidos. La conexión API y las pruebas de software no sustituyen la aceptación física del equipo.

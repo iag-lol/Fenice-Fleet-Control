@@ -82,8 +82,11 @@ export interface Position {
   receivedAt?: IsoDateTime;
   lat: number;
   lng: number;
-  /** km/h */
+  /** km/h; no interpretar el valor si speedKnown=false. */
   speed: number;
+  speedKnown?: boolean;
+  /** Valor y unidad recibidos, antes de cualquier conversión. */
+  reportedSpeed?: { value: number; measure: string | null };
   /** Grados 0-359, 0 = norte. */
   heading: number;
   altitude?: number;

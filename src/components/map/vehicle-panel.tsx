@@ -318,7 +318,7 @@ export function VehiclePanel({ vehicleId }: { vehicleId: string }) {
               value: (
                 <span className="numeric flex items-center gap-1.5">
                   <Gauge className="h-3.5 w-3.5 text-ink-faint" />
-                  {formatSpeed(position?.speed ?? null)}
+                  {formatSpeed(position?.speedKnown === false ? null : position?.speed ?? null)}
                 </span>
               ),
             },

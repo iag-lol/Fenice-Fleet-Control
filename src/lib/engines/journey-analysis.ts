@@ -49,7 +49,7 @@ export function analyzeJourney(
     stoppedSeconds: 0,
     idleSeconds: 0,
     unobservedSeconds: 0,
-    maxSpeed: Math.max(...timeline.samples.map((p) => p.speed)),
+    maxSpeed: Math.max(0, ...timeline.samples.filter((p) => p.speedKnown !== false && Number.isFinite(p.speed)).map((p) => p.speed)),
     averageMovingSpeed: null,
     coverage: 0,
     gaps: [],
@@ -155,6 +155,11 @@ export function buildSpeedProfile(timeline: ReplayTimeline, budget = 600) {
   const segments: (typeof timeline.samples)[] = [];
   let segment: typeof timeline.samples = [];
   timeline.samples.forEach((sample, i) => {
+    if (sample.speedKnown === false || !Number.isFinite(sample.speed)) {
+      if (segment.length) segments.push(segment);
+      segment = [];
+      return;
+    }
     if (i && !timeline.continuousPaths[i - 1]?.length) {
       if (segment.length) segments.push(segment);
       segment = [];

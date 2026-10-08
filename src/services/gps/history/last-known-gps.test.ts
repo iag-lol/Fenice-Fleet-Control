@@ -23,7 +23,7 @@ function source(): GpsProvider {
     subscribeToPositions: vi.fn(() => () => {}), healthCheck: vi.fn(async () => ({ ok: true, message: 'ok', latencyMs: 0 })) };
 }
 beforeEach(async () => {
-  vi.useFakeTimers(); vi.setSystemTime(new Date('2026-10-08T18:00:00Z'));
+  vi.useFakeTimers({ toFake: ['Date'] }); vi.setSystemTime(new Date('2026-10-08T18:00:00Z'));
   directory = await mkdtemp(join(tmpdir(), 'fenice-last-known-'));
 });
 afterEach(async () => { vi.useRealTimers(); await rm(directory, { recursive: true, force: true }); });
@@ -79,4 +79,40 @@ describe('ultima ubicacion real persistente', () => {
     expect(await gps.getVehicles()).toEqual([]);
     expect(await gps.getAllCurrentPositions()).toEqual([]);
   });
+  it('una actualización de catálogo no sobrescribe el fix más reciente guardado por otro proceso', async () => {
+    const a = source();
+    const first = withLastKnownGps(a, directory, 'shared-account');
+    await first.getVehicles(); await first.getAllCurrentPositions();
+    const b = source();
+    const newer = { ...position, timestamp: '2026-10-08T18:00:00Z', lat: -33.46 };
+    vi.mocked(b.getAllCurrentPositions).mockResolvedValue([newer]);
+    const recorder = withLastKnownGps(b, directory, 'shared-account');
+    await recorder.getVehicles(); await recorder.getAllCurrentPositions();
+    vi.mocked(a.getVehicles).mockResolvedValue([{ ...vehicle, fleetCode: 'Actualizado' }]);
+    await first.getVehicles();
+    const unavailable = source();
+    vi.mocked(unavailable.getAllCurrentPositions).mockRejectedValue(new Error('offline'));
+    const restored = withLastKnownGps(unavailable, directory, 'shared-account');
+    expect(await restored.getVehiclePosition(vehicle.id)).toEqual(newer);
+  });
+
+  it('preserva los nueve fixes más recientes cuando mapa y grabador escriben simultáneamente', async () => {
+    const fleet = Array.from({ length: 9 }, (_, i) => ({ ...vehicle, id: `fleet-${i}` as Vehicle['id'],
+      plate: `TEST0${i}`, device: { ...vehicle.device!, id: `device-${i}` as Position['deviceId'], imei: String(359632100000100 + i) } }));
+    const old = fleet.map((v) => ({ ...position, vehicleId: v.id, deviceId: v.device!.id }));
+    const latest = old.map((p, i) => ({ ...p, timestamp: '2026-10-08T18:00:00Z', lat: p.lat - .001 * i }));
+    const a = source(), b = source();
+    vi.mocked(a.getVehicles).mockResolvedValue(fleet); vi.mocked(b.getVehicles).mockResolvedValue(fleet);
+    vi.mocked(a.getAllCurrentPositions).mockResolvedValue(old); vi.mocked(b.getAllCurrentPositions).mockResolvedValue(latest);
+    const web = withLastKnownGps(a, directory, 'nine-shared');
+    const recorder = withLastKnownGps(b, directory, 'nine-shared');
+    await Promise.all([web.getVehicles(), recorder.getVehicles()]);
+    await Promise.all([web.getAllCurrentPositions(), recorder.getAllCurrentPositions()]);
+    const offline = source(); vi.mocked(offline.getAllCurrentPositions).mockRejectedValue(new Error('offline'));
+    const restored = await withLastKnownGps(offline, directory, 'nine-shared').getAllCurrentPositions();
+    expect(restored).toHaveLength(9); expect(restored).toEqual(expect.arrayContaining(latest));
+    vi.mocked(a.getAllCurrentPositions).mockRejectedValue(new Error('offline'));
+    expect(await web.getAllCurrentPositions()).toEqual(expect.arrayContaining(latest));
+  });
+
 });

@@ -63,15 +63,15 @@ describe('velocidad', () => {
     expect(toKmh(10, 'm/s')).toBeCloseTo(36, 2);
   });
 
-  it('ante una unidad desconocida asume km/h', () => {
-    expect(toKmh(54, 'no se sabe')).toBe(54);
-    expect(toKmh(54, null)).toBe(54);
+  it('ante una unidad desconocida no supone km/h', () => {
+    expect(toKmh(54, 'no se sabe')).toBeNull();
+    expect(toKmh(54, null)).toBeNull();
   });
 
   it('nunca devuelve velocidades imposibles', () => {
-    expect(toKmh(null, 'km/h')).toBe(0);
-    expect(toKmh(-5, 'km/h')).toBe(0);
-    expect(toKmh(Number.NaN, 'km/h')).toBe(0);
+    expect(toKmh(null, 'km/h')).toBeNull();
+    expect(toKmh(-5, 'km/h')).toBeNull();
+    expect(toKmh(Number.NaN, 'km/h')).toBeNull();
   });
 });
 
@@ -215,10 +215,7 @@ describe('unidad a posicion', () => {
   it('sobrevive a una respuesta con casi todo vacio', () => {
     // Una unidad recien instalada llega asi, y no puede tumbar la carga.
     const minima: TridUnit = { Uid: 'u-9', LastReportedTimeUTC: '2026-09-01T14:00:00Z', Position: {} };
-    const p = mapUnitToPosition(minima)!;
-    expect(p.speed).toBe(0);
-    expect(p.ignition).toBe('unknown');
-    expect(p.valid).toBe(false);
+    expect(mapUnitToPosition(minima)).toBeNull();
   });
 });
 
@@ -238,7 +235,7 @@ describe('estado del equipo', () => {
   it('escala a intermitente, sin señal y offline segun el silencio', () => {
     const en = (min: number) =>
       mapUnitToDeviceStatus(
-        unidad({ LastReportedTimeUTC: new Date(ahora.getTime() - min * 60_000).toISOString(), Position: { GPSTimeUtc: new Date(ahora.getTime() - min * 60_000).toISOString() } }),
+        unidad({ LastReportedTimeUTC: new Date(ahora.getTime() - min * 60_000).toISOString(), Position: { ...unidad().Position, GPSTimeUtc: new Date(ahora.getTime() - min * 60_000).toISOString() } }),
         ahora,
         UMBRALES,
       )!.connection;
@@ -249,7 +246,7 @@ describe('estado del equipo', () => {
   });
 
   it('un fix antiguo reenviado no aparece como señal fresca', () => {
-    const status = mapUnitToDeviceStatus(unidad({ LastReportedTimeUTC: ahora.toISOString(), Position: { GPSTimeUtc: '2026-09-01T10:00:00Z' } }), ahora, UMBRALES)!;
+    const status = mapUnitToDeviceStatus(unidad({ LastReportedTimeUTC: ahora.toISOString(), Position: { ...unidad().Position, GPSTimeUtc: '2026-09-01T10:00:00Z' } }), ahora, UMBRALES)!;
     expect(status.connection).toBe('offline');
     expect(status.lastCommunicationAt).toBe(ahora.toISOString());
     expect(status.lastPositionAt).toBe('2026-09-01T10:00:00.000Z');
@@ -260,5 +257,37 @@ describe('estado del equipo', () => {
     const estado = mapUnitToDeviceStatus(nueva, ahora, UMBRALES)!;
     expect(estado.connection).toBe('unknown');
     expect(estado.secondsSinceLastPosition).toBeNull();
+  });
+});
+
+
+describe('datos incompletos no crean observaciones', () => {
+  it('no convierte recepción o comunicación en una fecha de posición GPS', () => {
+    const unit = unidad();
+    unit.Position!.GPSTimeUtc = null;
+    const now = new Date('2026-09-01T14:30:30Z');
+    expect(mapUnitToPosition(unit)).toBeNull();
+    expect(mapUnitToDeviceStatus(unit, now, UMBRALES)).toMatchObject({ connection: 'unknown',
+      lastPositionAt: null, lastCommunicationAt: '2026-09-01T14:30:00.000Z', secondsSinceLastPosition: null });
+  });
+  it.each([null, undefined, -5, NaN])('marca velocidad no disponible sin presentarla como reposo (%s)', (speed) => {
+    const unit = unidad(); unit.Position!.Speed = speed;
+    expect(mapUnitToPosition(unit)).toMatchObject({ valid: true, speedKnown: false });
+  });
+  it('conserva el valor y la unidad originales aunque la conversión no sea segura', () => {
+    const unit = unidad(); unit.Position!.SpeedMeasure = 'desconocida';
+    expect(mapUnitToPosition(unit)).toMatchObject({ speedKnown: false,
+      reportedSpeed: { value: 54, measure: 'desconocida' } });
+  });
+  it('no presenta un reloj adelantado ni coordenadas inválidas como ubicación reciente', () => {
+    const unit = unidad(); unit.Position!.GPSTimeUtc = '2026-09-01T15:30:30Z';
+    const now = new Date('2026-09-01T14:30:30Z');
+    expect(mapUnitToDeviceStatus(unit, now, UMBRALES)).toMatchObject({ connection: 'unknown', secondsSinceLastPosition: null });
+    unit.Position!.Longitude = 0; unit.Position!.Latitude = 0;
+    expect(mapUnitToDeviceStatus(unit, now, UMBRALES)).toMatchObject({ connection: 'unknown', lastPositionAt: null });
+  });
+  it('identifica también el IMEI en mayúsculas del catálogo Partner', () => {
+    const unit = unidad(); unit.IMEI = unit.Imei; unit.Imei = undefined;
+    expect(mapUnitToDeviceStatus(unit, new Date('2026-09-01T14:30:30Z'), UMBRALES)?.imei).toBe(unit.IMEI);
   });
 });

@@ -83,7 +83,7 @@ export function deriveVehicleStatus(input: VehicleStatusInput): VehicleOperation
     return 'offline';
   }
 
-  if (input.position.motionEvidence === 'uncertain') return 'uncertain';
+  if (input.position.motionEvidence === 'uncertain' || input.position.speedKnown === false) return 'uncertain';
 
   const moving =
     input.position.speed > input.gps.movingSpeedThresholdKmh && input.position.ignition !== 'off';

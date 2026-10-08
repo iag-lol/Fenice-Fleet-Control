@@ -8,6 +8,7 @@ import type {
   VehicleId,
   VehicleType,
 } from '@/types/core';
+import { secondsSince } from '@/lib/engines/gps-health';
 import type { TridPosition, TridUnit } from './tridtracking-types';
 
 /**
@@ -25,23 +26,17 @@ const KM_PER_MILE = 1.609344;
 /** Nudo en km/h, por si algun equipo maritimo reporta en nudos. */
 const KMH_PER_KNOT = 1.852;
 
-/**
- * Velocidad normalizada a km/h.
- *
- * `SpeedMeasure` no es fiable ni uniforme entre cuentas. Interpretarlo mal
- * significaria mostrar 100 km/h donde hay 62, y las alertas de exceso de
- * velocidad se dispararian solas. Ante una unidad desconocida se asume km/h,
- * que es la del despliegue chileno, pero se hace explicito aqui.
- */
-export function toKmh(speed: number | null | undefined, measure: string | null | undefined): number {
-  if (typeof speed !== 'number' || !Number.isFinite(speed) || speed < 0) return 0;
-
-  const unidad = (measure ?? '').trim().toLowerCase();
-
-  if (unidad.includes('mph') || unidad.includes('mile')) return speed * KM_PER_MILE;
-  if (unidad.includes('knot') || unidad === 'kn') return speed * KMH_PER_KNOT;
-  if (unidad.includes('m/s') || unidad === 'mps') return speed * 3.6;
-  return speed;
+/** Una unidad ausente o desconocida no se convierte suponiendo km/h. */
+export function toKmh(speed: number | null | undefined, measure: string | null | undefined): number | null {
+  if (typeof speed !== 'number' || !Number.isFinite(speed) || speed < 0) return null;
+  // Cero conserva el mismo valor en cualquier unidad de velocidad.
+  if (speed === 0) return 0;
+  const unit = (measure ?? '').trim().toLowerCase().replace(/\s+/g, '');
+  if (['mph', 'miles/hour', 'mile/hour', 'mi/h'].includes(unit)) return speed * KM_PER_MILE;
+  if (['kn', 'knot', 'knots'].includes(unit)) return speed * KMH_PER_KNOT;
+  if (['m/s', 'mps'].includes(unit)) return speed * 3.6;
+  if (['km/h', 'kmh', 'kph', 'kilometers/hour', 'kilometres/hour'].includes(unit)) return speed;
+  return null;
 }
 
 /** Ignicion: el proveedor la manda como texto libre, no como booleano. */
@@ -158,10 +153,11 @@ export function mapUnitToPosition(unit: TridUnit): Position | null {
   const lat = p.Latitude ?? null;
   const lng = p.Longitude ?? null;
 
-  const timestamp =
-    toIsoUtc(p.GPSTimeUtc) ?? toIsoUtc(unit.LastReportedTimeUTC) ?? toIsoUtc(p.ServerTimeUTC);
+  // Una comunicación o recepción reciente no fecha una medición GNSS.
+  const timestamp = toIsoUtc(p.GPSTimeUtc);
   if (timestamp === null) return null;
 
+  const speed = toKmh(p.Speed, p.SpeedMeasure);
   const heading = typeof p.Heading === 'number' && Number.isFinite(p.Heading) ? p.Heading : 0;
   const odometer = p.Odometer ?? unit.OdometerDetails?.Reading ?? null;
 
@@ -172,10 +168,13 @@ export function mapUnitToPosition(unit: TridUnit): Position | null {
     ...(toIsoUtc(p.ServerTimeUTC) ? { receivedAt: toIsoUtc(p.ServerTimeUTC)! } : {}),
     lat: lat ?? 0,
     lng: lng ?? 0,
-    speed: Math.round(toKmh(p.Speed, p.SpeedMeasure) * 10) / 10,
+    speed: speed === null ? 0 : Math.round(speed * 10) / 10,
+    speedKnown: speed !== null,
+    ...(typeof p.Speed === 'number' && Number.isFinite(p.Speed)
+      ? { reportedSpeed: { value: p.Speed, measure: p.SpeedMeasure ?? null } } : {}),
     heading: ((heading % 360) + 360) % 360,
     ignition: toIgnition(p.Ignition),
-    // `valid` gobierna si el resto del sistema puede fiarse de la coordenada.
+    // `valid` sólo verifica coordenadas utilizables, no precisión GNSS.
     valid: isUsableFix(lat, lng),
     ...(typeof odometer === 'number' && Number.isFinite(odometer)
       ? { odometerKm: Math.round(odometer * 10) / 10 }
@@ -198,8 +197,10 @@ export function mapUnitToDeviceStatus(
   const uid = (unit.Uid ?? '').trim();
   if (uid === '') return null;
 
-  const last = toIsoUtc(unit.Position?.GPSTimeUtc) ?? toIsoUtc(unit.LastReportedTimeUTC);
-  const seconds = last === null ? null : Math.max(0, Math.round((now.getTime() - Date.parse(last)) / 1000));
+  const position = mapUnitToPosition(unit);
+  const last = position?.valid ? position.timestamp : null;
+  const seconds = secondsSince(last, now);
+  const imei = (unit.Imei ?? unit.IMEI ?? '').trim();
 
   const connection: DeviceStatus['connection'] =
     seconds === null
@@ -215,7 +216,7 @@ export function mapUnitToDeviceStatus(
   return {
     deviceId: ((unit.Imei ?? unit.IMEI ?? '').trim() || uid) as DeviceId,
     vehicleId: uid as VehicleId,
-    ...(unit.Imei ? { imei: unit.Imei } : {}),
+    ...(imei ? { imei } : {}),
     connection,
     lastPositionAt: last,
     lastCommunicationAt: toIsoUtc(unit.LastReportedTimeUTC) ?? toIsoUtc(unit.Position?.ServerTimeUTC),

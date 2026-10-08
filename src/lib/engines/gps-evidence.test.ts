@@ -54,6 +54,7 @@ describe('evidencia de movimiento GPS', () => {
     [p(0, 0, 36), p(15, 150, 36), p(30, 0, 36)],
     [p(0, 0, 36), p(15, 1500, 36), p(30, 3000, 36)],
     [p(0, 0, 36), p(15, 150, NaN), p(30, 300, 36)],
+    [p(0, 0, 0, { speedKnown: false }), p(30, 0, 0, { speedKnown: false }), p(60, 0, 0, { speedKnown: false })],
   ])('rechaza cortes, mala precisión, cambio de equipo, retornos erráticos y velocidades incompatibles (%#)', (...samples) => {
     expect(buildEvidenceTimeline(samples)!.evidence).toEqual(['uncertain', 'uncertain']);
   });

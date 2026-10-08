@@ -612,7 +612,7 @@ export function OperationsPanel({
                           {snap.vehicle.fleetCode}
                         </span>
                         <span className="numeric ml-auto shrink-0 text-2xs text-ink-muted">
-                          {formatSpeed(live?.speed ?? null)}
+                          {formatSpeed(live?.speedKnown === false ? null : live?.speed ?? null)}
                         </span>
                       </div>
 

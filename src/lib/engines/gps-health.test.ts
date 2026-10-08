@@ -221,3 +221,8 @@ it('no considera activo un GPS con el reloj adelantado varios minutos', () => {
   expect(deriveVehicleStatus({ position: { speed: 40, ignition: 'on', motionEvidence: 'uncertain' } as Position,
     connection: 'online', gps: DEFAULT_OPERATIONAL_SETTINGS.gps })).toBe('uncertain');
 });
+
+it('una velocidad ausente no declara detenido ni disponible aunque la posición sea reciente', () => {
+  expect(deriveVehicleStatus({ position: { speed: 0, speedKnown: false, ignition: 'on' } as Position,
+    connection: 'online', gps: DEFAULT_OPERATIONAL_SETTINGS.gps, hasActiveAssignment: true })).toBe('uncertain');
+});
