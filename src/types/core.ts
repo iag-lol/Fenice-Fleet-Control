@@ -68,6 +68,30 @@ export type IgnitionState = 'on' | 'off' | 'unknown';
  * Una posicion GPS normalizada. Todo proveedor debe producir esta forma.
  * Los campos opcionales reflejan que no todo dispositivo los reporta.
  */
+export interface GpsSensorReading {
+  name: string;
+  type: string | null;
+  value: string;
+  unit: string | null;
+  measuredAt: IsoDateTime | null;
+  receivedAt: IsoDateTime | null;
+  metric?: 'fuel_percent' | 'fuel_liters' | 'supply_voltage' | 'backup_voltage' | 'backup_percent' | 'engine_rpm' | 'engine_temperature';
+  numericValue?: number;
+}
+
+export interface GpsTelemetry {
+  source: '3dtracking';
+  measuredAt: IsoDateTime | null;
+  receivedAt: IsoDateTime | null;
+  engineStatus?: string;
+  /** La API no declara unidad: conservar el contador sin convertirlo a horas. */
+  engineCounter?: number;
+  externalPowerFailure?: boolean;
+  lowBattery?: boolean;
+  inputs: { code: string; label: string; active: boolean | null }[];
+  sensors: GpsSensorReading[];
+}
+
 export interface Position {
   /** A rejected GPS fix preceded this sample; do not bridge across it. */
   historyGapBefore?: boolean;
@@ -96,6 +120,7 @@ export interface Position {
   odometerKm?: number;
   /** Nivel de bateria del equipo (0-100). */
   batteryLevel?: number;
+  telemetry?: GpsTelemetry;
   /** Direccion inversa-geocodificada, si esta disponible en cache. */
   address?: string;
   communeCode?: string;
@@ -118,6 +143,7 @@ export interface DeviceStatus {
   secondsSinceLastPosition: number | null;
   protocol?: string;
   model?: string;
+  telemetry?: GpsTelemetry;
 }
 
 export type GpsEventType =
@@ -133,6 +159,10 @@ export type GpsEventType =
   | 'device_online'
   | 'device_offline'
   | 'power_cut'
+  | 'battery_low'
+  | 'jamming'
+  | 'towing'
+  | 'crash'
   | 'sos';
 
 export interface GpsEvent {

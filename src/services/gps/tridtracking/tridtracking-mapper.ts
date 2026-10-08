@@ -8,6 +8,7 @@ import type {
   VehicleId,
   VehicleType,
 } from '@/types/core';
+import { mapTridTelemetry } from './tridtracking-telemetry';
 import { secondsSince } from '@/lib/engines/gps-health';
 import type { TridPosition, TridUnit } from './tridtracking-types';
 
@@ -174,10 +175,11 @@ export function mapUnitToPosition(unit: TridUnit): Position | null {
       ? { reportedSpeed: { value: p.Speed, measure: p.SpeedMeasure ?? null } } : {}),
     heading: ((heading % 360) + 360) % 360,
     ignition: toIgnition(p.Ignition),
+    telemetry: mapTridTelemetry(unit),
     // `valid` sólo verifica coordenadas utilizables, no precisión GNSS.
     valid: isUsableFix(lat, lng),
-    ...(typeof odometer === 'number' && Number.isFinite(odometer)
-      ? { odometerKm: Math.round(odometer * 10) / 10 }
+    ...(typeof odometer === 'number' && Number.isFinite(odometer) && odometer >= 0
+      ? { odometerKm: odometer }
       : {}),
     ...(p.Address ? { address: p.Address } : {}),
   };
@@ -222,6 +224,7 @@ export function mapUnitToDeviceStatus(
     lastCommunicationAt: toIsoUtc(unit.LastReportedTimeUTC) ?? toIsoUtc(unit.Position?.ServerTimeUTC),
     secondsSinceLastPosition: seconds,
     protocol: '3DTracking WebApi v1.0',
+    telemetry: mapTridTelemetry(unit),
     ...(unit.UnitType ? { model: unit.UnitType } : {}),
   };
 }

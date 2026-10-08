@@ -191,3 +191,26 @@ La consulta de aceptación de software encontró RBDC59, coincidencia de IMEI 86
 Se corrigieron tres fallos de confiabilidad: el uso de una comunicación como fecha de posición cuando faltaba `GPSTimeUtc`; velocidades ausentes o unidades no reconocidas interpretadas como cero/km/h; y una escritura del catálogo que podía reemplazar una ubicación más reciente guardada por el otro proceso. Las pruebas cubren fallos de red, reinicio, cambios de dispositivo, nueve identidades, escritura concurrente y recuperación de bloqueos abandonados. La auditoría de dependencias de producción no reportó vulnerabilidades.
 
 Pendientes concretos de la instalación definitiva: vincular el proyecto correcto de Supabase para persistencia de flota/configuración y login; mantener servidor y grabador bajo supervisión en el alojamiento definitivo; y confirmar con MCI el perfil, frecuencia, firmware y prueba física del FMC130. El grabador local está activo, pero no es un servicio remoto que continúe con el computador apagado. No se han creado dispositivos ficticios en la cuenta para sustituir los ocho equipos aún no recibidos. La conexión API y las pruebas de software no sustituyen la aceptación física del equipo.
+
+
+## Capacidades y telemetría ampliada
+
+Se contrastó la [comparación oficial FMC130/FMC920/FMC150](https://www.teltonika-gps.com/compare?products=FMC130_FMC920_FMC150), el [manual FMC130](https://wiki.teltonika-gps.com/view/FMC130_General_description) y el contrato [Client API de 3DTracking](https://apiv2.3dtracking.net/openapi/v1.json) con consultas de sólo lectura a RBDC59.
+
+| Función | FMC130 y accesorios | Cuenta actual |
+|---|---|---|
+| Ubicación, velocidad, ignición, recorrido | Funciones básicas; validar fuente de ignición e instalación GNSS | Recibidos |
+| Odómetro | Contador del proveedor; no equivale automáticamente al tablero del camión | Recibido y conservado sin perder decimales |
+| Estado y contador de motor | El contrato incluye EngineStatus/EngineTime; no declara unidad del contador | Estado `idling` y contador recibidos; no convertido a horas |
+| Alimentación y batería | El equipo puede medir alimentación externa y batería interna de respaldo | Llegan dos indicadores: externalpowerfailure/batterylevellow; no se reciben voltajes ni porcentaje |
+| Nivel de combustible | Sonda LLS analógica calibrada o adaptador CAN/OBD compatible | SensorReadings vacío, también en consulta histórica de siete días |
+| RPM, temperatura y datos del vehículo | Dependen de sensores/adaptador y compatibilidad del vehículo | No recibidos |
+| Alertas | Configuración de escenarios y decodificación del proveedor: batería, alimentación, interferencia, remolque, impacto, conducción brusca | Endpoint de alertas accesible; lista vacía en la consulta |
+| Informes | API de reportes generados, registros de abastecimiento y reportes propios de Fleet Control | ReportRunLog y FuelLog vacíos; CSV de telemetría disponible en la ficha |
+| Cortacorriente/inmovilización | Tres DOUT para controlar un relé externo; instalación, configuración y validación física necesarias | Relé no confirmado. Client API no publica control DOUT; Partner sólo documenta un mensaje genérico. No se envió ningún comando |
+
+FMC130 soporta un adaptador CAN externo. El CAN integrado mostrado en la comparación corresponde al FMC150. La disponibilidad de un sensor en la ficha técnica no confirma que esté instalado o habilitado en RBDC59. La batería interna del GPS no es la batería del camión. Un abastecimiento registrado en FuelLog o una estimación GNSS de consumo no son lecturas de nivel ni prueba de litros descargados.
+
+Fleet Control conserva `InputOutputs`, `SensorReadings`, sus unidades y fechas. La ficha muestra los valores recibidos y permite descargar un CSV. No obtiene porcentajes de batería a partir de voltajes, no suma niveles de estanques distintos y no presenta sensores ajenos al IMEI. Los eventos de recuperación de alimentación no se etiquetan como cortes. Los sensores desconocidos se conservan con su nombre y unidad originales. La telemetría puede mostrarse desde el estado del dispositivo aunque falte un fix GNSS, sin renovar artificialmente la fecha de ubicación.
+
+Para habilitar los datos pendientes, MCI debe confirmar el perfil de I/O y publicar en SensorReadings la alimentación externa, batería interna y sus unidades; identificar tipo/fecha/unidad de cada sensor; confirmar fuente del odómetro y unidad de EngineTime; y validar con el instalador la sonda o adaptador compatible con marca/modelo/año del camión. Para inmovilización se requiere confirmar relé y canal, circuito de arranque, permisos, transporte de comando y confirmación de ejecución. Un `Result=true` al enviar un mensaje no acredita que el relé cambió de estado. La revisión no accionó ninguna salida digital ni modificó el hardware.

@@ -1,5 +1,7 @@
 'use client';
 
+import { DeviceTelemetry } from '@/components/gps/device-telemetry';
+
 import { useQuery } from '@tanstack/react-query';
 import {
   AlertTriangle,
@@ -404,6 +406,8 @@ export function VehiclePanel({ vehicleId }: { vehicleId: string }) {
           ]}
         />
       </Section>
+
+      <Section title="Energía y sensores" className="rounded-lg border border-line bg-surface-900 p-3 shadow-card"><DeviceTelemetry plate={vehicle.plate} position={position} device={vehicleSnapshot.device} /></Section>
 
       {/* --- Orden actual --- */}
       <Section title="Orden actual" className="rounded-lg border border-line bg-surface-900 p-3 shadow-card">

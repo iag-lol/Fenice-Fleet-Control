@@ -23,6 +23,23 @@ export interface TridAuthResponse {
   } | null;
 }
 
+export interface TridInputOutput {
+  SystemName?: string | null;
+  Description?: string | null;
+  UserDescription?: string | null;
+  Active?: boolean | null;
+}
+export interface TridSensorReading {
+  UnitUid?: string | null;
+  Name?: string | null;
+  Value?: string | null;
+  MeasurementSign?: string | null;
+  ReadingTimeUtc?: string | null;
+  ReadingTimeLocal?: string | null;
+  ServerTimeUtc?: string | null;
+  SensorType?: string | null;
+}
+
 export interface TridPosition {
   Unit?: { Uid?: string | null; Name?: string | null; Imei?: string | null } | null;
   Latitude?: number | null;
@@ -37,6 +54,7 @@ export interface TridPosition {
   Odometer?: number | null;
   EngineTime?: number | null;
   EngineStatus?: string | null;
+  InputOutputs?: TridInputOutput[] | null;
   ServerTimeUTC?: string | null;
   GPSTimeLocal?: string | null;
   GPSTimeUtc?: string | null;
@@ -62,6 +80,7 @@ export interface TridUnit {
   LastReportedTimeLocal?: string | null;
   OdometerDetails?: { Reading?: number | null; DateTime?: string | null } | null;
   Position?: TridPosition | null;
+  SensorReadings?: TridSensorReading[] | null;
 }
 
 export interface TridAlert {

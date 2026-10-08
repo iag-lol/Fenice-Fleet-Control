@@ -123,4 +123,17 @@ describe('FMC130 en 3DTracking para RBDC59', () => {
     stop(); done([unit]); await vi.advanceTimersByTimeAsync(30000);
     expect(onPositions).not.toHaveBeenCalled();
   });
+  it('incorpora alarmas nativas de batería, interferencia, remolque e impacto sin confundir recuperación con corte', async () => {
+    const gps = provider();
+    mocks.call.mockImplementation(async (path: string) => {
+      if (path.endsWith('/unit/list') || path.endsWith('latestpositionslist')) return [unit];
+      return { AlertList: ['Battery low', 'Jamming detected', 'Towing detected', 'Crash detected', 'Power restored'].map((name, i) => ({
+        AlertUID: `a${i}`, Vehicle: 'RBDC59', CreatedDate: to, AlertType: name, AlertName: name,
+      })) };
+    });
+    const events = await gps.getVehicleEvents({ vehicleId: uid as VehicleId, from, to });
+    expect(events.map((e) => e.type)).toEqual(expect.arrayContaining(['battery_low', 'jamming', 'towing', 'crash']));
+    expect(events).toHaveLength(4); expect(events.every((e) => e.vehicleId === uid)).toBe(true);
+  });
+
 });

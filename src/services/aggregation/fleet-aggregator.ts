@@ -368,12 +368,12 @@ function buildTimeline(
   }
 
   for (const event of events) {
-    if (event.type === 'harsh_braking' || event.type === 'harsh_acceleration' || event.type === 'power_cut' || event.type === 'sos') {
+    if (event.type === 'harsh_braking' || event.type === 'harsh_acceleration' || event.type === 'power_cut' || event.type === 'sos' || ['battery_low', 'jamming', 'towing', 'crash'].includes(event.type)) {
       entries.push({
         id: event.id,
         kind: 'evento_gps',
         timestamp: event.timestamp,
-        title: ({ harsh_braking: 'Frenada brusca', harsh_acceleration: 'Aceleracion brusca', power_cut: 'Corte de alimentacion', sos: 'Alarma SOS' } as Record<string, string>)[event.type]!,
+        title: ({ harsh_braking: 'Frenada brusca', harsh_acceleration: 'Aceleracion brusca', power_cut: 'Corte de alimentación reportado', sos: 'Alarma SOS', battery_low: 'Batería baja reportada', jamming: 'Interferencia reportada', towing: 'Remolque reportado', crash: 'Impacto reportado' } as Record<string, string>)[event.type]!,
         detail: event.detail ?? null,
         position: event.position ?? null,
       });

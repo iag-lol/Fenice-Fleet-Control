@@ -69,6 +69,12 @@ function classifyAlert(
   nombre: string | null | undefined,
 ): GpsEvent['type'] | null {
   const t = (nombre ?? '').toLowerCase();
+  // Una recuperación no debe presentarse como una nueva falla.
+  if (/(restor|recover|restablec|recuper|normaliz)/.test(t) && /(power|battery|jamm|bateria|alimentacion|interferencia)/.test(t)) return null;
+  if (/(battery|bateria)/.test(t) && /(low|baj)/.test(t)) return 'battery_low';
+  if (/(jamming|interferencia)/.test(t)) return 'jamming';
+  if (/(towing|remolque)/.test(t)) return 'towing';
+  if (/(crash|collision|colision|choque)/.test(t)) return 'crash';
 
   if (t.includes('geofence') || t.includes('zone') || t.includes('location')) {
     return t.includes('exit') || t.includes('salida')

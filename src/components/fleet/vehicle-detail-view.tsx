@@ -1,5 +1,7 @@
 'use client';
 
+import { DeviceTelemetry } from '@/components/gps/device-telemetry';
+
 import { useQuery } from '@tanstack/react-query';
 import {
   AlertTriangle,
@@ -285,8 +287,8 @@ export function VehicleDetailView({ vehicleId }: { vehicleId: string }) {
                     { label: 'Ignicion', value: position?.ignition === 'on' ? 'Encendida' : position?.ignition === 'off' ? 'Apagada' : 'Sin dato' },
                     { label: 'Rumbo', value: formatHeading(position?.heading) },
                     {
-                      label: 'Odometro',
-                      value: position?.odometerKm ? `${formatNumber(position.odometerKm)} km` : 'Sin dato',
+                      label: 'Odómetro del proveedor',
+                      value: position?.odometerKm !== undefined ? `${formatNumber(position.odometerKm, 2)} km` : 'Sin dato',
                     },
                     { label: 'Precision', value: position?.accuracy ? `${position.accuracy} m` : 'Sin dato' },
                     {
@@ -309,6 +311,8 @@ export function VehicleDetailView({ vehicleId }: { vehicleId: string }) {
                 />
               </CardBody>
             </Card>
+
+            <Card><CardHeader title="Energía y sensores" /><CardBody><DeviceTelemetry plate={vehicle.plate} position={position} device={snapshot.device} /></CardBody></Card>
 
             {/* --- Asignacion --- */}
             <Card>
