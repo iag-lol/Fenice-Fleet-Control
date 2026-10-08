@@ -90,7 +90,9 @@ export function getGpsProvider(): GpsProvider {
     const provider = withGeofenceDetection(withTraccarDeviceLinks(createGpsProvider()));
     const env = getServerEnv();
     const namespace = env.GPS_PROVIDER === '3dtracking'
-      ? `3dtracking:${env.TRIDTRACKING_BASE_URL}:${env.TRIDTRACKING_USERNAME ?? ''}`
+      ? env.TRIDTRACKING_API_MODE === 'partner'
+        ? `3dtracking:partner:${env.TRIDTRACKING_BASE_URL}:${env.TRIDTRACKING_USERNAME ?? ''}:${env.TRIDTRACKING_COMPANY_UID ?? ''}`
+        : `3dtracking:${env.TRIDTRACKING_BASE_URL}:${env.TRIDTRACKING_USERNAME ?? ''}`
       : `${env.GPS_PROVIDER}:${env.TRACCAR_BASE_URL ?? ''}`;
     globalForProviders.__feniceGpsProvider = withPositionArchive(provider,
       new PositionArchive(resolve(process.env.GPS_HISTORY_DIR?.trim() || '.fenice/gps-history'), namespace));

@@ -1,12 +1,14 @@
 # Integración con 3DTracking
 
-La flota usa 3DTracking Client WebApi v1.0. El primer FMC130 se instalará en RBDC59. Para la preparación del equipo y la aceptación en terreno, seguir [la guía del piloto](FMC130-PRUEBAS-RBDC59.md).
+La plataforma admite 3DTracking Client WebApi y Partner WebApi v1.0. El primer FMC130 se instalará en RBDC59. Para la preparación del equipo y la aceptación en terreno, seguir [la guía del piloto](FMC130-PRUEBAS-RBDC59.md).
 
 ## Configuración del servidor
 
 ```dotenv
 GPS_PROVIDER=3dtracking
 TRIDTRACKING_BASE_URL=https://apiv2.3dtracking.net
+TRIDTRACKING_API_MODE=client
+TRIDTRACKING_COMPANY_UID=
 TRIDTRACKING_USERNAME=<usuario API>
 TRIDTRACKING_PASSWORD=<clave API>
 TRIDTRACKING_TIMEOUT_MS=15000
@@ -18,6 +20,32 @@ NEXT_PUBLIC_DEMO_MODE=false
 ```
 
 Las credenciales permanecen en el servidor. El navegador consulta `/api/gps/*` de Fleet Control. Los mensajes de error censuran las credenciales y las peticiones no siguen redirecciones hacia otro servidor.
+
+## Movilmaster y Partner API
+
+El portal de Movilmaster `https://3dt.mcitelecom.com/live/` es el acceso web del proveedor. Una sesión abierta allí no demuestra que el mismo usuario pueda autenticarse en la API. Si la autenticación responde `50017` / `User Could not be Authenticated`, confirmar con MCI Telecom el usuario exacto, la habilitación de API y el endpoint aplicable; no repetir autenticaciones indefinidamente ni cambiar contraseñas para resolverlo.
+
+La documentación entregada de Partner API publica su esquema en [el recurso de definición oficial](https://partnerapi.3dtracking.net/api/v1.0/) y su interfaz en [Swagger](https://partnerapi.3dtracking.net/swagger/ui/index#/). Para ese contrato, usar:
+
+```dotenv
+TRIDTRACKING_BASE_URL=https://partnerapi.3dtracking.net
+TRIDTRACKING_API_MODE=partner
+TRIDTRACKING_COMPANY_UID=<UID de la empresa a consultar>
+TRIDTRACKING_USERNAME=<usuario habilitado para API>
+TRIDTRACKING_PASSWORD=<clave de ese usuario>
+```
+
+`CompanyUid` limita el catálogo y `CompanyUids` limita posiciones actuales. Si la cuenta es de un partner con varios clientes, seleccionar la empresa de Fenice antes de publicar sus unidades. Los namespaces del archivo GPS separan modo, servidor, cuenta y empresa. La clave y los datos privados de puesta en marcha no se versionan.
+
+| Uso en Partner API | Endpoint y diferencia |
+|---|---|
+| Autenticación | POST `/api/v1.0/Authentication/UserAuthenticate`, parámetros `UserName` y `Password` |
+| Catálogo | GET `/api/v1.0/Units/List`; el catálogo usa `IMEI` en mayúsculas |
+| Posiciones | GET `/api/v1.0/Units/LatestPositionsList` |
+| Historial | GET `/api/v1.0/Data/PositionsList`; hasta 500 posiciones por página, paginación con `StartId` |
+| Alertas | Ese contrato no publica un endpoint de alertas; no se consulta la ruta de Client API |
+
+Partner API empieza 24 horas atrás con cursor inicial vacío o hasta 7 días atrás con `StartId=0`. No devuelve `IsCurrent`: la lectura continúa hasta una página vacía, usando el cursor devuelto y rechazando páginas no vacías con cursor detenido. No se supone que una página corta sea la última. Para fechas anteriores se necesita el archivo GPS conservado por la aplicación. Posiciones, fechas, velocidad, ignición y continuidad usan las mismas validaciones del modo Client.
 
 ## Contrato oficial de respuestas
 
@@ -70,3 +98,16 @@ En Configuración se puede probar 3DTracking por patente y verificar opcionalmen
 La validación de software usa respuestas de prueba con el formato oficial. La validación en terreno debe repetir posición, ignición, detenciones, pérdida de señal, reconexión y recorrido con el FMC130 real.
 
 Referencia: [documentación oficial v1](https://apiv2.3dtracking.net/docs/v1/).
+
+
+## Comprobación de accesos del 8 de octubre de 2026
+
+Se revisaron las pestañas abiertas de Partner API y Movilmaster. El portal web mantiene una sesión de la cuenta y muestra 0 unidades. Se comprobó el nombre de usuario registrado en la administración y se revisaron los permisos visibles sin guardar cambios.
+
+La autenticación fue rechazada con `50017` / `User Could not be Authenticated` en Partner API y Client API. El acceso web no permite confirmar una contraseña ni garantiza habilitación de API. MCI Telecom debe confirmar el usuario de integración, su habilitación y la URL de API aplicable. Hasta obtener una autenticación válida, las credenciales no se activan en el sondeo automático de Fleet Control. La información privada de puesta en marcha permanece fuera de Git y se retiraron los valores del formulario de Swagger.
+
+El software ya distingue ambos contratos, contempla `IMEI` del catálogo Partner, selección de empresa y paginación sin `IsCurrent`. Las pruebas del contrato Partner y las de Client siguen separadas. Para comprobar transmisión real debe registrarse el FMC130 con su IMEI y asociarse a RBDC59: la cuenta actualmente no tiene unidades que permitan verificar posición o recorrido. [Comprobación del portal](assets/movilmaster-cuenta-sin-unidades.jpg).
+
+Texto para solicitar al proveedor:
+
+> Necesitamos integrar la cuenta con nuestra plataforma GPS. El portal Movilmaster está accesible, pero la autenticación de API responde código 50017. Favor confirmar la URL de API correcta, habilitar el acceso de integración y proporcionar el usuario correspondiente. También necesitamos el UID de la empresa y los datos de recepción del FMC130 (host, puerto y configuración SIM/APN). No enviar claves de API por canales públicos.

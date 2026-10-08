@@ -183,3 +183,16 @@ describe('contrato oficial Status y Result', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });
+
+it('usa la autenticación documentada de Partner API con nombres de parámetros exactos', async () => {
+  const fetchMock = vi.fn(async () => respuesta(AUTH_OK)) as unknown as typeof fetch;
+  const client = new TridTrackingClient({ baseUrl: 'https://partnerapi.3dtracking.net', username: 'test-user', password: 'test-password', apiMode: 'partner', fetchImpl: fetchMock });
+  expect((await client.healthCheck()).ok).toBe(true);
+  const [address, options] = (fetchMock as unknown as ReturnType<typeof vi.fn>).mock.calls[0]!;
+  const url = new URL(String(address));
+  expect(url.pathname).toBe('/api/v1.0/Authentication/UserAuthenticate');
+  expect(url.searchParams.get('UserName')).toBe('test-user');
+  expect(url.searchParams.get('Password')).toBe('test-password');
+  expect(options).toMatchObject({ method: 'POST', redirect: 'error' });
+  expect(redactUrl(url.toString())).not.toContain('test-password');
+});

@@ -71,6 +71,8 @@ const serverEnvSchema = z.object({
   // llegar al navegador: solo se lee desde el servidor.
   // Documentacion: https://apiv2.3dtracking.net/docs/v1/
   TRIDTRACKING_BASE_URL: z.string().url().default('https://apiv2.3dtracking.net'),
+  TRIDTRACKING_API_MODE: z.enum(['client', 'partner']).default('client'),
+  TRIDTRACKING_COMPANY_UID: z.string().trim().max(128).optional(),
   TRIDTRACKING_USERNAME: z.string().optional(),
   TRIDTRACKING_PASSWORD: z.string().optional(),
   TRIDTRACKING_TIMEOUT_MS: z.coerce.number().int().positive().max(60_000).default(15_000),

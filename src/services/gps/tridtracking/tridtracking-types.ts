@@ -47,6 +47,9 @@ export interface TridUnit {
   Uid?: string | null;
   Name?: string | null;
   Imei?: string | null;
+  /** El catálogo de Partner API usa IMEI en mayúsculas. */
+  IMEI?: string | null;
+  CompanyUid?: string | null;
   Status?: string | null;
   GroupName?: string | null;
   CompanyName?: string | null;

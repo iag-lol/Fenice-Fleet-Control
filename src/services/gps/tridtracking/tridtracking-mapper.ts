@@ -105,7 +105,7 @@ export function toVehicleType(unitType: string | null | undefined): VehicleType 
 export function toPlate(unit: TridUnit): string {
   const nombre = (unit.Name ?? '').trim();
   if (nombre !== '') return nombre;
-  const imei = (unit.Imei ?? '').trim();
+  const imei = (unit.Imei ?? unit.IMEI ?? '').trim();
   return imei !== '' ? `IMEI ${imei}` : 'Sin identificar';
 }
 
@@ -113,7 +113,7 @@ export function mapUnitToVehicle(unit: TridUnit): Vehicle | null {
   const uid = (unit.Uid ?? '').trim();
   if (uid === '') return null;
 
-  const imei = (unit.Imei ?? '').trim();
+  const imei = (unit.Imei ?? unit.IMEI ?? '').trim();
   const device: GpsDevice | null =
     imei === ''
       ? null
@@ -165,7 +165,7 @@ export function mapUnitToPosition(unit: TridUnit): Position | null {
 
   return {
     vehicleId: uid as VehicleId,
-    deviceId: ((unit.Imei ?? '').trim() || uid) as DeviceId,
+    deviceId: ((unit.Imei ?? unit.IMEI ?? '').trim() || uid) as DeviceId,
     timestamp,
     ...(toIsoUtc(p.ServerTimeUTC) ? { receivedAt: toIsoUtc(p.ServerTimeUTC)! } : {}),
     lat: lat ?? 0,
@@ -211,7 +211,7 @@ export function mapUnitToDeviceStatus(
             : 'online';
 
   return {
-    deviceId: ((unit.Imei ?? '').trim() || uid) as DeviceId,
+    deviceId: ((unit.Imei ?? unit.IMEI ?? '').trim() || uid) as DeviceId,
     vehicleId: uid as VehicleId,
     ...(unit.Imei ? { imei: unit.Imei } : {}),
     connection,

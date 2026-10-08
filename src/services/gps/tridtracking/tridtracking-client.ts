@@ -33,6 +33,7 @@ export interface TridClientOptions {
   baseUrl: string;
   username: string;
   password: string;
+  apiMode?: 'client' | 'partner';
   /** Tiempo maximo por peticion. Un GPS que no responde no puede colgar la UI. */
   timeoutMs?: number;
   /** Vida de la sesion antes de renovarla por precaucion. */
@@ -46,8 +47,10 @@ const DEFAULT_SESSION_TTL_MS = 30 * 60_000;
 
 /** Oculta credenciales antes de que una URL llegue a un registro. */
 export function redactUrl(url: string): string {
-  return url
-    .replace(/([?&](?:SessionId|UserIdGuid|password|username)=)[^&]*/gi, '$1***');
+  return url.replace(
+    /([?&](?:SessionId|UserIdGuid|password|username)=)[^&]*/gi,
+    '$1***',
+  );
 }
 
 export class TridTrackingClient {
@@ -61,8 +64,16 @@ export class TridTrackingClient {
 
   private safeMessage(message: string): string {
     let safe = redactUrl(message);
-    for (const secret of [this.options.username, this.options.password, this.session?.sessionId, this.session?.userIdGuid]) {
-      if (secret) safe = safe.replaceAll(secret, '***').replaceAll(encodeURIComponent(secret), '***');
+    for (const secret of [
+      this.options.username,
+      this.options.password,
+      this.session?.sessionId,
+      this.session?.userIdGuid,
+    ]) {
+      if (secret)
+        safe = safe
+          .replaceAll(secret, '***')
+          .replaceAll(encodeURIComponent(secret), '***');
     }
     return safe;
   }
@@ -74,7 +85,11 @@ export class TridTrackingClient {
     this.doFetch = options.fetchImpl ?? fetch;
   }
 
-  private async request<T>(path: string, params: Record<string, string>): Promise<T> {
+  private async request<T>(
+    path: string,
+    params: Record<string, string>,
+    method: 'GET' | 'POST' = 'GET',
+  ): Promise<T> {
     const url = new URL(`${this.baseUrl}${path}`);
     for (const [key, value] of Object.entries(params)) {
       if (value !== '') url.searchParams.set(key, value);
@@ -85,7 +100,7 @@ export class TridTrackingClient {
 
     try {
       const response = await this.doFetch(url.toString(), {
-        method: 'GET',
+        method,
         headers: { Accept: 'application/json' },
         signal: controller.signal,
         cache: 'no-store',
@@ -129,8 +144,16 @@ export class TridTrackingClient {
 
     this.authenticating = (async () => {
       const payload = await this.request<TridAuthResponse>(
-        '/api/v1.0/authentication/userauthenticate',
-        { username: this.options.username, password: this.options.password },
+        this.options.apiMode === 'partner'
+          ? '/api/v1.0/Authentication/UserAuthenticate'
+          : '/api/v1.0/authentication/userauthenticate',
+        this.options.apiMode === 'partner'
+          ? { UserName: this.options.username, Password: this.options.password }
+          : {
+              username: this.options.username,
+              password: this.options.password,
+            },
+        this.options.apiMode === 'partner' ? 'POST' : 'GET',
       );
 
       const resultado = (payload.Status?.Result ?? '').trim().toLowerCase();
@@ -139,14 +162,19 @@ export class TridTrackingClient {
 
       if (userIdGuid === '' || sessionId === '') {
         throw new TridTrackingError(
-          this.safeMessage(payload.Status?.Message?.trim() ||
-            '3DTracking no devolvio una sesion. Revisa usuario y contraseña.'),
+          this.safeMessage(
+            payload.Status?.Message?.trim() ||
+              '3DTracking no devolvio una sesion. Revisa usuario y contraseña.',
+          ),
           payload.Status?.ErrorCode ?? null,
         );
       }
       if (resultado !== '' && resultado !== 'success' && resultado !== 'ok') {
         throw new TridTrackingError(
-          this.safeMessage(payload.Status?.Message?.trim() || `Autenticacion rechazada (${resultado}).`),
+          this.safeMessage(
+            payload.Status?.Message?.trim() ||
+              `Autenticacion rechazada (${resultado}).`,
+          ),
           payload.Status?.ErrorCode ?? null,
         );
       }
@@ -164,7 +192,8 @@ export class TridTrackingClient {
 
   private async getSession(): Promise<Session> {
     const vigente =
-      this.session !== null && Date.now() - this.session.obtainedAt < this.sessionTtlMs;
+      this.session !== null &&
+      Date.now() - this.session.obtainedAt < this.sessionTtlMs;
     return vigente ? this.session! : this.authenticate();
   }
 
@@ -182,14 +211,25 @@ export class TridTrackingClient {
         SessionId: session.sessionId,
       });
       if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
-        throw new TridTrackingError(`Respuesta de 3DTracking incompatible en ${path}.`, 'FORMAT');
+        throw new TridTrackingError(
+          `Respuesta de 3DTracking incompatible en ${path}.`,
+          'FORMAT',
+        );
       }
       const result = (payload.Status?.Result ?? '').trim().toLowerCase();
       if (result !== '' && result !== 'success' && result !== 'ok') {
-        throw new TridTrackingError(this.safeMessage(payload.Status?.Message || `3DTracking rechazo ${path}.`),
-          payload.Status?.ErrorCode ?? null);
+        throw new TridTrackingError(
+          this.safeMessage(
+            payload.Status?.Message || `3DTracking rechazo ${path}.`,
+          ),
+          payload.Status?.ErrorCode ?? null,
+        );
       }
-      if (!('Result' in payload)) throw new TridTrackingError(`Respuesta de 3DTracking sin Result en ${path}.`, 'FORMAT');
+      if (!('Result' in payload))
+        throw new TridTrackingError(
+          `Respuesta de 3DTracking sin Result en ${path}.`,
+          'FORMAT',
+        );
       return payload.Result as T;
     };
 
@@ -197,9 +237,13 @@ export class TridTrackingClient {
     try {
       return await intentar(session);
     } catch (error) {
-      const expired = error instanceof TridTrackingError &&
-        (error.status === 401 || error.status === 403 ||
-          /session|auth|token|expir|unauthor/i.test(`${error.code ?? ''} ${error.message}`));
+      const expired =
+        error instanceof TridTrackingError &&
+        (error.status === 401 ||
+          error.status === 403 ||
+          /session|auth|token|expir|unauthor/i.test(
+            `${error.code ?? ''} ${error.message}`,
+          ));
       if (!expired) throw error;
       // Una respuesta de la sesion anterior no debe invalidar una sesion
       // que otra peticion concurrente acaba de renovar.
@@ -209,7 +253,11 @@ export class TridTrackingClient {
   }
 
   /** Comprobacion de conectividad y credenciales, sin efectos secundarios. */
-  async healthCheck(): Promise<{ ok: boolean; message: string; latencyMs: number | null }> {
+  async healthCheck(): Promise<{
+    ok: boolean;
+    message: string;
+    latencyMs: number | null;
+  }> {
     const inicio = Date.now();
     try {
       await this.getSession();
