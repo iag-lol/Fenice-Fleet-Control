@@ -205,9 +205,9 @@ export function ControlTowerView() {
       alerts={alerts.data?.alerts ?? []}
       communes={communes.data?.communes ?? []}
       loading={map.isLoading}
-      error={[map.error, alerts.error, communes.error]
+      error={[(livePayload ?? snapshot)?.availabilityWarnings?.join(' '), map.error, alerts.error, communes.error]
         .filter(Boolean)
-        .map((e) => e?.message)
+        .map((e) => typeof e === 'string' ? e : e?.message)
         .join(' ')}
       refreshing={map.isFetching || alerts.isFetching || communes.isFetching}
       onRefresh={refreshAll}

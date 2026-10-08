@@ -118,7 +118,6 @@ export const OperationalMap = memo(function OperationalMap({
     positions,
     payload: livePayload,
     error: gpsError,
-    lastUpdateAt,
     refresh,
   } = useLiveFleet();
 
@@ -225,6 +224,12 @@ export const OperationalMap = memo(function OperationalMap({
       position: positions.get(v.vehicle.id) ?? v.position,
     }));
   }, [vehicleSnapshots, positions]);
+
+  const lastKnownPositionAt = useMemo(() => {
+    const samples = vehicles.flatMap((v) => v.position?.valid ? [v.position.timestamp] : []);
+    return samples.filter((t) => Number.isFinite(Date.parse(t)))
+      .sort((a, b) => Date.parse(b) - Date.parse(a))[0] ?? null;
+  }, [vehicles]);
 
   /**
    * Enfoque activo.
@@ -724,7 +729,7 @@ export const OperationalMap = memo(function OperationalMap({
             />
           ) : (
             <GpsDegradedNotice
-              lastKnownAt={lastUpdateAt}
+              lastKnownAt={lastKnownPositionAt}
               onRetry={refresh}
               onDismiss={() => setGpsNoticeDismissed(true)}
             />

@@ -102,13 +102,15 @@ Referencia: [documentación oficial v1](https://apiv2.3dtracking.net/docs/v1/).
 
 ## Comprobación de accesos del 8 de octubre de 2026
 
-La autenticación visible en Partner API devuelve `ok`. El conector de Fleet Control confirmó el acceso con esas credenciales y las consultas de unidades, posiciones e historial. La configuración local usa `https://partnerapi.3dtracking.net`, modo `partner` y el `CompanyUid` de la cuenta Zyteron SpA, con demostración desactivada. Las credenciales permanecen en `.env.local`, fuera de Git; el servidor local se reinició para aplicar la configuración.
+La conexión local usa **Client API**, `https://apiv2.3dtracking.net`, modo `client`, con demostración desactivada. El conector confirmó una unidad RBDC59 y una posición GPS real. Partner API autentica y permitió administrar el nombre y estado de la unidad, pero sus consultas de posiciones devolvieron límites de frecuencia; Client API devuelve la telemetría de esta cuenta. Las credenciales permanecen en `.env.local`, fuera de Git.
 
 El usuario confirmó que el único equipo del catálogo corresponde a RBDC59. Se actualizó el nombre de la unidad a esa patente y su estado a `Activo` mediante los endpoints documentados `UnitNameInfo/Update` y `UnitStatus/Update`. Ambos cambios se verificaron leyendo nuevamente la unidad. Movilmaster ya muestra RBDC59 en Rastreo; su último registro visible es del 7 de octubre, por lo que todavía debe comprobarse transmisión reciente para aceptar la instalación.
 
 La cuenta permite consultar unidades, posiciones e historial, pero rechaza los listados administrativos de empresas y trackers por permisos. Estos listados no son necesarios para leer la telemetría del equipo ya registrado. El `CompanyUid` se obtuvo del catálogo de unidades, sin ampliar permisos.
 
 El proveedor también devolvió `Too Many Requests. Rate limit reached.` durante la comprobación web. El cliente HTTP respeta `Retry-After` cuando está presente y, en su ausencia, pausa las peticiones durante 60 segundos, aumentando la espera hasta 5 minutos si el límite se repite. La pausa también evita nuevas autenticaciones y consultas de diagnóstico. Las posiciones se comparten entre pantallas durante al menos 15 segundos y conservan la fecha original del GPS.
+
+Fleet Control conserva el catálogo y el último fix válido por cuenta en archivos privados dentro de `GPS_HISTORY_DIR`. La ubicación se recupera después de un reinicio o una consulta fallida, sin cambiar su fecha ni presentarla como señal reciente. Una muestra inválida, vacía o anterior no borra el último fix; una baja confirmada en el catálogo retira la unidad. El mapa, la flota y la cartografía comunal siguen disponibles si otra capa falla, con avisos de disponibilidad parcial. Las posiciones antiguas no generan entradas nuevas a geocercas ni cuentan como presencia actual en una comuna.
 
 Pendientes para la instalación:
 

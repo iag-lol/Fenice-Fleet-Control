@@ -4,6 +4,7 @@ import { getCommuneForPoint } from '@/data/communes';
 import { isUsableCoordinate } from '@/lib/geo';
 import { loadClientContext } from '@/services/aggregation/client-aggregator';
 import { loadFleetContext } from '@/services/aggregation/fleet-aggregator';
+import { getOperationalSettings } from '@/services/settings/settings-store';
 
 /**
  * Resumen operacional por comuna.
@@ -43,7 +44,7 @@ export async function loadCommuneOperationalSummary(): Promise<
   const now = new Date();
 
   const [clientContext, fleetContext] = await Promise.all([
-    loadClientContext(),
+    loadClientContext().catch(() => ({ clients: [], workOrders: [], snapshots: [] })),
     loadFleetContext(),
   ]);
 
@@ -87,6 +88,8 @@ export async function loadCommuneOperationalSummary(): Promise<
 
   // --- Vehiculos presentes ---------------------------------------------------
   for (const position of fleetContext.positions.values()) {
+    const age = now.getTime() - Date.parse(position.timestamp);
+    if (!position.valid || age < -60_000 || age > getOperationalSettings().gps.staleSeconds * 1000) continue;
     const commune = getCommuneForPoint(position.lat, position.lng);
     if (!commune) continue;
     ensure(commune.code, commune.name).vehiclesInside += 1;

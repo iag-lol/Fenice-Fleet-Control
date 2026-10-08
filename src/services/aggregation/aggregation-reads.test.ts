@@ -76,6 +76,26 @@ describe('single reads within operational responses', () => {
     expect(snapshot.geofences).toEqual([geofence]);
   });
 
+  it('mantiene mapa, flota y comunas cuando falla una capa GPS y la operacion esta pendiente', async () => {
+    sources.gps.getAllCurrentPositions.mockRejectedValue(new Error('limited'));
+    sources.gps.getDeviceStatus.mockRejectedValue(new Error('limited'));
+    sources.operations.getRoutes.mockRejectedValue(new Error('ERP unavailable'));
+    const snapshot = await loadMapSnapshot();
+    expect(snapshot.vehicles[0]?.vehicle.plate).toBe(vehicle.plate);
+    expect(snapshot.vehicles[0]?.position).toBeNull();
+    expect(snapshot.availabilityWarnings).toHaveLength(3);
+    await expect(loadCommuneOperationalSummary()).resolves.toBeDefined();
+  });
+
+  it('muestra la posicion antigua con estado offline y no la cuenta como presencia actual en una comuna', async () => {
+    sources.gps.getAllCurrentPositions.mockResolvedValue([{ ...position, timestamp: new Date(Date.now() - 86400000).toISOString() }]);
+    const snapshot = await loadMapSnapshot();
+    expect(snapshot.vehicles[0]?.position?.lat).toBe(position.lat);
+    expect(snapshot.vehicles[0]?.status).toBe('offline');
+    const summary = await loadCommuneOperationalSummary();
+    expect(Object.values(summary).reduce((sum, c) => sum + c.vehiclesInside, 0)).toBe(0);
+  });
+
   it('counts georeferenced alerts and vehicles in communes without a second alerts query', async () => {
     const summary = await loadCommuneOperationalSummary();
     expect(sources.operations.getAlerts).toHaveBeenCalledTimes(1);

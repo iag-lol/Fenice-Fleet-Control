@@ -5,6 +5,7 @@ import { createAlert } from '@/services/fleet/alert-store';
 import { recordGeofenceEvent } from '@/services/fleet/geofence-event-store';
 import { listVehicles } from '@/services/fleet/vehicle-store';
 import { listGeofences } from '@/services/geofences/geofence-store';
+import { getOperationalSettings } from '@/services/settings/settings-store';
 import type { GpsProvider, PositionSubscriptionHandlers, Unsubscribe } from '@/services/gps/gps-provider';
 import type { Geofence, LatLng, Position, VehicleId } from '@/types/core';
 
@@ -93,6 +94,10 @@ function processPositions(positions: Position[]): void {
   if (positions.length === 0) return;
 
   const now = Date.now();
+  const maxAge = getOperationalSettings().gps.staleSeconds * 1000;
+  positions = positions.filter((p) => p.valid && Number.isFinite(Date.parse(p.timestamp)) &&
+    now - Date.parse(p.timestamp) >= -60_000 && now - Date.parse(p.timestamp) <= maxAge);
+  if (!positions.length) return;
   if (now - lastProcessedAt < MIN_PROCESS_INTERVAL_MS) return;
   lastProcessedAt = now;
 

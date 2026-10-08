@@ -36,6 +36,7 @@ import type { RouteGeometry, RouteSummary, TimelineEntry, VehicleDetail } from '
 const HISTORY_WINDOW_MS = 8 * 3_600_000;
 
 export interface FleetContext {
+  availabilityWarnings?: string[];
   vehicles: Vehicle[];
   positions: Map<string, Position>;
   devices: Map<string, DeviceStatus>;
@@ -84,22 +85,28 @@ export async function loadFleetContext(): Promise<FleetContext> {
   const gps = getGpsProvider();
   const operations = getOperationsProvider();
   const today = new Date();
+  const warnings: string[] = [];
+  const read = async <T>(task: Promise<T>, label: string, fallback: T): Promise<T> => {
+    try { return await task; }
+    catch { warnings.push(`No fue posible consultar ${label}. Las demás capas siguen disponibles.`); return fallback; }
+  };
 
   const [erpVehicles, gpsVehicles, positions, devices, routes, workOrders, alerts, geofences] =
     await Promise.all([
-      operations.getVehicles(),
+      read(operations.getVehicles(), 'la flota operacional', []),
       // La fuente de telemetria tambien conoce el parque. Se pide siempre
       // porque es lo que permite operar antes de conectar el ERP.
-      gps.getVehicles().catch(() => [] as Vehicle[]),
-      gps.getAllCurrentPositions(),
-      gps.getDeviceStatus(),
-      operations.getRoutes({ date: today.toISOString() }),
-      operations.getWorkOrders({ date: today.toISOString() }),
-      operations.getAlerts({ states: ['nueva', 'revisada'] }),
-      operations.getGeofences(),
+      read(gps.getVehicles(), 'el catálogo GPS', []),
+      read(gps.getAllCurrentPositions(), 'las posiciones GPS', []),
+      read(gps.getDeviceStatus(), 'el estado GPS', []),
+      read(operations.getRoutes({ date: today.toISOString() }), 'las rutas', []),
+      read(operations.getWorkOrders({ date: today.toISOString() }), 'las órdenes de trabajo', []),
+      read(operations.getAlerts({ states: ['nueva', 'revisada'] }), 'las alertas', []),
+      read(operations.getGeofences(), 'las geocercas', []),
     ]);
 
   return {
+    availabilityWarnings: [...new Set([...warnings, ...(gps.getAvailabilityWarnings?.() ?? [])])],
     vehicles: mergeFleet(erpVehicles, gpsVehicles),
     positions: new Map(positions.map((p) => [p.vehicleId, p])),
     devices: new Map(devices.map((d) => [d.vehicleId, d])),
@@ -121,8 +128,8 @@ export function buildVehicleSnapshot(
   const position = context.positions.get(vehicle.id) ?? null;
   const device = context.devices.get(vehicle.id) ?? null;
 
-  const evaluatedConnection = device
-    ? evaluateConnectionState(device.lastPositionAt, settings.gps, now)
+  const evaluatedConnection = device || position
+    ? evaluateConnectionState(position?.timestamp ?? device?.lastPositionAt ?? null, settings.gps, now)
     : { state: 'unknown' as const, secondsSinceLastPosition: null };
   const connection = evaluatedConnection.state;
 
@@ -206,9 +213,9 @@ export function buildVehicleSnapshot(
 }
 
 /** Una sola lectura GPS alimenta posiciones y estados del mismo reporte. */
-export async function loadFleetTelemetry(): Promise<{ positions: Position[]; vehicles: VehicleSnapshot[] }> {
+export async function loadFleetTelemetry(): Promise<{ positions: Position[]; vehicles: VehicleSnapshot[]; availabilityWarnings: string[] }> {
   const operations = getOperationsProvider();
-  const [context, drivers] = await Promise.all([loadFleetContext(), operations.getDrivers()]);
+  const [context, drivers] = await Promise.all([loadFleetContext(), operations.getDrivers().catch(() => [])]);
   const positions = [...context.positions.values()];
   const driverIndex = new Map(drivers.map((d) => [d.id as string, d]));
   const now = new Date();
@@ -217,7 +224,7 @@ export async function loadFleetTelemetry(): Promise<{ positions: Position[]; veh
     const snapshot = buildVehicleSnapshot(vehicle, context, driverIndex, now);
     return { ...snapshot, driver: vehicle.driverId ? (driverIndex.get(vehicle.driverId) ?? null) : null };
   });
-  return { positions, vehicles };
+  return { positions, vehicles, availabilityWarnings: context.availabilityWarnings ?? [] };
 }
 
 export async function loadFleetSnapshots(): Promise<VehicleSnapshot[]> {

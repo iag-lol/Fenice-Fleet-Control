@@ -171,7 +171,7 @@ export function VehiclePanel({ vehicleId }: { vehicleId: string }) {
               </span>
             </div>
             <p className="mt-0.5 truncate text-xs text-ink-faint">
-              {vehicle.brand} {vehicle.model} · {vehicle.year}
+              {[vehicle.brand, vehicle.model, vehicle.year > 0 ? vehicle.year : null].filter(Boolean).join(' · ') || 'Equipo GPS vinculado'}
             </p>
           </div>
         </div>
@@ -301,7 +301,7 @@ export function VehiclePanel({ vehicleId }: { vehicleId: string }) {
       <>
       {/* --- Estado en tiempo real --- */}
       <Section
-        title="Estado en tiempo real"
+        title={vehicleSnapshot.device?.connection === 'online' ? 'Estado en tiempo real' : position ? 'Último registro GPS' : 'Estado GPS'}
         className="rounded-lg border border-line bg-surface-900 p-3 shadow-card"
         action={
           <span className="numeric text-[10px] text-ink-faint">

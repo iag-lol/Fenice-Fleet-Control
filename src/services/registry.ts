@@ -2,6 +2,7 @@ import 'server-only';
 
 import { resolve } from 'node:path';
 import { PositionArchive, withPositionArchive } from '@/services/gps/history/position-archive';
+import { withLastKnownGps } from '@/services/gps/history/last-known-gps';
 import { getServerEnv } from '@/config/env';
 import type { GpsProvider } from '@/services/gps/gps-provider';
 import { MockGpsProvider } from '@/services/gps/mock/mock-gps-provider';
@@ -94,8 +95,10 @@ export function getGpsProvider(): GpsProvider {
         ? `3dtracking:partner:${env.TRIDTRACKING_BASE_URL}:${env.TRIDTRACKING_USERNAME ?? ''}:${env.TRIDTRACKING_COMPANY_UID ?? ''}`
         : `3dtracking:${env.TRIDTRACKING_BASE_URL}:${env.TRIDTRACKING_USERNAME ?? ''}`
       : `${env.GPS_PROVIDER}:${env.TRACCAR_BASE_URL ?? ''}`;
-    globalForProviders.__feniceGpsProvider = withPositionArchive(provider,
-      new PositionArchive(resolve(process.env.GPS_HISTORY_DIR?.trim() || '.fenice/gps-history'), namespace));
+    const directory = resolve(process.env.GPS_HISTORY_DIR?.trim() || '.fenice/gps-history');
+    const archived = withPositionArchive(provider, new PositionArchive(directory, namespace));
+    globalForProviders.__feniceGpsProvider = !provider.info.simulated && provider.info.id !== 'unavailable'
+      ? withLastKnownGps(archived, directory, namespace) : archived;
   }
   return globalForProviders.__feniceGpsProvider;
 }

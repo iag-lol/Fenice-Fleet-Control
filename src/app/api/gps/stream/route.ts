@@ -57,7 +57,7 @@ export async function GET(request: Request): Promise<Response> {
         if (closed || publishing) return;
         publishing = true;
         try {
-          const { positions, vehicles } = await loadFleetTelemetry();
+          const { positions, vehicles, availabilityWarnings } = await loadFleetTelemetry();
 
           // El proveedor "unavailable" nunca lanza: sus metodos resuelven
           // listas vacias a proposito (ver UnavailableGpsProvider), para no
@@ -76,6 +76,7 @@ export async function GET(request: Request): Promise<Response> {
           }
 
           const payload: LivePositionsPayload = {
+            availabilityWarnings,
             generatedAt: new Date().toISOString(),
             positions,
             vehicles,

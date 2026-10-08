@@ -75,10 +75,10 @@ export function GpsDegradedNotice({
         <WifiOff className="h-4 w-4" />
       </span>
       <p className="min-w-0 flex-1 text-xs text-ink">
-        Conexion GPS temporalmente no disponible.{' '}
+        {lastKnownAt ? 'Sin señal GPS reciente. Se conserva la última ubicación.' : 'Esperando una ubicación GPS.'}{' '}
         {lastKnownAt ? (
           <span className="text-ink-muted">
-            Ultimos datos conocidos: {formatTimeWithSeconds(lastKnownAt)}.
+            Registro: {new Intl.DateTimeFormat('es-CL', { timeZone: 'America/Santiago', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }).format(new Date(lastKnownAt))}.
           </span>
         ) : null}
       </p>

@@ -14,7 +14,7 @@ export async function GET(): Promise<Response> {
   const response = await handleApi<LivePositionsPayload>(async () => {
     const provider = getGpsProvider();
 
-    const { positions, vehicles } = await loadFleetTelemetry();
+    const { positions, vehicles, availabilityWarnings } = await loadFleetTelemetry();
 
     // Sus metodos resuelven listas vacias en vez de fallar (ver
     // UnavailableGpsProvider): sin este chequeo, este fallback de polling
@@ -28,6 +28,7 @@ export async function GET(): Promise<Response> {
     }
 
     return {
+      availabilityWarnings,
       generatedAt: new Date().toISOString(),
       positions,
       vehicles,

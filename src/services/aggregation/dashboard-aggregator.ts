@@ -186,8 +186,8 @@ export async function loadMapSnapshot(): Promise<MapSnapshot> {
 
   const [context, drivers, clientContext] = await Promise.all([
     loadFleetContext(),
-    operations.getDrivers(),
-    loadClientContext(),
+    operations.getDrivers().catch(() => []),
+    loadClientContext().catch(() => ({ clients: [], workOrders: [], snapshots: [] })),
   ]);
 
   const driverIndex = new Map(
@@ -231,6 +231,7 @@ export async function loadMapSnapshot(): Promise<MapSnapshot> {
     }));
 
   return {
+    availabilityWarnings: context.availabilityWarnings ?? [],
     generatedAt: now.toISOString(),
     activeDeliveries: await loadActiveDeliveries(context, drivers, now),
     vehicles,

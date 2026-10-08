@@ -65,6 +65,9 @@ export interface GpsProviderInfo {
 export interface GpsProvider {
   readonly info: GpsProviderInfo;
 
+  /** Disponibilidad parcial: no impide mostrar la flota y su última posición. */
+  getAvailabilityWarnings?(): string[];
+
   /** Vehiculos conocidos por la fuente de telemetria. */
   getVehicles(): Promise<Vehicle[]>;
 

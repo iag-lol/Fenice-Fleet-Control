@@ -16,17 +16,18 @@ export async function GET(): Promise<Response> {
   if (denied) return denied;
 
   return handleApi(async () => {
-    const summary = await loadCommuneOperationalSummary();
+    const summary = await loadCommuneOperationalSummary().catch(() => null);
 
     return {
       metadata: BOUNDARY_METADATA,
+      summaryAvailable: summary !== null,
       communes: COMMUNES.map((commune) => ({
         code: commune.code,
         name: commune.name,
         region: commune.region,
         center: commune.center,
         boundary: commune.boundary,
-        summary: summary[commune.code] ?? null,
+        summary: summary?.[commune.code] ?? null,
       })),
     };
   }, 'los limites comunales');

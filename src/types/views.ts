@@ -103,6 +103,7 @@ export interface RouteSummary {
 
 /** Todo lo que el mapa operacional necesita en una sola respuesta. */
 export interface MapSnapshot {
+  availabilityWarnings?: string[];
   activeDeliveries?: ActiveDelivery[];
   generatedAt: IsoDateTime;
   vehicles: VehicleSnapshot[];
@@ -319,6 +320,7 @@ export interface GlobalSearchResult {
 }
 
 export interface LivePositionsPayload {
+  availabilityWarnings?: string[];
   generatedAt: IsoDateTime;
   positions: Position[];
   vehicles: VehicleSnapshot[];
