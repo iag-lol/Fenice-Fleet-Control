@@ -104,7 +104,7 @@ Referencia: [documentación oficial v1](https://apiv2.3dtracking.net/docs/v1/).
 
 La autenticación visible en Partner API devuelve `ok`. El conector de Fleet Control confirmó el acceso con esas credenciales y las consultas de unidades, posiciones e historial. La configuración local usa `https://partnerapi.3dtracking.net`, modo `partner` y el `CompanyUid` de la cuenta Zyteron SpA, con demostración desactivada. Las credenciales permanecen en `.env.local`, fuera de Git; el servidor local se reinició para aplicar la configuración.
 
-El catálogo devuelve una unidad identificada por su IMEI, sin posición actual ni muestras de recorrido de la última hora. Todavía no aparece una unidad con nombre RBDC59. La prueba por patente confirma que el servidor responde y que falta identificar el equipo del primer camión y comprobar su transmisión real. No se asigna el único equipo a RBDC59 sin confirmar que corresponde a ese vehículo.
+El usuario confirmó que el único equipo del catálogo corresponde a RBDC59. Se actualizó el nombre de la unidad a esa patente y su estado a `Activo` mediante los endpoints documentados `UnitNameInfo/Update` y `UnitStatus/Update`. Ambos cambios se verificaron leyendo nuevamente la unidad. Movilmaster ya muestra RBDC59 en Rastreo; su último registro visible es del 7 de octubre, por lo que todavía debe comprobarse transmisión reciente para aceptar la instalación.
 
 La cuenta permite consultar unidades, posiciones e historial, pero rechaza los listados administrativos de empresas y trackers por permisos. Estos listados no son necesarios para leer la telemetría del equipo ya registrado. El `CompanyUid` se obtuvo del catálogo de unidades, sin ampliar permisos.
 
@@ -112,6 +112,6 @@ El proveedor también devolvió `Too Many Requests. Rate limit reached.` durante
 
 Pendientes para la instalación:
 
-- Confirmar qué IMEI se instalará en RBDC59 y asociar la unidad a esa patente.
+- La unidad ya quedó identificada como RBDC59 y activa. En terreno, cotejar el IMEI de la etiqueta física con el registro privado de puesta en marcha.
 - Si el proveedor entrega el FMC130 configurado, comprobar recepción de una posición reciente e ignición y realizar un recorrido de prueba. Si lo configuramos nosotros, obtener host, puerto, protocolo y APN de la SIM.
 - Configurar las mismas variables privadas en el entorno de despliegue cuando esté disponible. Esta validación corresponde al servidor local.
