@@ -75,9 +75,9 @@ export function GpsStatusIndicator({ compact }: { compact?: boolean }) {
 
   const label =
     severity === 'critical'
-      ? 'Sin senal'
+      ? !sourceResponding && error ? 'Consulta GPS interrumpida' : 'Sin GPS reciente'
       : severity === 'lost'
-        ? 'Posible perdida de senal'
+        ? 'Sin ubicación reciente'
         : severity === 'warning'
           ? 'Senal retrasada'
           : severity === 'unknown'

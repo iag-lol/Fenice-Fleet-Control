@@ -45,11 +45,11 @@ export function evaluateConnectionState(
 }
 
 export const CONNECTION_LABEL: Record<DeviceConnectionState, string> = {
-  online: 'Senal activa',
-  stale: 'Senal retrasada',
-  lost: 'Posible perdida de senal',
-  offline: 'Sin senal',
-  unknown: 'Sin datos',
+  online: 'Ubicación reciente',
+  stale: 'Ubicación retrasada',
+  lost: 'Sin ubicación reciente',
+  offline: 'Posición antigua',
+  unknown: 'Sin ubicación',
 };
 
 export const CONNECTION_COLOR: Record<DeviceConnectionState, string> = {
@@ -93,8 +93,8 @@ export function deriveVehicleStatus(input: VehicleStatusInput): VehicleOperation
 export const VEHICLE_STATUS_LABEL: Record<VehicleOperationalStatus, string> = {
   en_ruta: 'En ruta',
   detenido: 'Detenido',
-  inactivo: 'Inactivo',
-  offline: 'Offline',
+  inactivo: 'Disponible',
+  offline: 'Sin GPS reciente',
   mantenimiento: 'Mantenimiento',
 };
 

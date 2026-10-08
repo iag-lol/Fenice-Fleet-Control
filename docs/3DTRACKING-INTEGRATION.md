@@ -121,3 +121,10 @@ Pendientes para la instalación:
 - La unidad ya quedó identificada como RBDC59 y activa. En terreno, cotejar el IMEI de la etiqueta física con el registro privado de puesta en marcha.
 - Si el proveedor entrega el FMC130 configurado, comprobar recepción de una posición reciente e ignición y realizar un recorrido de prueba. Si lo configuramos nosotros, obtener host, puerto, protocolo y APN de la SIM.
 - Configurar las mismas variables privadas en el entorno de despliegue cuando esté disponible. Esta validación corresponde al servidor local.
+
+
+## Acceso al perfil físico del FMC130
+
+La consulta documentada `Devices/Tracker/List` filtrada por el IMEI del piloto devuelve `error.Youdonothaveaccesstothisfunctionality` con el usuario entregado. La cuenta permite leer telemetría y administrar la unidad, pero este permiso no permite inspeccionar el tracker ni confirmar sus parámetros de adquisición. El ajuste del perfil requiere el Configurator o la asistencia del proveedor; no se envían comandos de configuración basados en parámetros sin verificar.
+
+Los estados visibles describen la antigüedad de la ubicación: “Sin GPS reciente” no afirma que el equipo esté apagado. “Disponible” describe un vehículo detenido sin asignación operacional y es independiente del estado activo de la unidad en el proveedor.
