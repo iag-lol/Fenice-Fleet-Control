@@ -15,21 +15,25 @@ const inspect = (positions: Position[], workOrders = [order]) => findActiveDeliv
   history: positions, workOrders, geofences: [], settings, now: new Date(Date.parse(positions.at(-1)?.timestamp ?? '2026-10-07T12:00:00Z')) });
 
 describe('tarjeta de entrega activa', () => {
-  it('se activa tras una detención dentro del cliente asignado y registra entrada observada', () => {
+  it('se activa tras reposo consistente sin inventar una entrada entre lecturas', () => {
     const result = inspect([pos(0, { lng: -70.663, speed: 30 }), pos(15), pos(30), pos(60), pos(90)]);
     expect(result?.workOrder.id).toBe(order.id);
     expect(result?.enteredAt).toBe(pos(15).timestamp);
     expect(result?.stoppedAt).toBe(pos(15).timestamp);
-    expect(result?.arrivalObserved).toBe(true);
+    expect(result?.arrivalObserved).toBe(false);
   });
   it('no se abre por una pasada, una parada breve ni otro camión', () => {
+    expect(inspect([pos(0), pos(60)])).toBeNull();
+    expect(inspect([pos(60)], [{ ...order, status: 'en_cliente', actualArrivalAt: pos(0).timestamp }])).toBeNull();
+    expect(inspect([pos(0), pos(30, { lng: -70.6605 }), pos(60)])).toBeNull();
+    expect(inspect([pos(0), pos(30), pos(60, { accuracy: 100 })])).toBeNull();
     expect(inspect([pos(0), pos(15)])).toBeNull();
     expect(inspect([pos(0, { speed: 30 }), pos(60, { speed: 30 })])).toBeNull();
     expect(inspect([pos(0, { vehicleId: 'v2' as Position['vehicleId'] }), pos(60, { vehicleId: 'v2' as Position['vehicleId'] })])).toBeNull();
   });
   it('se apaga al salir o circular y cambia al cliente siguiente sin conservar la OT anterior', () => {
     const second = { ...order, id: 'wo2' as WorkOrder['id'], clientId: 'c2' as WorkOrder['clientId'], coordinates: { ...coordinate, lng: -70.658 }, stopSequence: 2 };
-    const first = inspect([pos(0), pos(60)], [order, second]);
+    const first = inspect([pos(0), pos(30), pos(60)], [order, second]);
     expect(first?.workOrder.id).toBe('wo1');
     expect(inspect([pos(0), pos(60, { lng: -70.659, speed: 30 })], [order, second])).toBeNull();
     const next = inspect([pos(0), pos(60), pos(90, { lng: -70.659, speed: 30 }), pos(105, { lng: -70.658 }), pos(135, { lng: -70.658 }), pos(165, { lng: -70.658 })], [order, second]);

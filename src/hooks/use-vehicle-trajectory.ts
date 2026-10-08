@@ -1,10 +1,11 @@
 'use client';
 
+import { buildEvidenceTimeline } from '@/lib/engines/gps-evidence';
+
 import { useQuery } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';
 
 import {
-  buildReplayTimeline,
   findIgnitionEvents,
   findSpeedingEvents,
   findStops,
@@ -89,7 +90,7 @@ export function useVehicleTrajectory(
 
   const trajectory = useMemo((): VehicleTrajectory | null => {
     if (!vehicleId || !query.data) return null;
-    const timeline = buildReplayTimeline(query.data);
+    const timeline = buildEvidenceTimeline(query.data);
     if (!timeline) return null;
 
     const frame = frameAt(timeline, timeline.endMs);
@@ -116,8 +117,8 @@ export function useVehicleTrajectory(
         at: event.at,
         endedAt: null,
         position: event.position,
-        title: event.type === 'ignition_on' ? 'Encendido' : 'Apagado',
-        detail: event.type === 'ignition_on' ? 'Motor encendido' : 'Motor apagado',
+        title: event.type === 'ignition_on' ? 'Contacto activado' : 'Contacto desactivado',
+        detail: 'Cambio reportado por el equipo',
       });
     }
 
@@ -133,7 +134,6 @@ export function useVehicleTrajectory(
       });
     }
 
-    for (const gap of summary.gaps) events.push({ id: `gap:${gap.from}`, type: 'signal_gap', at: gap.from, endedAt: gap.to, position: gap.position, title: 'Intervalo sin continuidad GPS', detail: `${Math.round(gap.seconds / 60)} min sin muestras continuas` });
 
     events.sort((a, b) => Date.parse(a.at) - Date.parse(b.at));
 
@@ -149,7 +149,8 @@ export function useVehicleTrajectory(
         executedPath: frame.traveledPath,
         executedSegments: frame.traveledSegments,
         speedSections: summary.speedSections,
-        showEndpoints: true,
+        showEndpoints: !timeline.evidence,
+        reportedTrace: Boolean(timeline.evidence),
         stops: [],
       },
       events,

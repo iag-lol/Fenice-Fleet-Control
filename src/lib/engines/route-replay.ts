@@ -37,6 +37,7 @@ export interface ReplayFrame {
 }
 
 export interface ReplayTimeline {
+  evidence?: ('moving' | 'stationary' | 'uncertain')[];
   startMs: number;
   endMs: number;
   durationMs: number;
@@ -145,14 +146,17 @@ export function frameAt(timeline: ReplayTimeline, atMs: number): ReplayFrame {
   const span = nextMs - currentMs;
   const t = span > 0 ? (clamped - currentMs) / span : 0;
 
-  const signalGap = next !== null && (!isContinuous(current, next) || uncertainStationaryDisplacement(current, next));
-  const road = next && !signalGap && !(current.speed <= 0.5 && next.speed <= 0.5 && haversineMeters(current, next) <= 15)
+  const uncertain = timeline.evidence?.[next ? index : Math.max(0, index - 1)] === 'uncertain';
+  const signalGap = uncertain || (next !== null && (!isContinuous(current, next) || uncertainStationaryDisplacement(current, next)));
+  const road = !timeline.evidence && next && !signalGap && !(current.speed <= 0.5 && next.speed <= 0.5 && haversineMeters(current, next) <= 15)
     ? roadPathForTransition(current, next) : null;
   // Sin evidencia vial se conserva la ultima muestra, sin dibujar un vuelo
   // recto por edificios. Los cortes de transmision quedan visibles.
   const position = road ? pointOnRoad(road, t) : { lat: current.lat, lng: current.lng };
   const speed = current.speed;
-  const traveledPath = samples.slice(0, index + 1).map((p) => ({ lat: p.lat, lng: p.lng }));
+  const traveledPath = timeline.evidence
+    ? timeline.continuousPaths.slice(0, index).flat()
+    : samples.slice(0, index + 1).map((p) => ({ lat: p.lat, lng: p.lng }));
   if (road && t > 0) traveledPath.push(position);
   const paths = timeline.continuousPaths.slice(0, index);
   if (road && t > 0) {
@@ -174,7 +178,7 @@ export function frameAt(timeline: ReplayTimeline, atMs: number): ReplayFrame {
     traveledPath,
     traveledMeters: (cumulativeMeters[index] ?? 0) + segmentMeters,
     sampleIndex: index,
-    stopped: speed < STOPPED_SPEED_KMH,
+    stopped: (!timeline.evidence || !signalGap) && speed < STOPPED_SPEED_KMH,
   };
 }
 
@@ -206,7 +210,7 @@ export function findStops(timeline: ReplayTimeline, minSeconds = 180): ReplaySto
   for (let i = 0; i < samples.length; i += 1) {
     const sample = samples[i]!;
     const previous = samples[i - 1];
-    if (anchor !== null && previous && (!isContinuous(previous, sample) || haversineMeters(samples[anchor]!, sample) > 50)) {
+    if (anchor !== null && previous && ((timeline.evidence && timeline.evidence[i - 1] !== 'stationary') || !isContinuous(previous, sample) || haversineMeters(samples[anchor]!, sample) > (timeline.evidence ? 15 : 50))) {
       const start = samples[anchor]!;
       const seconds = (Date.parse(previous.timestamp) - Date.parse(start.timestamp)) / 1000;
       if (seconds >= minSeconds) stops.push({ startedAt: start.timestamp, endedAt: previous.timestamp,
@@ -252,10 +256,10 @@ export function findIgnitionEvents(timeline: ReplayTimeline): ReplayIgnitionEven
   const events: ReplayIgnitionEvent[] = [];
   let last: 'on' | 'off' | null = null;
 
-  for (const sample of timeline.samples) {
+  for (const [index, sample] of timeline.samples.entries()) {
     if (sample.ignition !== 'on' && sample.ignition !== 'off') continue;
 
-    if (last !== null && sample.ignition !== last) {
+    if (last !== null && sample.ignition !== last && (!timeline.evidence || timeline.evidence[index - 1] !== 'uncertain')) {
       events.push({
         type: sample.ignition === 'on' ? 'ignition_on' : 'ignition_off',
         at: sample.timestamp,
@@ -298,7 +302,7 @@ export function findSpeedingEvents(
   for (let i = 0; i < samples.length; i += 1) {
     const sample = samples[i]!;
     const previous = samples[i - 1];
-    if (anchor !== null && previous && !isContinuous(previous, sample)) {
+    if (anchor !== null && previous && ((timeline.evidence && timeline.evidence[i - 1] !== 'moving') || !isContinuous(previous, sample))) {
       const start = samples[anchor]!;
       const seconds = (Date.parse(previous.timestamp) - Date.parse(start.timestamp)) / 1000;
       if (seconds >= minSeconds) events.push({ startedAt: start.timestamp, endedAt: previous.timestamp,

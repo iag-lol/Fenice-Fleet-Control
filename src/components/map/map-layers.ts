@@ -386,12 +386,13 @@ export function registerLayers(map: MapLibreMap): void {
         14,
         ['case', ['get', 'highlighted'], 5.5, 4.2],
       ],
+      'line-dasharray': ['case', ['get', 'reportedTrace'], ['literal', [2, 2]], ['literal', [1, 0]]],
       'line-opacity': ['case', ['get', 'context'], 0.38, ['get', 'preview'], 0.35, ['case', ['get', 'highlighted'], 0.98, 0.86]],
     },
   });
 
   map.addLayer({ id: LAYER.routeDirections, type: 'symbol', source: SOURCE.routesExecuted,
-    filter: ['all', ['==', ['get', 'highlighted'], true], ['!=', ['get', 'context'], true]],
+    filter: ['all', ['==', ['get', 'highlighted'], true], ['!=', ['get', 'context'], true], ['!=', ['get', 'reportedTrace'], true]],
     layout: { 'symbol-placement': 'line', 'symbol-spacing': 95, 'text-field': '›',
       'text-size': 22, 'text-font': [BOLD_FONT], 'text-keep-upright': false, 'text-allow-overlap': true },
     paint: { 'text-color': '#ffffff', 'text-halo-color': '#0e7490', 'text-halo-width': 0.5 } });
@@ -792,11 +793,11 @@ export function updateRoutes(
       .map(({ route, points, color }) => ({
         type: 'Feature', geometry: { type: 'LineString', coordinates: points.map((p) => [p.lng, p.lat]) },
         properties: { routeId: route.routeId, highlighted: highlightedRouteId === route.routeId,
-          context: route.visualRole === 'context', preview: route.visualRole === 'preview', color },
+          reportedTrace: Boolean(route.reportedTrace), context: route.visualRole === 'context', preview: route.visualRole === 'preview', color },
       })),
   };
   const endpoints: FeatureCollection = { type: 'FeatureCollection', features: routes.flatMap((route) => {
-    if (!route.showEndpoints) return [];
+    if (!route.showEndpoints || route.reportedTrace) return [];
     const points = (route.executedSegments?.flat() ?? route.executedPath).filter(isUsableCoordinate);
     if (points.length < 2) return [];
     return [points[0]!, points.at(-1)!].map((point, i) => ({ type: 'Feature' as const,
@@ -847,7 +848,7 @@ export interface TrajectoryEventInput {
 export function updateTrajectoryEvents(map: MapLibreMap, events: TrajectoryEventInput[]): void {
   setData(map, SOURCE.trajectoryEvents, {
     type: 'FeatureCollection',
-    features: events.filter(isUsableCoordinate).map((event) => ({
+    features: events.filter((event) => event.eventType !== 'signal_gap' && isUsableCoordinate(event)).map((event) => ({
       type: 'Feature',
       id: event.id,
       geometry: { type: 'Point', coordinates: [event.lng, event.lat] },

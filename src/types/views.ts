@@ -148,6 +148,8 @@ export interface RouteGeometry {
   visualRole?: 'context' | 'preview' | 'active';
   speedSections?: { path: LatLng[]; color: string }[];
   showEndpoints?: boolean;
+  /** Unión aproximada de lecturas; no acredita calles recorridas. */
+  reportedTrace?: boolean;
   /**
    * Cuanto del corredor planificado (`plannedPath`) ya quedo atras, medido en
    * metros desde su inicio segun la posicion ACTUAL del vehiculo. `null`

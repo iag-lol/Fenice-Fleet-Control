@@ -35,7 +35,7 @@ import {
 import { resolveMapStyle } from '@/components/map/map-style';
 import { OPERATION_CENTER } from '@/config/map-viewport';
 import { pointOnRoad, roadPathForTransition } from '@/lib/gps-motion';
-import { buildReplayTimeline } from '@/lib/engines/route-replay';
+import { buildEvidenceTimeline } from '@/lib/engines/gps-evidence';
 import { startMapAnimationLoop } from '@/lib/map-animation-loop';
 import { isUsableCoordinate } from '@/lib/geo';
 import { geofencePoints } from '@/lib/map-navigation';
@@ -574,7 +574,7 @@ export function FleetMap({
       } else if (existing.sample.lat !== target.lat || existing.sample.lng !== target.lng) {
         // Posicion realmente nueva: el intervalo desde el ultimo cambio de
         // target es la mejor estimacion de cuanto tardara el proximo reporte.
-        const path = playbackMode ? null : roadPathForTransition(existing.sample, vehicle.position);
+        const path = playbackMode || vehicle.position.simulated !== true ? null : roadPathForTransition(existing.sample, vehicle.position);
         existing.path = path;
         existing.sample = vehicle.position;
         existing.animateUntil = now + Math.min(30_000, Math.max(0, 30_000 - (Date.now() - Date.parse(vehicle.position.timestamp))));
@@ -697,7 +697,7 @@ export function FleetMap({
     const previous = trailSampleRef.current;
     if (previous && Date.parse(position.timestamp) <= Date.parse(previous.timestamp)) return;
     if (previous) {
-      const transition = buildReplayTimeline([previous, position]);
+      const transition = buildEvidenceTimeline([previous, position]);
       trailRef.current.push(transition?.continuousPaths[0] ?? []);
       if (trailRef.current.length > 300) trailRef.current.shift();
       updateFollowTrail(map, trailRef.current);

@@ -42,6 +42,7 @@ export function ClientStatusBadge({
 }
 
 const VEHICLE_TONE: Record<VehicleOperationalStatus, Tone> = {
+  uncertain: 'warning',
   en_ruta: 'moving',
   detenido: 'warning',
   inactivo: 'neutral',

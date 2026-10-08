@@ -173,3 +173,12 @@ La auditoría de dependencias de producción (`npm audit --omit=dev`) no report�
 - Resultado: aceptado / requiere corrección.
 
 Contrato de integración: [documentación oficial de 3DTracking](https://apiv2.3dtracking.net/docs/v1/) y [OpenAPI v1](https://apiv2.3dtracking.net/openapi/v1.json).
+
+
+## Revisión de lecturas inconsistentes — 8 de octubre de 2026
+
+La conexión de Client API confirmó RBDC59 e IMEI 865124073408991. Las lecturas consultadas contienen coordenadas, velocidad y contacto, pero no precisión GNSS ni satélites. El historial de prueba presenta desplazamientos entre lecturas de velocidad cero y dos lecturas aisladas de velocidad durante pocos segundos. Esos datos no permiten certificar el recorrido mostrado previamente.
+
+La aplicación conserva el historial recibido, excluye esos intervalos de líneas, distancia, detenciones y visitas, y distingue posición reportada de actividad corroborada por muestras consecutivas. La prueba de regresión reproduce el patrón con coordenadas ficticias; no publica las ubicaciones reales. Ver [política de evidencia](GPS-RECORRIDOS.md).
+
+Pendiente de aceptación física: probar equipo fijo al aire libre, luego un recorrido conocido, comparar timestamps y dispersión, revisar instalación/alimentación y perfil FMC130 con el proveedor. Persisten intervalos largos entre fixes: la comunicación del equipo no reemplaza una medición GNSS reciente. No se ha confirmado ni modificado remotamente el perfil del hardware. No se debe aceptar el piloto como preciso hasta superar esta prueba.

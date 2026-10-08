@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { Map as MapLibreMap } from 'maplibre-gl';
 import { validateStyleMin, type StyleSpecification } from '@maplibre/maplibre-gl-style-spec';
 
-import { registerLayers, SOURCE, updateAlerts, updateCommunes, updateFollowTrail, updateGeofences, updateRoutes } from '@/components/map/map-layers';
+import { registerLayers, SOURCE, updateAlerts, updateCommunes, updateFollowTrail, updateGeofences, updateRoutes, updateTrajectoryEvents } from '@/components/map/map-layers';
 import { polylineLengthMeters } from '@/lib/geo';
 import type { Geofence } from '@/types/core';
 import type { AlertMapPoint, RouteGeometry } from '@/types/views';
@@ -16,6 +16,16 @@ function sourceRecorder() {
 }
 
 describe('capas territoriales del mapa', () => {
+  it('un intervalo incierto no recibe un pin geográfico y una traza reportada no afirma inicio o fin de viaje', () => {
+    const { map, data } = sourceRecorder();
+    updateTrajectoryEvents(map, [{ id: 'gap', eventType: 'signal_gap', lat: -33.45, lng: -70.66 }]);
+    expect(data.get(SOURCE.trajectoryEvents)!.features).toEqual([]);
+    const path = [{ lat: -33.45, lng: -70.66 }, { lat: -33.449, lng: -70.66 }];
+    updateRoutes(map, [{ routeId: 'gps', code: 'GPS', name: 'GPS', vehicleId: 'v1', vehiclePlate: 'TEST',
+      status: 'completada', plannedPath: [], executedPath: path, executedSegments: [], reportedTrace: true, showEndpoints: true, stops: [] }], null);
+    expect(data.get(SOURCE.routesExecuted)!.features).toEqual([]);
+    expect(data.get(SOURCE.routeEndpoints)!.features).toEqual([]);
+  });
   it('registra todas las capas con expresiones válidas para MapLibre', () => {
     const style: StyleSpecification = { version: 8, glyphs: 'https://example.test/fonts/{fontstack}/{range}.pbf', sources: {}, layers: [] };
     const map = { addSource: (id: string, source: StyleSpecification['sources'][string]) => { style.sources[id] = source; },

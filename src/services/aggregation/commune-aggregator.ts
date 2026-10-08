@@ -89,7 +89,7 @@ export async function loadCommuneOperationalSummary(): Promise<
   // --- Vehiculos presentes ---------------------------------------------------
   for (const position of fleetContext.positions.values()) {
     const age = now.getTime() - Date.parse(position.timestamp);
-    if (!position.valid || age < -60_000 || age > getOperationalSettings().gps.staleSeconds * 1000) continue;
+    if (position.motionEvidence === 'uncertain' || !position.valid || age < -60_000 || age > getOperationalSettings().gps.staleSeconds * 1000) continue;
     const commune = getCommuneForPoint(position.lat, position.lng);
     if (!commune) continue;
     ensure(commune.code, commune.name).vehiclesInside += 1;

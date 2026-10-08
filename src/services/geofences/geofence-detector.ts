@@ -1,5 +1,6 @@
 import 'server-only';
 
+import { isContinuous } from '@/lib/engines/route-replay';
 import { containsPoint, distanceToCenter, resolveGeofenceAlertDecision } from '@/lib/engines/geofence-engine';
 import { createAlert } from '@/services/fleet/alert-store';
 import { recordGeofenceEvent } from '@/services/fleet/geofence-event-store';
@@ -28,6 +29,8 @@ import type { Geofence, LatLng, Position, VehicleId } from '@/types/core';
  */
 
 const insideState = new Map<string, boolean>();
+const pending = new Map<string, { inside: boolean; samples: Position[] }>();
+const lastPosition = new Map<string, Position>();
 let lastProcessedAt = 0;
 const MIN_PROCESS_INTERVAL_MS = 4_000;
 
@@ -46,9 +49,18 @@ async function evaluateOne(
 
   const point: LatLng = { lat: position.lat, lng: position.lng };
   const key = insideKey(position.vehicleId, geofence.id);
-  const wasInside = insideState.get(key) ?? false;
   const isInside = containsPoint(geofence, point);
-  if (wasInside === isInside) return;
+  // La primera observación es una referencia, no demuestra una entrada.
+  const wasInside = insideState.get(key);
+  if (wasInside === undefined) { insideState.set(key, isInside); return; }
+  if (wasInside === isInside) { pending.delete(key); return; }
+  const candidate = pending.get(key);
+  const samples = candidate?.inside === isInside ? candidate.samples : [];
+  if (samples.at(-1)?.timestamp !== position.timestamp) samples.push(position);
+  pending.set(key, { inside: isInside, samples: samples.slice(-3) });
+  if (position.simulated !== true && (samples.length < 3 ||
+    Date.parse(position.timestamp) - Date.parse(samples[0]!.timestamp) < 20_000)) return;
+  pending.delete(key);
   insideState.set(key, isInside);
 
   const type: 'enter' | 'exit' = isInside ? 'enter' : 'exit';
@@ -112,6 +124,14 @@ function processPositions(positions: Position[]): void {
       const plateByVehicle = new Map(vehicles.map((v) => [v.id as VehicleId, v.plate]));
 
       for (const position of positions) {
+        const previous = lastPosition.get(position.vehicleId);
+        if (previous?.timestamp === position.timestamp) continue;
+        if (position.simulated !== true && (position.motionEvidence === 'uncertain' || !previous || !isContinuous(previous, position))) {
+          for (const g of active) { insideState.delete(insideKey(position.vehicleId, g.id)); pending.delete(insideKey(position.vehicleId, g.id)); }
+          lastPosition.set(position.vehicleId, position);
+          continue;
+        }
+        lastPosition.set(position.vehicleId, position);
         const vehiclePlate = plateByVehicle.get(position.vehicleId) ?? null;
         for (const geofence of active) {
           await evaluateOne(position, geofence, vehiclePlate);

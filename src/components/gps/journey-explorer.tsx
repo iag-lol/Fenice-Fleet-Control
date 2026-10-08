@@ -1,5 +1,7 @@
 'use client';
 
+import { buildEvidenceTimeline, hasJourneyEvidence } from '@/lib/engines/gps-evidence';
+
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Map as MapLibreMap } from 'maplibre-gl';
 import {
@@ -30,7 +32,6 @@ import { FleetMap } from '@/components/map/fleet-map';
 import { Button } from '@/components/ui/button';
 import { ErrorBoundary } from '@/components/ui/error-boundary';
 import {
-  buildReplayTimeline,
   findIgnitionEvents,
   findSpeedingEvents,
   findStops,
@@ -97,7 +98,7 @@ export function JourneyExplorer({
   plannedRoute?: RouteGeometry;
   speedLimit?: number;
 }) {
-  const timeline = useMemo(() => buildReplayTimeline(positions), [positions]);
+  const timeline = useMemo(() => buildEvidenceTimeline(positions), [positions]);
   const summary = useMemo(
     () => (timeline ? analyzeJourney(timeline, speedLimit) : null),
     [timeline, speedLimit],
@@ -183,7 +184,7 @@ export function JourneyExplorer({
         kind: 'signal_gap' as const,
         at: gap.from,
         end: gap.to,
-        title: 'Intervalo sin continuidad GPS',
+        title: 'Intervalo sin evidencia suficiente',
         detail: formatDuration(gap.seconds),
         position: gap.position,
       })),
@@ -191,7 +192,7 @@ export function JourneyExplorer({
   }, [timeline, summary, speedLimit]);
   const mapEvents = useMemo(
     () =>
-      events.map((event) => ({
+      events.filter((event) => event.kind !== 'signal_gap').map((event) => ({
         id: event.id,
         eventType: event.kind,
         at: event.at,
@@ -314,6 +315,7 @@ export function JourneyExplorer({
   const selectEvent = (event: JourneyEvent) => {
     seek(Date.parse(event.at));
     setActiveEvent(event.id);
+    if (event.kind === 'signal_gap') return;
     setFollowing(false);
     map?.easeTo({
       center: [event.position.lng, event.position.lat],
@@ -333,7 +335,8 @@ export function JourneyExplorer({
             {
               routeId: `${routeId}-context`,
               code: 'GPS',
-              name: 'Recorrido completo',
+              reportedTrace: Boolean(timeline.evidence),
+              name: 'Traza GPS consistente',
               vehicleId: vehicle.id,
               vehiclePlate: vehicle.plate,
               status: 'completada',
@@ -341,12 +344,13 @@ export function JourneyExplorer({
               executedPath: complete.traveledPath,
               executedSegments: complete.traveledSegments,
               visualRole: 'context',
-              showEndpoints: true,
+              showEndpoints: !timeline.evidence,
               stops: [],
             },
             {
               routeId: `${routeId}-preview`,
               code: 'GPS',
+              reportedTrace: Boolean(timeline.evidence),
               name: 'Perfil completo',
               visualRole: 'preview',
               vehicleId: vehicle.id,
@@ -361,6 +365,7 @@ export function JourneyExplorer({
             {
               routeId,
               code: 'GPS',
+              reportedTrace: Boolean(timeline.evidence),
               name: 'Recorrido registrado',
               vehicleId: vehicle.id,
               vehiclePlate: vehicle.plate,
@@ -405,7 +410,7 @@ export function JourneyExplorer({
             onClick={() =>
               download(
                 [
-                  'fecha_utc,latitud,longitud,velocidad_kmh,rumbo,ignicion',
+                  'fecha_utc,latitud,longitud,velocidad_reportada_kmh,rumbo_reportado,ignicion_reportada,evidencia_intervalo_anterior',
                   ...positions.map((p) =>
                     [
                       p.timestamp,
@@ -414,6 +419,7 @@ export function JourneyExplorer({
                       p.speed,
                       p.heading,
                       p.ignition,
+                      'sin_evaluar',
                     ].join(','),
                   ),
                 ].join('\n'),
@@ -480,8 +486,8 @@ export function JourneyExplorer({
             onClick={() =>
               download(
                 [
-                  'fecha_utc,latitud,longitud,velocidad_kmh,rumbo,ignicion',
-                  ...timeline.samples.map((p) =>
+                  'fecha_utc,latitud,longitud,velocidad_reportada_kmh,rumbo_reportado,ignicion_reportada,evidencia_intervalo_anterior',
+                  ...timeline.samples.map((p, index) =>
                     [
                       p.timestamp,
                       p.lat,
@@ -489,6 +495,7 @@ export function JourneyExplorer({
                       p.speed,
                       p.heading,
                       p.ignition,
+                      index ? (timeline.evidence?.[index - 1] ?? 'simulated') : 'primera_lectura',
                     ].join(','),
                   ),
                 ].join('\n'),
@@ -516,24 +523,25 @@ export function JourneyExplorer({
           </button>
         </div>
       </div>
+      {timeline.evidence ? <div className="border-b border-status-warning/20 bg-status-warning/10 px-4 py-2 text-xs text-status-warning">Lecturas reportadas por el GPS, sin ajuste a calles. Los tramos punteados son aproximados; no acreditan una calle recorrida. {summary.gaps.length} intervalos sin evidencia suficiente se excluyen del recorrido y de los cálculos.</div> : null}
       <div className="grid grid-cols-3 divide-x divide-line border-b border-line bg-surface-850 sm:grid-cols-6">
         {(
           [
             [
-              'Distancia observada',
-              formatDistance(timeline.totalMeters),
+              'Distancia GPS estimada',
+              hasJourneyEvidence(timeline) ? formatDistance(timeline.totalMeters) : 'Sin evidencia',
               Route,
             ],
-            ['En movimiento', formatDuration(summary.movingSeconds), Truck],
-            ['Detenido', formatDuration(summary.stoppedSeconds), Timer],
+            ['Marcha consistente', hasJourneyEvidence(timeline) ? formatDuration(summary.movingSeconds) : 'Sin evidencia', Truck],
+            ['Reposo consistente', hasJourneyEvidence(timeline) ? formatDuration(summary.stoppedSeconds) : 'Sin evidencia', Timer],
             [
               'Detenido con contacto',
               formatDuration(summary.idleSeconds),
               Power,
             ],
-            ['Velocidad máxima', `${Math.round(summary.maxSpeed)} km/h`, Gauge],
+            ['Máxima reportada', `${Math.round(summary.maxSpeed)} km/h`, Gauge],
             [
-              'Continuidad GPS',
+              'Consistencia GPS',
               `${Math.round(summary.coverage * 100)} %`,
               Radio,
             ],
@@ -567,8 +575,8 @@ export function JourneyExplorer({
                   vehicleId: vehicle.id,
                   plate: vehicle.plate,
                   fleetCode: vehicle.fleetCode,
-                  status: frame.signalGap
-                    ? 'offline'
+                  status: frame.signalGap || (timeline.evidence && timeline.evidence[Math.max(0, frame.sampleIndex - 1)] === 'uncertain')
+                    ? 'uncertain'
                     : frame.stopped
                       ? 'stopped'
                       : 'moving',
@@ -734,7 +742,7 @@ export function JourneyExplorer({
             <option value="all">Todos los eventos</option>
             <option value="stop">Detenciones desde 3 min</option>
             <option value="speeding">Velocidad sobre umbral</option>
-            <option value="signal_gap">Cortes de continuidad</option>
+            <option value="signal_gap">Intervalos inciertos</option>
             <option value="ignition_on">Encendidos</option>
             <option value="ignition_off">Apagados</option>
           </select>
@@ -916,7 +924,7 @@ export function JourneyExplorer({
             ['#0891b2', 'Menos de 30 km/h'],
             ['#2563eb', `30–${speedLimit} km/h`],
             ['#dc2626', 'Sobre el umbral'],
-            ['#94a3b8', 'Recorrido completo'],
+            ['#94a3b8', 'Traza GPS consistente'],
           ].map(([color, label]) => (
             <span key={label} className="flex items-center gap-1.5">
               <span className="h-1 w-4 rounded" style={{ background: color }} />
@@ -930,7 +938,7 @@ export function JourneyExplorer({
             </span>
           ) : null}
           <span>
-            Los intervalos sin continuidad no suman distancia ni tiempo
+            Los intervalos inciertos no suman distancia ni tiempo
             observado.
           </span>
           <span>
@@ -939,7 +947,7 @@ export function JourneyExplorer({
               : ''}
             {timeline.totalMeters - timeline.roadMatchedMeters > 1
               ? 'Los tramos entre puntos GPS son aproximados; pueden omitir giros entre reportes.'
-              : 'La distancia se mide sobre la geometría validada.'}
+              : 'Sin tramos de movimiento respaldados por muestras consistentes.'}
           </span>
         </div>
       </div>

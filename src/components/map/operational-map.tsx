@@ -473,7 +473,7 @@ export const OperationalMap = memo(function OperationalMap({
     offline: vehicleSnapshots.filter((v) => v.status === 'offline').length,
     // "En observacion": el vehiculo arrastra al menos una alerta abierta,
     // independiente de si sigue en movimiento o esta detenido.
-    enObservacion: vehicleSnapshots.filter((v) => v.openAlertCount > 0).length,
+    enObservacion: vehicleSnapshots.filter((v) => v.openAlertCount > 0 || v.activityStatus === 'uncertain').length,
     // "OT en curso": el vehiculo tiene una orden de trabajo asignada que esta
     // ejecutando en este momento (no simplemente pendiente de despacho).
     otEnCurso: vehicleSnapshots.filter((v) => v.activeWorkOrderId !== null).length,
@@ -793,9 +793,10 @@ export const OperationalMap = memo(function OperationalMap({
             onClearCommune={() => scopeToCommune(null)}
           />
           {selectedTrajectory ? <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 rounded-md bg-surface-900/90 px-2 py-1.5 text-[10px] text-ink-muted">
-            <span>Recorrido <strong className="numeric text-ink">{formatDistance(selectedTrajectory.totalMeters)}</strong></span>
-            <span>Movimiento <strong className="numeric text-ink">{formatDuration(selectedTrajectory.summary.movingSeconds)}</strong></span>
-            <span>Continuidad <strong className="numeric text-ink">{Math.round(selectedTrajectory.summary.coverage * 100)} %</strong></span>
+            {selectedTrajectory.summary.coverage === 0 ? <span className="text-status-warning">Recorrido por verificar · {selectedTrajectory.sampleCount} lecturas · {selectedTrajectory.summary.gaps.length} intervalos sin evidencia suficiente</span> : <>
+            <span>Distancia GPS estimada <strong className="numeric text-ink">{formatDistance(selectedTrajectory.totalMeters)}</strong></span>
+            <span>Marcha observada <strong className="numeric text-ink">{formatDuration(selectedTrajectory.summary.movingSeconds)}</strong></span>
+            <span>Consistencia GPS <strong className="numeric text-ink">{Math.round(selectedTrajectory.summary.coverage * 100)} %</strong></span></>}
           </div> : null}
           {selectedVehicleId && trajectoryLoading ? (
             <p className="mt-1.5 text-2xs text-ink-faint">Cargando trayecto del dia...</p>

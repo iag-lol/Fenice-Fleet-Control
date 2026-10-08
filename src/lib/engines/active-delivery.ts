@@ -1,4 +1,5 @@
 import { containsPoint } from './geofence-engine';
+import { buildEvidenceTimeline } from './gps-evidence';
 import { isContinuous } from './route-replay';
 import { normalizeGpsHistory } from '@/lib/gps-history';
 import { isUsableCoordinate } from '@/lib/geo';
@@ -20,7 +21,7 @@ export function deliveryGeofence(workOrder: WorkOrder, geofences: Geofence[], ra
 
 /** Cheap filter before requesting history or product data. */
 export function deliveryCandidates(position: Position, workOrders: WorkOrder[], geofences: Geofence[], settings: OperationalSettings) {
-  if (!position.valid || !isUsableCoordinate(position) || !Number.isFinite(position.speed) || position.speed >= settings.gps.movingSpeedThresholdKmh) return [];
+  if (position.motionEvidence === 'uncertain' || !position.valid || !isUsableCoordinate(position) || !Number.isFinite(position.speed) || position.speed >= settings.gps.movingSpeedThresholdKmh) return [];
   return workOrders.filter((w) => w.vehicleId === position.vehicleId && w.status !== 'cancelada' && !w.actualDepartureAt)
     .map((workOrder) => ({ workOrder, geofence: deliveryGeofence(workOrder, geofences, settings.geofence.defaultRadiusMeters) }))
     .filter((entry): entry is { workOrder: WorkOrder; geofence: Geofence } => entry.geofence !== null && containsPoint(entry.geofence, position))
@@ -39,20 +40,24 @@ export function findActiveDelivery(input: {
   if (!position || age === null || age >= settings.gps.offlineSeconds) return null;
   const sampleMs = Date.parse(position.timestamp);
   const samples = normalizeGpsHistory([...input.history.filter((p) => p.vehicleId === position.vehicleId && Date.parse(p.timestamp) <= sampleMs), position]);
+  const timeline = buildEvidenceTimeline(samples);
+  if (position.simulated !== true && !timeline) return null;
+  const evidence = timeline?.evidence;
+  if (evidence && evidence.at(-1) !== 'stationary') return null;
   for (const { workOrder, geofence } of deliveryCandidates(position, workOrders, geofences, settings)) {
     let enteredIndex = samples.length - 1;
-    while (enteredIndex > 0 && isContinuous(samples[enteredIndex - 1]!, samples[enteredIndex]!) && containsPoint(geofence, samples[enteredIndex - 1]!)) enteredIndex--;
+    while (enteredIndex > 0 && (!evidence || evidence[enteredIndex - 1] !== 'uncertain') && isContinuous(samples[enteredIndex - 1]!, samples[enteredIndex]!) && containsPoint(geofence, samples[enteredIndex - 1]!)) enteredIndex--;
     let stoppedIndex = samples.length - 1;
-    while (stoppedIndex > enteredIndex && samples[stoppedIndex - 1]!.speed < settings.gps.movingSpeedThresholdKmh &&
+    while (stoppedIndex > enteredIndex && (!evidence || evidence[stoppedIndex - 1] === 'stationary') && samples[stoppedIndex - 1]!.speed < settings.gps.movingSpeedThresholdKmh &&
       isContinuous(samples[stoppedIndex - 1]!, samples[stoppedIndex]!)) stoppedIndex--;
     const enteredSample = samples[enteredIndex]!;
     const stoppedSample = samples[stoppedIndex]!;
     const stoppedSeconds = (sampleMs - Date.parse(stoppedSample.timestamp)) / 1000;
     const reportedArrival = workOrder.actualArrivalAt ? Date.parse(workOrder.actualArrivalAt) : NaN;
-    const arrivalObserved = enteredIndex > 0 && isContinuous(samples[enteredIndex - 1]!, enteredSample) && !containsPoint(geofence, samples[enteredIndex - 1]!);
-    const useReportedArrival = !arrivalObserved && Number.isFinite(reportedArrival) && reportedArrival <= Date.parse(enteredSample.timestamp) && reportedArrival <= sampleMs;
+    const arrivalObserved = enteredIndex > 0 && (!evidence || evidence[enteredIndex - 1] !== 'uncertain') && isContinuous(samples[enteredIndex - 1]!, enteredSample) && !containsPoint(geofence, samples[enteredIndex - 1]!);
+    const useReportedArrival = !arrivalObserved && Number.isFinite(reportedArrival) && (evidence ? reportedArrival >= Date.parse(enteredSample.timestamp) : reportedArrival <= Date.parse(enteredSample.timestamp)) && reportedArrival <= sampleMs;
     const required = geofence.rules.minDwellSeconds ?? geofence.minDwellSeconds ?? settings.geofence.minDwellSeconds;
-    if (stoppedSeconds < required && !(workOrder.status === 'en_cliente' && useReportedArrival)) continue;
+    if (stoppedSeconds < required && (evidence || !(workOrder.status === 'en_cliente' && useReportedArrival))) continue;
     return { workOrder, geofence, enteredAt: useReportedArrival ? workOrder.actualArrivalAt! : enteredSample.timestamp,
       stoppedAt: stoppedSeconds > 0 ? stoppedSample.timestamp : null, observedAt: position.timestamp,
       arrivalObserved: arrivalObserved || useReportedArrival };
@@ -62,7 +67,7 @@ export function findActiveDelivery(input: {
 
 /** New GPS reports close the card immediately, even while the map response is cached. */
 export function deliveryStillPresent(delivery: ActiveDelivery, position: Position | null | undefined): boolean {
-  return Boolean(position && position.vehicleId === delivery.vehicleId && position.valid && isUsableCoordinate(position) &&
+  return Boolean(position && position.vehicleId === delivery.vehicleId && position.motionEvidence !== 'uncertain' && position.valid && isUsableCoordinate(position) &&
     Number.isFinite(position.speed) && position.speed < delivery.movingSpeedThresholdKmh && containsPoint(delivery.geofence, position));
 }
 

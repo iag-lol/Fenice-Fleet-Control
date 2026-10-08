@@ -216,3 +216,8 @@ it('no considera activo un GPS con el reloj adelantado varios minutos', () => {
   const now = new Date('2026-10-07T12:00:00Z');
   expect(evaluateConnectionState('2026-10-07T12:05:00Z', gps, now).state).toBe('unknown');
 });
+
+ it('una lectura no corroborada no confirma marcha aunque reporte velocidad', () => {
+  expect(deriveVehicleStatus({ position: { speed: 40, ignition: 'on', motionEvidence: 'uncertain' } as Position,
+    connection: 'online', gps: DEFAULT_OPERATIONAL_SETTINGS.gps })).toBe('uncertain');
+});

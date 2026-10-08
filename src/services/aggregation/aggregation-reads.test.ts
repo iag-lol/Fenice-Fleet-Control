@@ -119,9 +119,10 @@ it('la ficha no suma distancia ni tiempo de marcha durante un corte GPS', async 
     { ...position, timestamp: new Date(time).toISOString(), lat: -33.439, speed: 0 },
   ]);
   const detail = await loadVehicleDetail(vehicle.id);
-  expect(detail?.journey.movingSeconds).toBe(15);
-  expect(detail?.journey.stoppedSeconds).toBe(30);
-  expect(detail?.journey.distanceKm).toBeLessThan(.3);
+  expect(detail?.journey.movingSeconds).toBe(0);
+  expect(detail?.journey.stoppedSeconds).toBe(0);
+  expect(detail?.journey.distanceKm).toBeNull();
+  expect(detail?.telemetryWarnings?.join()).toContain('sin evidencia suficiente');
 });
 
 it('mantiene disponible la ficha si solo fallan historial y eventos del proveedor', async () => {

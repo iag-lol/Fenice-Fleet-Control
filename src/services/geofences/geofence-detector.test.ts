@@ -25,3 +25,32 @@ it('permite mostrar la ultima ubicacion antigua sin registrar una nueva entrada 
   expect(actions.alert).not.toHaveBeenCalled();
   expect(actions.geofences).not.toHaveBeenCalled();
 });
+
+it('no transforma el primer fix, la deriva incierta o la repetición de un fix en entradas de geocerca', async () => {
+  const { DEFAULT_GEOFENCE_RULES } = await import('@/types/core');
+  const origin = Date.now();
+  const center = { lat: -33.45, lng: -70.66 };
+  const vehicleId = 'quality-geofence-test' as Position['vehicleId'];
+  let current: Position = { ...center, lng: -70.663, vehicleId, deviceId: 'test' as Position['deviceId'],
+    timestamp: new Date(origin).toISOString(), valid: true, speed: 0, ignition: 'on', heading: 0, motionEvidence: 'stationary' };
+  actions.geofences.mockResolvedValue([{ id: 'quality-g', active: true, name: 'Cliente de prueba', kind: 'cliente',
+    geometry: { shape: 'circle', center, radiusMeters: 60 }, rules: { ...DEFAULT_GEOFENCE_RULES, onEnter: true } }]);
+  const provider = withGeofenceDetection({ info: { simulated: false }, getAllCurrentPositions: async () => [current] } as GpsProvider);
+  const sample = async (second: number, values: Partial<Position> = {}) => {
+    vi.setSystemTime(new Date(origin + second * 1000));
+    current = { ...current, timestamp: new Date(origin + second * 1000).toISOString(), ...values };
+    await provider.getAllCurrentPositions(); await vi.advanceTimersByTimeAsync(1);
+  };
+  await sample(0); await sample(15);
+  expect(actions.event).not.toHaveBeenCalled();
+  await sample(30, { ...center });
+  await provider.getAllCurrentPositions(); await vi.advanceTimersByTimeAsync(1);
+  expect(actions.event).not.toHaveBeenCalled();
+  await sample(45, { motionEvidence: 'uncertain' });
+  await sample(60, { motionEvidence: 'stationary' });
+  expect(actions.event).not.toHaveBeenCalled(); // nueva referencia, no nueva visita
+  await sample(75, { lng: -70.663 });
+  await sample(90); await sample(105);
+  expect(actions.event).toHaveBeenCalledTimes(1);
+  expect(actions.event).toHaveBeenLastCalledWith(expect.objectContaining({ type: 'exit', timestamp: current.timestamp }));
+});

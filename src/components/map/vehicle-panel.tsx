@@ -310,11 +310,12 @@ export function VehiclePanel({ vehicleId }: { vehicleId: string }) {
           </span>
         }
       >
+        {position?.simulated !== true ? <p className="mb-3 rounded-md bg-status-warning/10 px-2.5 py-2 text-2xs text-status-warning">Ubicación reportada por el GPS. {position?.accuracy === undefined ? 'El proveedor no informa precisión; no acredita una visita ni una descarga.' : `Precisión reportada: ${position.accuracy} m.`}</p> : null}
         <DetailList
           className="gap-y-2.5"
           items={[
             {
-              label: 'Velocidad',
+              label: 'Velocidad reportada',
               value: (
                 <span className="numeric flex items-center gap-1.5">
                   <Gauge className="h-3.5 w-3.5 text-ink-faint" />
@@ -438,10 +439,10 @@ export function VehiclePanel({ vehicleId }: { vehicleId: string }) {
           columns={2}
           className="gap-y-2.5"
           items={[
-            { label: 'Kilómetros recorridos', value: <span className="numeric">{formatKm(journey.distanceKm)}</span> },
-            { label: 'Inicio de ruta', value: <span className="numeric">{formatTime(journey.startedAt)}</span> },
-            { label: 'Tiempo en movimiento', value: <span className="numeric">{formatDuration(journey.movingSeconds)}</span> },
-            { label: 'Tiempo detenido', value: <span className="numeric">{formatDuration(journey.stoppedSeconds)}</span> },
+            { label: 'Distancia GPS estimada', value: <span className="numeric">{journey.distanceKm === null ? 'Sin evidencia' : formatKm(journey.distanceKm)}</span> },
+            { label: 'Primer registro GPS', value: <span className="numeric">{formatTime(journey.startedAt)}</span> },
+            { label: 'Marcha observada', value: <span className="numeric">{journey.distanceKm === null ? 'Sin evidencia' : formatDuration(journey.movingSeconds)}</span> },
+            { label: 'Reposo observado', value: <span className="numeric">{journey.distanceKm === null ? 'Sin evidencia' : formatDuration(journey.stoppedSeconds)}</span> },
             { label: 'Entregas realizadas', value: <span className="numeric">{journey.deliveriesCompleted}</span> },
             { label: 'Entregas pendientes', value: <span className="numeric">{journey.deliveriesPending}</span> },
           ]}
@@ -651,15 +652,15 @@ export function VehiclePanel({ vehicleId }: { vehicleId: string }) {
         <DetailList
           columns={2}
           items={[
-            { label: 'Kilometros recorridos', value: <span className="numeric">{formatKm(journey.distanceKm)}</span> },
-            { label: 'Inicio de ruta', value: <span className="numeric">{formatTime(journey.startedAt)}</span> },
+            { label: 'Distancia GPS estimada', value: <span className="numeric">{journey.distanceKm === null ? 'Sin evidencia' : formatKm(journey.distanceKm)}</span> },
+            { label: 'Primer registro GPS', value: <span className="numeric">{formatTime(journey.startedAt)}</span> },
             {
-              label: 'Tiempo en movimiento',
-              value: <span className="numeric">{formatDuration(journey.movingSeconds)}</span>,
+              label: 'Marcha observada',
+              value: <span className="numeric">{journey.distanceKm === null ? 'Sin evidencia' : formatDuration(journey.movingSeconds)}</span>,
             },
             {
-              label: 'Tiempo detenido',
-              value: <span className="numeric">{formatDuration(journey.stoppedSeconds)}</span>,
+              label: 'Reposo observado',
+              value: <span className="numeric">{journey.distanceKm === null ? 'Sin evidencia' : formatDuration(journey.stoppedSeconds)}</span>,
             },
             {
               label: 'Entregas realizadas',
@@ -673,6 +674,7 @@ export function VehiclePanel({ vehicleId }: { vehicleId: string }) {
         />
       </Section>
 
+      {trajectory?.summary.unobservedSeconds ? <p className="rounded-md border border-status-warning/20 bg-status-warning/10 p-3 text-xs text-status-warning">{trajectory.summary.gaps.length} intervalos sin evidencia suficiente. No se dibujan ni suman movimiento, detenciones o distancia. Los registros recibidos se conservan en el historial GPS.</p> : null}
       {/* --- Trayecto del dia --- */}
       <Section title="Eventos del trayecto (00:00 - 23:59)">
         {trajectoryLoading ? (

@@ -97,6 +97,8 @@ export interface Position {
   address?: string;
   communeCode?: string;
   valid: boolean;
+  /** Consistencia de lecturas consecutivas; no certifica ubicación física. */
+  motionEvidence?: 'moving' | 'stationary' | 'uncertain';
 }
 
 export type DeviceConnectionState = 'online' | 'stale' | 'lost' | 'offline' | 'unknown';
@@ -151,7 +153,8 @@ export type VehicleOperationalStatus =
   | 'detenido'
   | 'inactivo'
   | 'offline'
-  | 'mantenimiento';
+  | 'mantenimiento'
+  | 'uncertain';
 
 /**
  * Estado de ACTIVIDAD del vehiculo, para el marcador del mapa.
@@ -171,7 +174,8 @@ export type VehicleActivityStatus =
   | 'stopped'
   | 'deviated'
   | 'warning'
-  | 'offline';
+  | 'offline'
+  | 'uncertain';
 
 export interface GpsDevice {
   id: DeviceId;

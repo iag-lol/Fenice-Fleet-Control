@@ -62,6 +62,11 @@ export function resolveVehicleActivity(input: VehicleActivityInput): VehicleActi
     };
   }
 
+  if (position.motionEvidence === 'uncertain' || input.operationalStatus === 'uncertain') {
+    return { status: 'uncertain', insideGeofence: null, deviationMeters: null,
+      reason: 'Actividad sin confirmar: faltan lecturas GPS consistentes.' };
+  }
+
   const point: LatLng = { lat: position.lat, lng: position.lng };
 
   const insideGeofence =
@@ -144,6 +149,7 @@ export const ACTIVITY_LABEL: Record<VehicleActivityStatus, string> = {
   stopped: 'Detenido',
   deviated: 'Fuera de ruta',
   warning: 'Alerta critica',
+  uncertain: 'Actividad sin confirmar',
   offline: 'Sin GPS reciente',
 };
 
@@ -160,6 +166,7 @@ export const ACTIVITY_COLOR: Record<VehicleActivityStatus, string> = {
   stopped: '#b45309',
   deviated: '#c2410c',
   warning: '#dc2626',
+  uncertain: '#b45309',
   offline: '#64748b',
 };
 

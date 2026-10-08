@@ -65,6 +65,8 @@ export class PositionArchive {
 }
 
 export function withPositionArchive(provider: GpsProvider, archive: PositionArchive): GpsProvider {
+  // El ajuste vial es visual e inferido; no se añade a mediciones reales.
+  const enrich = (positions: Position[]) => provider.info.simulated ? addRoadMatches(positions) : Promise.resolve(positions);
   const record = async (positions: Position[]) => {
     const real = positions.filter((p) => p.simulated === false || (!provider.info.simulated && p.simulated !== true));
     if (real.length) {
@@ -79,10 +81,10 @@ export function withPositionArchive(provider: GpsProvider, archive: PositionArch
     getVehicles: () => provider.getVehicles(),
     getDeviceStatus: (id) => provider.getDeviceStatus(id),
     getVehicleEvents: (query) => provider.getVehicleEvents(query),
-    getAllCurrentPositions: async () => record(await addRoadMatches(await provider.getAllCurrentPositions())),
+    getAllCurrentPositions: async () => record(await enrich(await provider.getAllCurrentPositions())),
     getVehiclePosition: async (id) => {
       const position = await provider.getVehiclePosition(id);
-      if (position) return (await record(await addRoadMatches([position])))[0] ?? position;
+      if (position) return (await record(await enrich([position])))[0] ?? position;
       return position;
     },
     async getPositionHistory(query) {

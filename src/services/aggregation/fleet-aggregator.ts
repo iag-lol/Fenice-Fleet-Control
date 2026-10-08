@@ -1,6 +1,7 @@
+import { buildEvidenceTimeline, hasJourneyEvidence } from '@/lib/engines/gps-evidence';
 import 'server-only';
 
-import { buildReplayTimeline, findStops } from '@/lib/engines/route-replay';
+import { findStops } from '@/lib/engines/route-replay';
 import { analyzeJourney } from '@/lib/engines/journey-analysis';
 import { getOperationalSettings } from '@/services/settings/settings-store';
 import { getCommuneName } from '@/data/communes';
@@ -273,7 +274,9 @@ export function toRouteGeometry(route: Route, vehiclePlate: string | null): Rout
     vehiclePlate,
     status: route.status,
     plannedPath: route.plannedPath,
-    executedPath: route.executedPath,
+    // Un arreglo sin timestamps no prueba un trayecto GPS. La traza real se
+    // construye a partir del historial evaluado, no de geometría heredada.
+    executedPath: getGpsProvider().info?.simulated === false ? [] : route.executedPath,
     stops: route.stops
       .filter((s) => isUsableCoordinate(s.coordinates))
       .map((s) => ({
@@ -350,7 +353,7 @@ function buildTimeline(
     }
   }
 
-  const replay = buildReplayTimeline(history);
+  const replay = buildEvidenceTimeline(history);
   const stops = replay ? findStops(replay, settings.route.prolongedStopSeconds) : [];
 
   for (const stop of stops) {
@@ -452,7 +455,8 @@ export async function loadVehicleDetail(vehicleId: VehicleId): Promise<VehicleDe
     ) ?? null;
 
   // La ficha y el explorador aplican la misma continuidad de muestras.
-  const replay = buildReplayTimeline(history);
+  const replay = buildEvidenceTimeline(history);
+  if (replay?.evidence?.includes('uncertain')) telemetryWarnings.push('Hay intervalos GPS sin evidencia suficiente: no confirman movimiento, detención ni distancia.');
   const analysis = replay ? analyzeJourney(replay, settings.route.maxLegalSpeedKmh) : null;
 
   const deliveriesCompleted = vehicleWorkOrders.filter((w) =>
@@ -499,8 +503,8 @@ export async function loadVehicleDetail(vehicleId: VehicleId): Promise<VehicleDe
       progressRatio: progress?.completionRatio ?? 0,
     },
     journey: {
-      distanceKm: replay ? Math.round(replay.totalMeters / 100) / 10 : null,
-      startedAt: route?.startedAt ?? history[0]?.timestamp ?? null,
+      distanceKm: replay && hasJourneyEvidence(replay) ? Math.round(replay.totalMeters / 100) / 10 : null,
+      startedAt: replay?.samples[0]?.timestamp ?? null,
       movingSeconds: Math.round(analysis?.movingSeconds ?? 0),
       stoppedSeconds: Math.round(analysis?.stoppedSeconds ?? 0),
       deliveriesCompleted,

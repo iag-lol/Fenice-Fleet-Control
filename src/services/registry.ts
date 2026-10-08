@@ -2,6 +2,7 @@ import 'server-only';
 
 import { resolve } from 'node:path';
 import { PositionArchive, withPositionArchive } from '@/services/gps/history/position-archive';
+import { withGpsEvidence } from '@/services/gps/gps-evidence-provider';
 import { withLastKnownGps } from '@/services/gps/history/last-known-gps';
 import { getServerEnv } from '@/config/env';
 import type { GpsProvider } from '@/services/gps/gps-provider';
@@ -88,7 +89,7 @@ export function getGpsProvider(): GpsProvider {
     // sin migrar (ni redeployar) toda la flota. La deteccion de geocercas
     // se aplica encima de todo eso, para que alcance por igual a la flota
     // del proveedor global y a los vinculos manuales.
-    const provider = withGeofenceDetection(withTraccarDeviceLinks(createGpsProvider()));
+    const provider = withGeofenceDetection(withGpsEvidence(withTraccarDeviceLinks(createGpsProvider())));
     const env = getServerEnv();
     const namespace = env.GPS_PROVIDER === '3dtracking'
       ? env.TRIDTRACKING_API_MODE === 'partner'

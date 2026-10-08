@@ -170,6 +170,7 @@ export function OperationsPanel({
     // lo que va bien. El operador no deberia tener que buscar el problema.
     const priority: Record<VehicleActivityStatus, number> = {
       warning: 0,
+      uncertain: 1,
       deviated: 1,
       offline: 2,
       stopped: 3,

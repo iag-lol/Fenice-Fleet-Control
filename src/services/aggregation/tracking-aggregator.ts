@@ -151,7 +151,7 @@ export async function loadTrackingSession(
     const record = [...vehicles, ...gpsVehicles].find((v) => v.id === workOrder.vehicleId) ?? null;
     const connection = evaluateConnectionState(position?.timestamp ?? null, settings.gps, now);
     const fixMs = position ? Date.parse(position.timestamp) : NaN;
-    const usablePosition = position?.valid && isUsableCoordinate(position) &&
+    const usablePosition = position?.motionEvidence !== 'uncertain' && position?.valid && isUsableCoordinate(position) &&
       now.getTime() - Date.parse(position.timestamp) >= -60000 &&
       (connection.state === 'online' || connection.state === 'stale') ? position : null;
 

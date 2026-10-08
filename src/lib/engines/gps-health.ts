@@ -83,6 +83,8 @@ export function deriveVehicleStatus(input: VehicleStatusInput): VehicleOperation
     return 'offline';
   }
 
+  if (input.position.motionEvidence === 'uncertain') return 'uncertain';
+
   const moving =
     input.position.speed > input.gps.movingSpeedThresholdKmh && input.position.ignition !== 'off';
 
@@ -96,6 +98,7 @@ export const VEHICLE_STATUS_LABEL: Record<VehicleOperationalStatus, string> = {
   inactivo: 'Disponible',
   offline: 'Sin GPS reciente',
   mantenimiento: 'Mantenimiento',
+  uncertain: 'Actividad sin confirmar',
 };
 
 export const VEHICLE_STATUS_COLOR: Record<VehicleOperationalStatus, string> = {
@@ -104,6 +107,7 @@ export const VEHICLE_STATUS_COLOR: Record<VehicleOperationalStatus, string> = {
   inactivo: '#64748b',
   offline: '#dc2626',
   mantenimiento: '#7e22ce',
+  uncertain: '#b45309',
 };
 
 /**

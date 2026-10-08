@@ -61,7 +61,7 @@ export function analyzeJourney(
       current = timeline.samples[i]!;
     const seconds =
       (Date.parse(current.timestamp) - Date.parse(previous.timestamp)) / 1000;
-    if (!isContinuous(previous, current)) {
+    if (!isContinuous(previous, current) || timeline.evidence?.[i - 1] === 'uncertain') {
       summary.unobservedSeconds += seconds;
       summary.gaps.push({
         from: previous.timestamp,
@@ -117,6 +117,10 @@ export function exportJourneyGeoJson(timeline: ReplayTimeline, plate: string) {
           from: new Date(timeline.startMs).toISOString(),
           to: new Date(timeline.endMs).toISOString(),
           samples: timeline.samples.length,
+          geometrySource: timeline.evidence ? 'consistent_gps_samples' : 'simulated_or_legacy',
+          distanceMetersEstimated: timeline.totalMeters,
+          uncertainIntervals: timeline.evidence?.filter((s) => s === 'uncertain').length ?? 0,
+          provesRoadTravel: false,
         },
         geometry: {
           type: 'MultiLineString',

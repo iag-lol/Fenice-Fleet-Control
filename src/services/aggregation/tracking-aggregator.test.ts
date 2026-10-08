@@ -95,6 +95,7 @@ describe('seguimiento publico fiable', () => {
   it.each([
     { ...sample(), timestamp: new Date(Date.now() - 5 * 60000).toISOString() },
     { ...sample(), valid: false },
+    { ...sample(), motionEvidence: 'uncertain' as const },
     { ...sample(), lat: 0, lng: 0 },
     { ...sample(), timestamp: new Date(Date.now() + 5 * 60000).toISOString() },
   ])(
