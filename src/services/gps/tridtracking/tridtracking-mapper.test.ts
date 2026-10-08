@@ -249,7 +249,10 @@ describe('estado del equipo', () => {
   });
 
   it('un fix antiguo reenviado no aparece como señal fresca', () => {
-    expect(mapUnitToDeviceStatus(unidad({ LastReportedTimeUTC: ahora.toISOString(), Position: { GPSTimeUtc: '2026-09-01T10:00:00Z' } }), ahora, UMBRALES)!.connection).toBe('offline');
+    const status = mapUnitToDeviceStatus(unidad({ LastReportedTimeUTC: ahora.toISOString(), Position: { GPSTimeUtc: '2026-09-01T10:00:00Z' } }), ahora, UMBRALES)!;
+    expect(status.connection).toBe('offline');
+    expect(status.lastCommunicationAt).toBe(ahora.toISOString());
+    expect(status.lastPositionAt).toBe('2026-09-01T10:00:00.000Z');
   });
 
   it('no afirma nada cuando la unidad nunca reporto', () => {

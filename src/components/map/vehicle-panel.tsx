@@ -50,6 +50,7 @@ import {
   formatSpeed,
   formatTime,
   formatTimeWithSeconds,
+  formatSmartDateTime,
 } from '@/lib/format';
 import { cn } from '@/lib/cn';
 import { findDeviceCapabilities } from '@/config/gps-device-capabilities';
@@ -353,7 +354,7 @@ export function VehiclePanel({ vehicleId }: { vehicleId: string }) {
               ),
             },
             {
-              label: 'Ultima actualizacion',
+              label: 'Antigüedad de la posición',
               value: (
                 <span className="flex flex-wrap items-center gap-2">
                   <span className="numeric">
@@ -364,6 +365,10 @@ export function VehiclePanel({ vehicleId }: { vehicleId: string }) {
                   ) : null}
                 </span>
               ),
+            },
+            {
+              label: 'Comunicación del equipo',
+              value: formatSmartDateTime(vehicleSnapshot.device?.lastCommunicationAt),
             },
             {
               label: 'Conductor',

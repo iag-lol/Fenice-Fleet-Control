@@ -102,6 +102,10 @@ Referencia: [documentación oficial v1](https://apiv2.3dtracking.net/docs/v1/).
 
 ## Comprobación de accesos del 8 de octubre de 2026
 
+Con el GPS encendido, la prueba de RBDC59 confirmó IMEI, posición válida con 26 segundos de antigüedad, ignición conocida y 12 muestras de la última hora. El archivo privado conservó esa posición con su fecha original y permisos 0600. No se observaron errores de consultas ni del grabador en esa comprobación.
+
+El historial observado incluye intervalos entre posiciones de 60 a 240 segundos, además de intervalos cortos. El proveedor puede actualizar la última comunicación sin renovar el fix GNSS. El encabezado usa la fecha del fix y los umbrales configurados, distingue una consulta fallida de una posición antigua y no renueva la antigüedad al consultar nuevamente. La cadencia física debe contrastarse con el perfil del Configurator antes de aceptar el seguimiento continuo de 15–30 segundos.
+
 La conexión local usa **Client API**, `https://apiv2.3dtracking.net`, modo `client`, con demostración desactivada. El conector confirmó una unidad RBDC59 y una posición GPS real. Partner API autentica y permitió administrar el nombre y estado de la unidad, pero sus consultas de posiciones devolvieron límites de frecuencia; Client API devuelve la telemetría de esta cuenta. Las credenciales permanecen en `.env.local`, fuera de Git.
 
 El usuario confirmó que el único equipo del catálogo corresponde a RBDC59. Se actualizó el nombre de la unidad a esa patente y su estado a `Activo` mediante los endpoints documentados `UnitNameInfo/Update` y `UnitStatus/Update`. Ambos cambios se verificaron leyendo nuevamente la unidad. Movilmaster ya muestra RBDC59 en Rastreo; su último registro visible es del 7 de octubre, por lo que todavía debe comprobarse transmisión reciente para aceptar la instalación.

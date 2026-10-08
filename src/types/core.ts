@@ -107,6 +107,8 @@ export interface DeviceStatus {
   imei?: string;
   connection: DeviceConnectionState;
   lastPositionAt: IsoDateTime | null;
+  /** Comunicación recibida del equipo; no renueva la fecha de su fix GNSS. */
+  lastCommunicationAt?: IsoDateTime | null;
   /** Segundos transcurridos desde la ultima posicion valida. */
   secondsSinceLastPosition: number | null;
   protocol?: string;

@@ -218,6 +218,7 @@ export function mapUnitToDeviceStatus(
     ...(unit.Imei ? { imei: unit.Imei } : {}),
     connection,
     lastPositionAt: last,
+    lastCommunicationAt: toIsoUtc(unit.LastReportedTimeUTC) ?? toIsoUtc(unit.Position?.ServerTimeUTC),
     secondsSinceLastPosition: seconds,
     protocol: '3DTracking WebApi v1.0',
     ...(unit.UnitType ? { model: unit.UnitType } : {}),

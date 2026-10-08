@@ -11,9 +11,11 @@ import { useLiveFleet, useSecondsSince } from '@/hooks/use-live-fleet';
 import { formatElapsed, formatTimeWithSeconds } from '@/lib/format';
 import { cn } from '@/lib/cn';
 import type { SystemModeInfo } from '@/services/registry';
+import { DEFAULT_OPERATIONAL_SETTINGS, type OperationalSettings } from '@/config/operational';
+import { liveGpsConnection } from '@/lib/engines/live-gps-health';
 
 interface SystemModeResponse extends SystemModeInfo {
-  settings: unknown;
+  settings: OperationalSettings;
 }
 
 /**
@@ -24,7 +26,7 @@ interface SystemModeResponse extends SystemModeInfo {
  * advertencia, posible perdida de senal y offline.
  */
 export function GpsStatusIndicator({ compact }: { compact?: boolean }) {
-  const { transport, error, lastUpdateAt, isPaused, refresh } = useLiveFleet();
+  const { transport, error, lastUpdateAt, sourceResponding, isPaused, refresh } = useLiveFleet();
   const secondsSinceUpdate = useSecondsSince(lastUpdateAt);
   const [busy, setBusy] = useState(false);
 
@@ -55,18 +57,10 @@ export function GpsStatusIndicator({ compact }: { compact?: boolean }) {
   const simulated = mode?.gps.simulated ?? false;
 
   // El escalonamiento es el mismo que aplican los motores del servidor.
-  const severity =
-    error !== null
-      ? 'critical'
-      : secondsSinceUpdate === null
-        ? 'unknown'
-        : secondsSinceUpdate > 600
-          ? 'critical'
-          : secondsSinceUpdate > 180
-            ? 'lost'
-            : secondsSinceUpdate > 60
-              ? 'warning'
-              : 'ok';
+  const connection = liveGpsConnection(secondsSinceUpdate, sourceResponding, error !== null,
+    mode?.settings.gps ?? DEFAULT_OPERATIONAL_SETTINGS.gps);
+  const severity = connection === 'online' ? 'ok' : connection === 'stale' ? 'warning'
+    : connection === 'offline' ? 'critical' : connection;
 
   const tone =
     severity === 'ok'

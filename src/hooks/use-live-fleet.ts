@@ -7,6 +7,7 @@ import { HttpGpsProvider } from '@/services/gps/client/http-gps-provider';
 import type { GpsTransport } from '@/services/gps/gps-provider';
 import type { Position } from '@/types/core';
 import type { LivePositionsPayload } from '@/types/views';
+import { latestGpsTimestamp } from '@/lib/engines/live-gps-health';
 
 /**
  * Telemetria viva de la flota, compartida por toda la aplicacion.
@@ -24,6 +25,7 @@ import type { LivePositionsPayload } from '@/types/views';
  */
 
 export interface LiveFleetSnapshot {
+  sourceResponding: boolean;
   positions: Map<string, Position>;
   /** Ultimo estado completo recibido en el mismo pulso que las posiciones. */
   payload: LivePositionsPayload | null;
@@ -35,6 +37,7 @@ export interface LiveFleetSnapshot {
 }
 
 const EMPTY_SNAPSHOT: LiveFleetSnapshot = {
+  sourceResponding: false,
   positions: new Map(),
   payload: null,
   transport: 'disconnected',
@@ -98,8 +101,8 @@ function resolveTransport(): Promise<void> {
 
 function receivePositions(incoming: Position[], payload = snapshot.payload): void {
   if (incoming.length === 0) {
-    if (snapshot.error !== 'No hay posiciones GPS recibidas.' || snapshot.payload !== payload) {
-      emit({ ...snapshot, payload, error: 'No hay posiciones GPS recibidas.' });
+    if (snapshot.error !== 'No hay posiciones GPS recibidas.' || snapshot.payload !== payload || !snapshot.sourceResponding) {
+      emit({ ...snapshot, payload, sourceResponding: true, error: 'No hay posiciones GPS recibidas.' });
     }
     return;
   }
@@ -113,9 +116,9 @@ function receivePositions(incoming: Position[], payload = snapshot.payload): voi
   const now = Date.now();
   const hasFreshFix = incoming.some((p) => p.valid && Number.isFinite(Date.parse(p.timestamp)) &&
     now - Date.parse(p.timestamp) <= 180_000 && Date.parse(p.timestamp) - now <= 60_000);
-  emit({ ...snapshot, positions, payload,
+  emit({ ...snapshot, positions, payload, sourceResponding: true,
     error: hasFreshFix ? null : 'La fuente responde, pero no entrega posiciones GPS recientes.',
-    lastUpdateAt: hasFreshFix ? new Date(now).toISOString() : snapshot.lastUpdateAt,
+    lastUpdateAt: latestGpsTimestamp(incoming, snapshot.lastUpdateAt, now),
   });
 }
 
@@ -142,7 +145,7 @@ function startStream(): void {
     onPositions: receivePositions,
     onSnapshot: receiveSnapshot,
     onError: (error) => {
-      if (snapshot.error !== error.message) emit({ ...snapshot, error: error.message });
+      if (snapshot.error !== error.message || snapshot.sourceResponding) emit({ ...snapshot, sourceResponding: false, error: error.message });
     },
     onTransportChange: (transport) => {
       if (snapshot.transport !== transport) emit({ ...snapshot, transport });
