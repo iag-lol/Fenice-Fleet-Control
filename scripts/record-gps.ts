@@ -12,7 +12,12 @@ async function main(): Promise<void> {
   }
   console.log('Grabador GPS iniciado. Las muestras se guardan en GPS_HISTORY_DIR.');
   while (!stopping) {
-    try { await getGpsProvider().getAllCurrentPositions(); }
+    try {
+      const gps = getGpsProvider();
+      // El catálogo debe acompañar las posiciones cuando se agregan equipos:
+      // la recuperación de última ubicación también persiste la flota.
+      await Promise.all([gps.getVehicles(), gps.getAllCurrentPositions()]);
+    }
     catch (error) {
       console.error('GPS pendiente de reconexion:', error instanceof Error ? error.message : error);
     }

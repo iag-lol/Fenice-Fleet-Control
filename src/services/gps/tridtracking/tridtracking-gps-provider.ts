@@ -209,9 +209,16 @@ export class TridTrackingGpsProvider implements GpsProvider {
   private async identities(): Promise<Map<string, Vehicle>> {
     const [units, local] = await Promise.all([this.getUnits(), listVehicles()]);
     const identities = new Map<string, Vehicle>();
+    const deviceOwners = new Set<string>();
     for (const unit of units) {
       const mapped = mapUnitToVehicle(unit);
       if (!mapped) continue;
+      if (identities.has(String(mapped.id)))
+        throw new GpsProviderError('El catálogo de 3DTracking repite el identificador de una unidad.');
+      const imei = mapped.device?.imei;
+      if (imei && deviceOwners.has(imei))
+        throw new GpsProviderError('El catálogo de 3DTracking asigna el mismo IMEI a varias unidades.');
+      if (imei) deviceOwners.add(imei);
       const matches = local.filter(
         (vehicle) =>
           mapped.device?.imei && vehicle.device?.imei === mapped.device.imei,

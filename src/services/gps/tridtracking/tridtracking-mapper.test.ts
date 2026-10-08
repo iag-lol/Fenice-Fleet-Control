@@ -13,6 +13,11 @@ import {
 } from './tridtracking-mapper';
 import type { TridUnit } from './tridtracking-types';
 
+it.each([['Activo', true], ['Inactivo', false], ['Suspendido', false], ['inactive', false], ['Active', true]] as const)
+  ('interpreta el estado de unidad %s sin activar registros inactivos', (status, active) => {
+    expect(mapUnitToVehicle({ Uid: 'test-unit', Name: 'TEST01', Status: status })?.active).toBe(active);
+  });
+
 const UMBRALES = { staleSeconds: 60, lostSeconds: 180, offlineSeconds: 600 };
 
 /** Unidad tal como la devuelve `latestpositionslist`. */

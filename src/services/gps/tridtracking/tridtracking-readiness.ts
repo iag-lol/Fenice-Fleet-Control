@@ -53,6 +53,9 @@ export async function checkTridReadiness(gps: GpsProvider, input: {
     report.hasPosition = report.ageSeconds >= -60 && report.ageSeconds < input.maxAgeSeconds;
     report.ignitionKnown = latest.ignition !== 'unknown';
   }
+  if (gps.getAvailabilityWarnings?.().length) {
+    return { ...report, message: 'Se conservan datos GPS guardados, pero una consulta del proveedor no está disponible. No se puede confirmar la instalación hasta recuperar las consultas.' };
+  }
   if (input.history) {
     try {
       const history = await gps.getPositionHistory({ vehicleId: vehicle.id,

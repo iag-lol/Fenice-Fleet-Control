@@ -24,6 +24,42 @@ function provider() {
   return new TridTrackingGpsProvider();
 }
 describe('FMC130 en 3DTracking para RBDC59', () => {
+  it('incorpora nueve GPS con una consulta de catálogo y una de posiciones, sin mezclar identidades', async () => {
+    const units = Array.from({ length: 9 }, (_, i) => ({ ...unit, Uid: `supplier-${i}`, Name: `TEST0${i}`,
+      Imei: String(359632100000100 + i), Position: { ...rawPosition(to), Unit: { Uid: `supplier-${i}` }, Latitude: -33.45 - i * .001 } }));
+    mocks.vehicles.mockResolvedValue(units.map((u, i) => ({ id: `local-${i}`, plate: u.Name, capacityLiters: 30000,
+      device: { imei: u.Imei } })) as Vehicle[]);
+    mocks.call.mockImplementation(async (path: string) => path.endsWith('/unit/list') || path.endsWith('latestpositionslist')
+      ? units : { Position: units.map((u) => u.Position), StartId: 99, IsCurrent: true });
+    const gps = new TridTrackingGpsProvider();
+    const [vehicles, positions, devices] = await Promise.all([gps.getVehicles(), gps.getAllCurrentPositions(), gps.getDeviceStatus()]);
+    expect(vehicles).toHaveLength(9); expect(positions).toHaveLength(9); expect(devices).toHaveLength(9);
+    for (let i = 0; i < 9; i++) {
+      expect(positions.find((p) => p.vehicleId === `local-${i}`)).toMatchObject({ deviceId: units[i]!.Imei, lat: units[i]!.Position.Latitude });
+      expect(devices.find((d) => d.vehicleId === `local-${i}`)?.deviceId).toBe(units[i]!.Imei);
+      const history = await gps.getPositionHistory({ vehicleId: `local-${i}` as VehicleId, from, to });
+      expect(history).toHaveLength(1);
+      expect(history[0]?.vehicleId).toBe(`local-${i}`);
+      expect(history[0]?.lat).toBe(units[i]!.Position.Latitude);
+    }
+    expect(mocks.call.mock.calls.filter(([p]) => p.endsWith('/unit/list'))).toHaveLength(1);
+    expect(mocks.call.mock.calls.filter(([p]) => p.endsWith('latestpositionslist'))).toHaveLength(1);
+  });
+  it('descubre los ocho equipos nuevos cuando se renueva el catálogo sin reconfigurar el proveedor', async () => {
+    vi.useFakeTimers(); const gps = provider(); await gps.getVehicles();
+    const added = Array.from({ length: 8 }, (_, i) => ({ ...unit, Uid: `new-${i}`, Name: `NEW0${i}`, Imei: String(359632100000101 + i) }));
+    mocks.call.mockResolvedValue([unit, ...added]);
+    await vi.advanceTimersByTimeAsync(60000);
+    expect(await gps.getVehicles()).toHaveLength(9);
+  });
+  it('rechaza dos unidades asociadas al mismo IMEI', async () => {
+    const gps = provider(); mocks.call.mockResolvedValue([unit, { ...unit, Uid: 'other', Name: 'OTHER1' }]);
+    await expect(gps.getVehicles()).rejects.toThrow(/mismo IMEI/);
+  });
+  it('rechaza un UID duplicado antes de sobrescribir otra unidad del catálogo', async () => {
+    const gps = provider(); mocks.call.mockResolvedValue([unit, { ...unit, Imei: '359632100000002' }]);
+    await expect(gps.getVehicles()).rejects.toThrow(/identificador/);
+  });
   it('comparte la instantanea durante la cadencia de refresco aunque varias pantallas consulten', async () => {
     vi.useFakeTimers(); const gps = provider();
     await gps.getAllCurrentPositions();

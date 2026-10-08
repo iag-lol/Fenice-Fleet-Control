@@ -29,6 +29,15 @@ beforeEach(async () => {
 afterEach(async () => { vi.useRealTimers(); await rm(directory, { recursive: true, force: true }); });
 
 describe('ultima ubicacion real persistente', () => {
+  it('no atribuye la posición del equipo anterior a un GPS reemplazado en el mismo vehículo', async () => {
+    const base = source(); const gps = withLastKnownGps(base, directory, 'account-one');
+    await gps.getVehicles(); await gps.getAllCurrentPositions();
+    vi.mocked(base.getVehicles).mockResolvedValue([{ ...vehicle, device: { ...vehicle.device!, id: 'new-device' as Position['deviceId'], imei: '359632100000002' } }]);
+    await gps.getVehicles();
+    vi.mocked(base.getAllCurrentPositions).mockRejectedValue(new Error('offline'));
+    await expect(gps.getAllCurrentPositions()).rejects.toThrow('offline');
+    expect((await gps.getDeviceStatus())[0]?.lastPositionAt).toBeNull();
+  });
   it('conserva flota y ubicacion durante una caida sin renovar la fecha del GPS', async () => {
     const base = source(); const gps = withLastKnownGps(base, directory, 'account-one');
     await gps.getVehicles(); await gps.getAllCurrentPositions();

@@ -1,8 +1,8 @@
 # Pruebas e instalación del FMC130 en RBDC59
 
-El primer camión es **RBDC59** y la primera instalación está prevista para el **viernes 9 de octubre de 2026**, hora de Chile. La cadena de datos es FMC130 → SIM → 3DTracking → Fleet Control. El IMEI se completa cuando llegue el equipo.
+El primer camión es **RBDC59** y la primera instalación está prevista para el **viernes 9 de octubre de 2026**, hora de Chile. La cadena de datos es FMC130 → SIM → 3DTracking → Fleet Control. El IMEI del primer equipo ya está identificado en el registro privado de puesta en marcha y asociado a RBDC59.
 
-El software está preparado para leer el contrato oficial de 3DTracking y comprobar el camión por patente. La aceptación en terreno requiere recibir datos del equipo real. En la configuración local revisada el 7 de octubre faltan el usuario y la clave API de 3DTracking; el acceso público y la persistencia de flota en Supabase también están pendientes.
+Client API ya autentica y devuelve RBDC59, su IMEI y su última posición. La unidad quedó activa en el proveedor. La última muestra comprobada es del 7 de octubre; la aceptación en terreno requiere una muestra reciente, pruebas de ignición y un recorrido. El acceso público y la persistencia de flota en Supabase siguen pendientes; esta validación corresponde al servidor local.
 
 ## Preparación antes del viernes
 
@@ -10,9 +10,9 @@ El software está preparado para leer el contrato oficial de 3DTracking y compro
 |---|---|
 | Patente | RBDC59, confirmada |
 | Equipo | Teltonika FMC130 |
-| IMEI | Pendiente; registrar los 15 dígitos de la etiqueta |
-| Cuenta API | Configurar usuario y clave de 3DTracking con acceso a RBDC59 y al historial |
-| Unidad en 3DTracking | Crear o confirmar la unidad con nombre RBDC59 y el IMEI real |
+| IMEI | Identificado en API; cotejar los 15 dígitos con la etiqueta física |
+| Cuenta API | Client API configurada; acceso a catálogo, posición e historial comprobado |
+| Unidad en 3DTracking | RBDC59, activa y asociada al equipo confirmado |
 | Destino del hardware | Solicitar a 3DTracking el dominio/IP, puerto, transporte y codec de recepción |
 | SIM | Confirmar activación, datos móviles, operador y APN; registrar número e ICCID |
 | Configurador | Llevar un equipo Windows compatible, cable Micro USB de datos y el Configurator indicado para el firmware |
@@ -29,6 +29,7 @@ Usar [.env.fmc130.example](../.env.fmc130.example) como referencia y completar l
 ```dotenv
 GPS_PROVIDER=3dtracking
 TRIDTRACKING_BASE_URL=https://apiv2.3dtracking.net
+TRIDTRACKING_API_MODE=client
 TRIDTRACKING_USERNAME=<usuario API autorizado>
 TRIDTRACKING_PASSWORD=<clave API>
 GPS_LIVE_TRANSPORT=polling
@@ -58,6 +59,8 @@ En **Configuración → Integración GPS / 3DTracking**, pulsar **Probar 3DTrack
 ## Perfil propuesto para las pruebas del FMC130
 
 Estos valores son un punto de partida para el piloto y deben guardarse y comprobarse en el Configurator. No son un archivo binario listo para importar ni sustituyen el perfil de 3DTracking.
+
+La API no permite demostrar qué APN, firmware, destino GPRS o perfil de reposo tiene cargado físicamente el FMC130. Leer el perfil del equipo con el Configurator o contrastarlo con el instalador antes de dar esa configuración por confirmada. En un camión de 24 V, revisar especialmente la fuente de ignición: el rango de voltaje de fábrica 13,2–30 V puede mantenerse activo con el motor apagado. La prueba debe contrastar apagado, encendido y arranque con la señal instalada.
 
 | Parámetro | Valor propuesto para el piloto |
 |---|---|
@@ -115,6 +118,19 @@ Ejecutar `npm run gps:record` como proceso supervisado en el servidor. Guarda mu
 
 [Ejemplo de servicio systemd](../ops/fenice-gps-record.service.example): adaptar usuario, ruta del proyecto y binario Node antes de instalarlo. No está activado automáticamente. Un despliegue con disco efímero o funciones de corta duración necesita un grabador separado con volumen persistente.
 
+## Recepción de los ocho FMC130 adicionales
+
+El lote previsto suma nueve equipos. Las pruebas de software incluyen nueve unidades simultáneas, identidad local por IMEI, separación de sus posiciones e historiales y actualización del catálogo al incorporar las ocho nuevas. Son pruebas con datos ficticios; la cuenta real sigue teniendo un equipo.
+
+1. Registrar por equipo: patente, IMEI de la etiqueta, SIM/ICCID, firmware, instalador y fecha. Cada IMEI y UID de proveedor debe identificar una sola unidad; no reutilizar el registro de RBDC59.
+2. Asignar cada unidad a la cuenta accesible por el mismo usuario API y darle su patente como nombre. Confirmar su estado activo en 3DTracking.
+3. Aplicar el perfil aprobado tras el piloto, conservando los identificadores y la SIM propios de cada equipo. Exportar una copia de configuración por IMEI.
+4. Confirmar su aparición en Flota: el catálogo se renueva cada 60 segundos y la consulta de posiciones es conjunta para todos los equipos, con caché compartida de al menos 15 segundos.
+5. Ejecutar `npm run gps:check -- --plate <PATENTE> --imei <IMEI> --history` después del recorrido. Repetir los criterios de aceptación de esta guía para cada camión.
+6. Mantener el grabador supervisado y el volumen persistente. No considerar la posición guardada como una instalación validada si la consulta actual del proveedor está fallando.
+
+Los ocho equipos pendientes no se crean con IMEIs o patentes ficticios en la cuenta real. La preparación del software no sustituye el alta y las pruebas físicas de cada dispositivo.
+
 ## Diagnóstico rápido
 
 | Síntoma | Revisar |
@@ -129,6 +145,10 @@ Ejecutar `npm run gps:record` como proceso supervisado en el servidor. Guarda mu
 | Ignición desconocida | DIN1, fuente de ignición y mapeo del proveedor para FMC130 |
 
 ## Verificación del software
+
+Auditoría del 8 de octubre de 2026: **648 pruebas aprobadas**, TypeScript y ESLint sin errores y compilación de producción correcta. Se comprobaron nueve equipos simultáneos con datos de prueba, separación de posiciones e historial, altas nuevas, rechazo de UID/IMEI duplicados, reemplazo de GPS y bloqueo de aceptación cuando se usan datos guardados tras una consulta fallida. La cuenta real autentica y devuelve un equipo, cuyo IMEI coincide con RBDC59; todavía no hay muestra reciente ni recorrido de la última hora para aceptar la instalación.
+
+El grabador local quedó iniciado durante la preparación. Para operación permanente debe ejecutarse como servicio supervisado en el servidor definitivo; el ejemplo systemd no instala ni habilita ese servicio por sí solo.
 
 Verificación del 7 de octubre de 2026: **531 pruebas aprobadas**, TypeScript y ESLint sin errores, compilación de producción correcta y comprobación local de API y pantalla. El diagnóstico sin credenciales devuelve pendiente; un IMEI inválido devuelve 400 y un origen ajeno devuelve 403. Las pruebas incluyen el formato oficial desde autenticación hasta posición e historial archivado. Los datos de esas pruebas son ficticios y no se envían al proveedor.
 

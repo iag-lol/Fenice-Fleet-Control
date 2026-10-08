@@ -56,9 +56,15 @@ export function withLastKnownGps(base: GpsProvider, directory: string, namespace
     catch { warnings.set('storage', 'No fue posible guardar la última ubicación para el siguiente reinicio.'); }
   };
 
-  const rememberedPositions = () => saved.positions.filter((p) =>
-    saved.vehicles === null || saved.vehicles.some((v) => v.id === p.vehicleId),
-  );
+  const rememberedPositions = () => saved.positions.filter((p) => {
+    if (saved.vehicles === null) return true;
+    const vehicle = saved.vehicles.find((v) => v.id === p.vehicleId);
+    if (!vehicle) return false;
+    if (!vehicle.device) return true;
+    const deviceIds = [vehicle.device.id, vehicle.device.imei,
+      base.info.id === '3dtracking' ? undefined : vehicle.device.externalId];
+    return deviceIds.includes(p.deviceId);
+  });
   const remember = async (positions: Position[]) => {
     const latest = new Map(saved.positions.map((p) => [p.vehicleId, p]));
     for (const p of positions.filter(usable)) {

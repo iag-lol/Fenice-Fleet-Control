@@ -144,7 +144,8 @@ export function mapUnitToVehicle(unit: TridUnit): Vehicle | null {
     // La planta la asigna el ERP de Fenice. Sin el, se deja en blanco en vez
     // de inventar una pertenencia que nadie ha declarado.
     depotName: '',
-    active: (unit.Status ?? '').trim().toLowerCase() !== 'inactive',
+    active: !['inactive', 'inactivo', 'suspended', 'suspendido', 'deleted', 'eliminado']
+      .includes((unit.Status ?? '').trim().toLowerCase()),
   };
 }
 

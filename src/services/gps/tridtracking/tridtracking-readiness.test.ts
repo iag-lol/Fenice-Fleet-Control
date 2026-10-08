@@ -9,6 +9,11 @@ const position = { vehicleId: vehicle.id, valid: true, lat: -33.45, lng: -70.66,
 const input = { plate: 'RBDC59', maxAgeSeconds: 180 };
 function gps(): GpsProvider { return { info: { id: '3dtracking', simulated: false, label: 'CONECTADO', preferredTransport: 'polling' }, healthCheck: vi.fn(async () => ({ ok: true, message: 'OK', latencyMs: 5 })), getVehicles: vi.fn(async () => [vehicle]), getAllCurrentPositions: vi.fn(async () => [position]), getPositionHistory: vi.fn(async () => [position]) } as unknown as GpsProvider; }
 describe('diagnostico de instalacion RBDC59', () => {
+  it('no aprueba la instalación con una posición reciente guardada si la consulta actual falló', async () => {
+    const provider = gps(); provider.getAvailabilityWarnings = () => ['Datos recuperados de cache'];
+    expect(await checkTridReadiness(provider, input, now)).toMatchObject({ ok: false, deviceFound: true, hasPosition: true,
+      message: expect.stringContaining('No se puede confirmar') });
+  });
   it('distingue el limite de consultas de un problema de permisos o credenciales', async () => {
     const provider = gps();
     vi.mocked(provider.getAllCurrentPositions).mockRejectedValue(new TridTrackingError('3DTracking limitó la frecuencia de consultas. Reintentaremos en 60 s.', 'RATE_LIMIT', 429));
