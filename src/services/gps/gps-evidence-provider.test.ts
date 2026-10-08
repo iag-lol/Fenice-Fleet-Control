@@ -23,3 +23,12 @@ it('no corrobora repeticiones, separa equipos y conserva coordenada y fecha orig
   positions = [p(600, 'v1', 'd2')];
   expect((await provider.getAllCurrentPositions())[0]!.motionEvidence).toBe('uncertain');
 });
+
+it('corrobora lecturas rápidas tras veinte segundos, sin convertir repeticiones en evidencia', async () => {
+  let current = p(0);
+  const provider = withGpsEvidence({ info: { simulated: false }, getAllCurrentPositions: async () => [current] } as GpsProvider);
+  for (let second = 0; second <= 25; second += 5) {
+    current = p(second);
+    expect((await provider.getAllCurrentPositions())[0]!.motionEvidence).toBe(second < 20 ? 'uncertain' : 'stationary');
+  }
+});

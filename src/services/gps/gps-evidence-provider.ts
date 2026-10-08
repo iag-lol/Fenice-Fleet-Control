@@ -11,7 +11,7 @@ export function withGpsEvidence(base: GpsProvider): GpsProvider {
     let window = windows.get(position.vehicleId) ?? [];
     const last = window.at(-1);
     if (last && (last.deviceId !== position.deviceId || Date.parse(position.timestamp) < Date.parse(last.timestamp))) window = [];
-    window = [...window.filter((p) => p.timestamp !== position.timestamp), position].slice(-3);
+    window = [...window.filter((p) => p.timestamp !== position.timestamp), position].slice(-128);
     windows.set(position.vehicleId, window);
     const timeline = buildEvidenceTimeline(window);
     return { ...position, motionEvidence: timeline?.samples.at(-1)?.timestamp === position.timestamp ? (timeline.evidence?.at(-1) ?? 'uncertain') : 'uncertain' };

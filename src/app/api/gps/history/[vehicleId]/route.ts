@@ -34,11 +34,13 @@ export async function GET(
     return apiError('El limite de muestras debe estar entre 2 y 20000.', 400);
   }
   return handleApi(async () => {
+    const effectiveTo = Math.min(toMs, Date.now());
+    if (fromMs >= effectiveTo) return [];
     const positions = await getGpsProvider().getPositionHistory({
       vehicleId: asVehicleId(vehicleId), from: new Date(fromMs).toISOString(),
-      to: new Date(toMs).toISOString(), limit,
+      to: new Date(effectiveTo).toISOString(), limit,
     });
     return normalizeGpsHistory(positions.filter((p) => p.vehicleId === vehicleId &&
-      Date.parse(p.timestamp) >= fromMs && Date.parse(p.timestamp) <= toMs), limit);
+      Date.parse(p.timestamp) >= fromMs && Date.parse(p.timestamp) <= effectiveTo), limit);
   }, 'el historial GPS del vehiculo');
 }

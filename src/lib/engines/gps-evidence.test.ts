@@ -38,6 +38,18 @@ describe('evidencia de movimiento GPS', () => {
     expect(timeline.roadMatchedMeters).toBe(0);
     expect(frameAt(timeline, base + 7000).position.lat).toBe(timeline.samples[0]!.lat);
   });
+  it('acepta marcha sostenida con reportes cada cinco segundos sin exigir tres puntos separados artificialmente', () => {
+    const timeline = buildEvidenceTimeline(Array.from({ length: 7 }, (_, i) => p(i * 5, i * 50, 36)))!;
+    expect(timeline.evidence).toEqual(Array(6).fill('moving'));
+    expect(timeline.totalMeters).toBeCloseTo(300, 0);
+    expect(analyzeJourney(timeline, 60).movingSeconds).toBe(30);
+  });
+  it('reconoce reposo con reportes de un segundo y mantiene la deriva fuera de la distancia', () => {
+    const timeline = buildEvidenceTimeline(Array.from({ length: 181 }, (_, i) => p(i, i % 3)))!;
+    expect(timeline.evidence?.every((s) => s === 'stationary')).toBe(true);
+    expect(findStops(timeline)[0]!.durationSeconds).toBe(180);
+    expect(timeline.totalMeters).toBe(0);
+  });
   it('el reposo consistente no suma deriva y un salto posterior no prolonga una detención', () => {
     const timeline = buildEvidenceTimeline([p(0, 0), p(30, 3), p(60, -2), p(90, 1), p(120, 2), p(150, 3), p(180, 0), p(210, 200)])!;
     expect(timeline.totalMeters).toBe(0);
