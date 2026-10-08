@@ -24,6 +24,16 @@ function provider() {
   return new TridTrackingGpsProvider();
 }
 describe('FMC130 en 3DTracking para RBDC59', () => {
+  it('comparte la instantanea durante la cadencia de refresco aunque varias pantallas consulten', async () => {
+    vi.useFakeTimers(); const gps = provider();
+    await gps.getAllCurrentPositions();
+    await vi.advanceTimersByTimeAsync(10000);
+    await Promise.all([gps.getAllCurrentPositions(), gps.getDeviceStatus()]);
+    expect(mocks.call.mock.calls.filter(([path]) => path.endsWith('latestpositionslist'))).toHaveLength(1);
+    await vi.advanceTimersByTimeAsync(5000);
+    await Promise.all([gps.getAllCurrentPositions(), gps.getDeviceStatus()]);
+    expect(mocks.call.mock.calls.filter(([path]) => path.endsWith('latestpositionslist'))).toHaveLength(2);
+  });
   it('comparte la lectura de posiciones entre mapa y salud GPS', async () => {
     const gps = provider();
     const [positions, devices, vehicles] = await Promise.all([gps.getAllCurrentPositions(), gps.getDeviceStatus(), gps.getVehicles()]);

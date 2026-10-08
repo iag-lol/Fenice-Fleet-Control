@@ -1,0 +1,16 @@
+{
+  "configured": true,
+  "apiMode": "partner",
+  "units": 1,
+  "positions": 0,
+  "rbdc59Found": false,
+  "historyReadable": true,
+  "historySamples": 0,
+  "checkedDate": "2026-10-08",
+  "scope": "servidor local",
+  "apiBaseUrl": "https://partnerapi.3dtracking.net",
+  "authenticationOk": true,
+  "rateLimitObserved": true,
+  "rateLimitBackoffImplemented": true,
+  "installationReady": false
+}

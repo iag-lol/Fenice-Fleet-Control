@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import { apiError, guardApi, NO_STORE_HEADERS } from '@/lib/api';
 import { getServerEnv } from '@/config/env';
 import { getGpsProvider } from '@/services/registry';
+import { TridTrackingError } from '@/services/gps/tridtracking/tridtracking-client';
 
 export const dynamic = 'force-dynamic';
 
@@ -51,7 +52,12 @@ export async function GET(): Promise<Response> {
       const flota = fleetResult.status === 'fulfilled' ? fleetResult.value : [];
       const actuales = positionsResult.status === 'fulfilled' ? positionsResult.value : [];
       if (fleetResult.status === 'rejected' || positionsResult.status === 'rejected') {
-        telemetryError = 'La sesion responde, pero fallo la consulta de flota o posiciones. Revisa permisos y disponibilidad del proveedor.';
+        const limited = [fleetResult, positionsResult].find((result) =>
+          result.status === 'rejected' && result.reason instanceof TridTrackingError && result.reason.status === 429,
+        );
+        telemetryError = limited?.status === 'rejected'
+          ? limited.reason.message
+          : 'La sesion responde, pero fallo la consulta de flota o posiciones. Revisa permisos y disponibilidad del proveedor.';
       }
       vehiculos = flota.length;
       posiciones = actuales.length;

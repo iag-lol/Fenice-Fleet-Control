@@ -102,12 +102,16 @@ Referencia: [documentación oficial v1](https://apiv2.3dtracking.net/docs/v1/).
 
 ## Comprobación de accesos del 8 de octubre de 2026
 
-Se revisaron las pestañas abiertas de Partner API y Movilmaster. El portal web mantiene una sesión de la cuenta y muestra 0 unidades. Se comprobó el nombre de usuario registrado en la administración y se revisaron los permisos visibles sin guardar cambios.
+La autenticación visible en Partner API devuelve `ok`. El conector de Fleet Control confirmó el acceso con esas credenciales y las consultas de unidades, posiciones e historial. La configuración local usa `https://partnerapi.3dtracking.net`, modo `partner` y el `CompanyUid` de la cuenta Zyteron SpA, con demostración desactivada. Las credenciales permanecen en `.env.local`, fuera de Git; el servidor local se reinició para aplicar la configuración.
 
-La autenticación fue rechazada con `50017` / `User Could not be Authenticated` en Partner API y Client API. El acceso web no permite confirmar una contraseña ni garantiza habilitación de API. MCI Telecom debe confirmar el usuario de integración, su habilitación y la URL de API aplicable. Hasta obtener una autenticación válida, las credenciales no se activan en el sondeo automático de Fleet Control. La información privada de puesta en marcha permanece fuera de Git y se retiraron los valores del formulario de Swagger.
+El catálogo devuelve una unidad identificada por su IMEI, sin posición actual ni muestras de recorrido de la última hora. Todavía no aparece una unidad con nombre RBDC59. La prueba por patente confirma que el servidor responde y que falta identificar el equipo del primer camión y comprobar su transmisión real. No se asigna el único equipo a RBDC59 sin confirmar que corresponde a ese vehículo.
 
-El software ya distingue ambos contratos, contempla `IMEI` del catálogo Partner, selección de empresa y paginación sin `IsCurrent`. Las pruebas del contrato Partner y las de Client siguen separadas. Para comprobar transmisión real debe registrarse el FMC130 con su IMEI y asociarse a RBDC59: la cuenta actualmente no tiene unidades que permitan verificar posición o recorrido. [Comprobación del portal](assets/movilmaster-cuenta-sin-unidades.jpg).
+La cuenta permite consultar unidades, posiciones e historial, pero rechaza los listados administrativos de empresas y trackers por permisos. Estos listados no son necesarios para leer la telemetría del equipo ya registrado. El `CompanyUid` se obtuvo del catálogo de unidades, sin ampliar permisos.
 
-Texto para solicitar al proveedor:
+El proveedor también devolvió `Too Many Requests. Rate limit reached.` durante la comprobación web. El cliente HTTP respeta `Retry-After` cuando está presente y, en su ausencia, pausa las peticiones durante 60 segundos, aumentando la espera hasta 5 minutos si el límite se repite. La pausa también evita nuevas autenticaciones y consultas de diagnóstico. Las posiciones se comparten entre pantallas durante al menos 15 segundos y conservan la fecha original del GPS.
 
-> Necesitamos integrar la cuenta con nuestra plataforma GPS. El portal Movilmaster está accesible, pero la autenticación de API responde código 50017. Favor confirmar la URL de API correcta, habilitar el acceso de integración y proporcionar el usuario correspondiente. También necesitamos el UID de la empresa y los datos de recepción del FMC130 (host, puerto y configuración SIM/APN). No enviar claves de API por canales públicos.
+Pendientes para la instalación:
+
+- Confirmar qué IMEI se instalará en RBDC59 y asociar la unidad a esa patente.
+- Si el proveedor entrega el FMC130 configurado, comprobar recepción de una posición reciente e ignición y realizar un recorrido de prueba. Si lo configuramos nosotros, obtener host, puerto, protocolo y APN de la SIM.
+- Configurar las mismas variables privadas en el entorno de despliegue cuando esté disponible. Esta validación corresponde al servidor local.

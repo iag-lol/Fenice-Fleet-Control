@@ -164,7 +164,10 @@ export class TridTrackingGpsProvider implements GpsProvider {
               'Formato de posiciones incompatible en 3DTracking.',
             );
           const units = data ?? [];
-          this.latest = { data: units, expiresAt: Date.now() + 2_000 };
+          this.latest = {
+            data: units,
+            expiresAt: Date.now() + Math.max(15_000, getOperationalSettings().gps.refreshIntervalMs),
+          };
           return units;
         })();
       try {

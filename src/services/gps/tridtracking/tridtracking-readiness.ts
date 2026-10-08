@@ -1,6 +1,7 @@
 import 'server-only';
 import type { GpsProvider } from '@/services/gps/gps-provider';
 import type { Position } from '@/types/core';
+import { TridTrackingError } from './tridtracking-client';
 
 export interface TridReadinessReport {
   ok: boolean;
@@ -32,7 +33,9 @@ export async function checkTridReadiness(gps: GpsProvider, input: {
   report.serverReachable = true;
   let vehicles, positions: Position[];
   try { [vehicles, positions] = await Promise.all([gps.getVehicles(), gps.getAllCurrentPositions()]); }
-  catch { return { ...report, message: '3DTracking responde, pero no fue posible consultar flota y posiciones. Revisa los permisos de la cuenta.' }; }
+  catch (error) { return { ...report, message: error instanceof TridTrackingError && error.status === 429
+    ? error.message
+    : '3DTracking responde, pero no fue posible consultar flota y posiciones. Revisa los permisos de la cuenta.' }; }
   const matches = vehicles.filter((v) => normalizePlate(v.plate) === report.plate);
   if (!matches.length) return { ...report, message: `No aparece ${report.plate} en la cuenta. Da de alta el FMC130 en 3DTracking con esa patente y confirma el acceso de la cuenta API.` };
   if (matches.length !== 1) return { ...report, message: `Hay varias unidades con la patente ${report.plate}. Corrige el registro antes de probar.` };

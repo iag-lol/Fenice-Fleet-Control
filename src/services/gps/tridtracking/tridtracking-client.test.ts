@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { redactUrl, TridTrackingClient, TridTrackingError } from './tridtracking-client';
 
@@ -6,6 +6,7 @@ const AUTH_OK = {
   Status: { Result: 'Success', ErrorCode: null, Message: null },
   Result: { UserIdGuid: 'user-guid-1', SessionId: 'sesion-1' },
 };
+afterEach(() => vi.useRealTimers());
 
 function respuesta(body: unknown, ok = true, status = 200): Response {
   return {
@@ -195,4 +196,51 @@ it('usa la autenticación documentada de Partner API con nombres de parámetros 
   expect(url.searchParams.get('Password')).toBe('test-password');
   expect(options).toMatchObject({ method: 'POST', redirect: 'error' });
   expect(redactUrl(url.toString())).not.toContain('test-password');
+});
+
+describe('limites de frecuencia del proveedor', () => {
+  it('respeta Retry-After HTTP y pausa tambien el diagnostico sin autenticar otra vez', async () => {
+    vi.useFakeTimers();
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(respuesta(AUTH_OK))
+      .mockResolvedValueOnce(new Response(null, { status: 429, headers: { 'Retry-After': '120' } }))
+      .mockResolvedValueOnce(respuesta({ Status: { Result: 'ok' }, Result: [] }));
+    const c = cliente(fetchMock as typeof fetch);
+    await expect(c.call('/positions')).rejects.toMatchObject({ status: 429, retryAfterMs: 120000 });
+    await expect(c.call('/units')).rejects.toMatchObject({ status: 429 });
+    expect((await c.healthCheck()).ok).toBe(false);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    await vi.advanceTimersByTimeAsync(120000);
+    expect(await c.call('/positions')).toEqual([]);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+  });
+  it('reconoce el limite dentro de HTTP 200 y aumenta la pausa si se repite', async () => {
+    vi.useFakeTimers();
+    const fetchMock = vi.fn(async (url: string) => String(url).includes('userauthenticate')
+      ? respuesta(AUTH_OK)
+      : respuesta({ Status: { Result: 'error', ErrorCode: 'LIMIT', Message: 'Too Many Requests. Rate limit reached.' }, Result: null }));
+    const c = cliente(fetchMock as unknown as typeof fetch);
+    await expect(c.call('/positions')).rejects.toMatchObject({ status: 429, retryAfterMs: 60000 });
+    await Promise.allSettled([c.call('/positions'), c.call('/units')]);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    await vi.advanceTimersByTimeAsync(60000);
+    await expect(c.call('/positions')).rejects.toMatchObject({ status: 429, retryAfterMs: 120000 });
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+  });
+  it('interpreta Retry-After como fecha HTTP sin adelantar el siguiente intento', async () => {
+    vi.useFakeTimers(); vi.setSystemTime(new Date('2026-10-08T12:00:00Z'));
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(respuesta(AUTH_OK))
+      .mockResolvedValueOnce(new Response(null, { status: 429, headers: { 'Retry-After': 'Thu, 08 Oct 2026 12:02:00 GMT' } }));
+    await expect(cliente(fetchMock as typeof fetch).call('/positions')).rejects.toMatchObject({ retryAfterMs: 120000 });
+  });
+  it('pausa autenticaciones cuando el limite se aplica al inicio de sesion', async () => {
+    vi.useFakeTimers();
+    const fetchMock = vi.fn(async () => new Response(null, { status: 429 }));
+    const c = cliente(fetchMock as typeof fetch);
+    expect((await c.healthCheck()).ok).toBe(false);
+    expect((await c.healthCheck()).message).toContain('frecuencia');
+    await expect(c.call('/positions')).rejects.toMatchObject({ status: 429 });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
 });

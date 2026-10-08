@@ -17,6 +17,7 @@ export class TridTrackingError extends Error {
     message: string,
     readonly code: string | null = null,
     readonly status: number | null = null,
+    readonly retryAfterMs: number | null = null,
   ) {
     super(message);
     this.name = 'TridTrackingError';
@@ -56,11 +57,23 @@ export function redactUrl(url: string): string {
 export class TridTrackingClient {
   private session: Session | null = null;
   private authenticating: Promise<Session> | null = null;
+  private rateLimitedUntil = 0;
+  private rateLimitFailures = 0;
 
   private readonly baseUrl: string;
   private readonly timeoutMs: number;
   private readonly sessionTtlMs: number;
   private readonly doFetch: typeof fetch;
+
+  private checkRateLimit(): void {
+    const remaining = this.rateLimitedUntil - Date.now();
+    if (remaining > 0) {
+      throw new TridTrackingError(
+        `3DTracking limitó la frecuencia de consultas. Reintentaremos en ${Math.ceil(remaining / 1000)} s.`,
+        'RATE_LIMIT', 429, remaining,
+      );
+    }
+  }
 
   private safeMessage(message: string): string {
     let safe = redactUrl(message);
@@ -90,6 +103,7 @@ export class TridTrackingClient {
     params: Record<string, string>,
     method: 'GET' | 'POST' = 'GET',
   ): Promise<T> {
+    this.checkRateLimit();
     const url = new URL(`${this.baseUrl}${path}`);
     for (const [key, value] of Object.entries(params)) {
       if (value !== '') url.searchParams.set(key, value);
@@ -108,15 +122,36 @@ export class TridTrackingClient {
       });
 
       if (!response.ok) {
+        const retryAfter = response.headers?.get('retry-after');
+        const retryAfterMs = retryAfter
+          ? /^\d+(?:\.\d+)?$/.test(retryAfter.trim())
+            ? Number(retryAfter) * 1000
+            : Date.parse(retryAfter) - Date.now()
+          : null;
         throw new TridTrackingError(
           `3DTracking respondio ${response.status} en ${path}.`,
           null,
           response.status,
+          retryAfterMs !== null && Number.isFinite(retryAfterMs) && retryAfterMs > 0
+            ? retryAfterMs : null,
         );
       }
 
-      return (await response.json()) as T;
+      const payload = (await response.json()) as T;
+      const status = (payload as TridResponse<unknown> | null)?.Status;
+      if (status && (/too many requests|rate.?limit|throttl/i.test(status.Message ?? '') || status.ErrorCode === '429')) {
+        throw new TridTrackingError(this.safeMessage(status.Message || 'Rate limit reached.'), status.ErrorCode ?? 'RATE_LIMIT', 429);
+      }
+      // Una respuesta en vuelo anterior al límite no cancela la pausa.
+      if (Date.now() >= this.rateLimitedUntil) this.rateLimitFailures = 0;
+      return payload;
     } catch (error) {
+      if (error instanceof TridTrackingError && error.status === 429) {
+        const delay = error.retryAfterMs ?? Math.min(300_000, 60_000 * 2 ** this.rateLimitFailures);
+        this.rateLimitFailures = Math.min(4, this.rateLimitFailures + 1);
+        this.rateLimitedUntil = Math.max(this.rateLimitedUntil, Date.now() + delay);
+        this.checkRateLimit();
+      }
       if (error instanceof TridTrackingError) throw error;
       if (error instanceof Error && error.name === 'AbortError') {
         throw new TridTrackingError(
@@ -260,6 +295,7 @@ export class TridTrackingClient {
   }> {
     const inicio = Date.now();
     try {
+      this.checkRateLimit();
       await this.getSession();
       return {
         ok: true,
