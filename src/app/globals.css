@@ -170,6 +170,10 @@ body {
     padding-bottom: 5rem !important;
   }
 
+  .app-shell-main[data-layout='map'] {
+    padding-bottom: calc(54px + env(safe-area-inset-bottom, 0px)) !important;
+  }
+
   .app-sheet-root {
     top: 0 !important;
     pointer-events: auto !important;

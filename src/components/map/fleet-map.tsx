@@ -37,6 +37,7 @@ import { OPERATION_CENTER } from '@/config/map-viewport';
 import { pointOnRoad, roadPathForTransition } from '@/lib/gps-motion';
 import { buildEvidenceTimeline } from '@/lib/engines/gps-evidence';
 import { startMapAnimationLoop } from '@/lib/map-animation-loop';
+import { centerFollowedVehicle } from '@/lib/map-follow-camera';
 import { isUsableCoordinate } from '@/lib/geo';
 import { geofencePoints } from '@/lib/map-navigation';
 import { useMapStore, type MapLayerId } from '@/stores/map-store';
@@ -325,7 +326,12 @@ export function FleetMap({
     };
 
     map.on('load', onLoad);
-    const resizeObserver = new ResizeObserver(() => map.resize());
+    const recenterFollowed = (): void => {
+      if (isolated || map.isZooming()) return;
+      const id = useMapStore.getState().followingVehicleId;
+      if (id) centerFollowedVehicle(map, animatedRef.current.get(id)?.current);
+    };
+    const resizeObserver = new ResizeObserver(() => { map.resize(); recenterFollowed(); });
     resizeObserver.observe(containerRef.current);
 
     /**
@@ -334,7 +340,7 @@ export function FleetMap({
      * Mientras se sigue a un camion la camara se reposiciona en cada cuadro.
      * Sin esto, arrastrar el mapa era imposible: la vista volvia sola al
      * vehiculo y parecia que el mapa estaba bloqueado. En cuanto el operador
-     * mueve, hace zoom o gira, se suelta el seguimiento y el mapa vuelve a
+     * arrastra o gira, se suelta el seguimiento y el mapa vuelve a
      * ser suyo.
      *
      * Se comprueba `originalEvent` para distinguir el gesto humano de los
@@ -348,7 +354,8 @@ export function FleetMap({
     };
 
     map.on('dragstart', soltarSeguimiento);
-    map.on('zoomstart', soltarSeguimiento);
+    // El zoom ajusta la escala sin cancelar el vehículo seguido.
+    map.on('zoomend', recenterFollowed);
     map.on('rotatestart', soltarSeguimiento);
 
     map.on('error', (event) => {
@@ -654,15 +661,11 @@ export function FleetMap({
       updateVehicles(map, features);
 
       // Camara adherida al vehiculo seguido.
-      if (following) {
+      if (following && useMapStore.getState().followingVehicleId === following && !map.isZooming()) {
         const state = animatedRef.current.get(following);
         if (state && (!followedCenter || followedCenter.lat !== state.current.lat || followedCenter.lng !== state.current.lng)) {
           followedCenter = { lat: state.current.lat, lng: state.current.lng };
-          map.easeTo({
-            center: [state.current.lng, state.current.lat],
-            duration: 220,
-            essential: true,
-          });
+          centerFollowedVehicle(map, state.current);
 
         }
       }
@@ -850,6 +853,13 @@ export function FleetMap({
     // Fit once per visit, preserving manual camera changes during the stay.
     const focusVehicleId = fitFullRoute ? null : following ?? (isolated && presentDeliveries.length === 1 ? presentDeliveries[0]!.vehicleId : null);
     const focusedPosition = focusVehicleId ? vehicles.find((v) => v.vehicleId === focusVehicleId)?.position : null;
+    if (following) {
+      // Seguir significa centrar el camión, no encuadrar el cliente o la ruta.
+      if (focusedPosition?.valid && centerFollowedVehicle(map, focusedPosition, map.getZoom() < 14 ? 15.5 : undefined)) {
+        autoFitDone.current = true;
+      }
+      return;
+    }
     if (focusedPosition && focusedPosition.valid && isUsableCoordinate(focusedPosition)) {
       const bounds = new maplibregl.LngLatBounds([focusedPosition.lng, focusedPosition.lat], [focusedPosition.lng, focusedPosition.lat]);
       const delivery = presentDeliveries.find((entry) => entry.vehicleId === focusVehicleId);
@@ -962,6 +972,7 @@ export function FleetMap({
     }
     map.flyTo({
       center: [focus.center.lng, focus.center.lat],
+      padding: 0,
       zoom: focus.zoom ?? 15,
       duration: 900,
       essential: true,

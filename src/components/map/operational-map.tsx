@@ -96,7 +96,7 @@ const WorkOrderPanel = dynamic(() => import('@/components/map/work-order-panel')
  * como panel lateral en escritorio y hoja inferior en movil.
  */
 export interface OperationalMapProps {
-  /** Space occupied by the mobile operation button and bottom navigation. */
+  /** Space occupied by the bottom navigation. */
   mobileDockClearance?: number;
   /**
    * En escritorio la torre aloja cualquier ficha en su columna derecha.
@@ -110,7 +110,9 @@ export const OperationalMap = memo(function OperationalMap({
   mobileDockClearance = 0,
 }: OperationalMapProps) {
   const [filtersOpen, setFiltersOpen] = useState(false);
-  const [detailOpen, setDetailOpen] = useState(false);
+  const detailOpen = useMapStore((s) => s.detailOpen);
+  const setDetailOpen = useMapStore((s) => s.setDetailOpen);
+  const closeDetail = useMapStore((s) => s.closeDetail);
   const [fullscreen, setFullscreen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -395,19 +397,7 @@ export const OperationalMap = memo(function OperationalMap({
     return snapshot.geofences.find((g) => g.active && containsPoint(g, selectedEvent.position)) ?? null;
   }, [selectedEvent, snapshot]);
 
-  const openDetail = useCallback(() => setDetailOpen(true), []);
-
-  // Abrir la ficha automaticamente al seleccionar desde el mapa.
-  useEffect(() => {
-    if (currentSelection) {
-      setDetailOpen(true);
-    }
-  }, [currentSelection]);
-
-  const closeDetail = useCallback(() => {
-    setDetailOpen(false);
-    selection(null);
-  }, [selection]);
+  const openDetail = useCallback(() => setDetailOpen(true), [setDetailOpen]);
 
   const fitOperation = useCallback(() => {
     const store = useMapStore.getState();
@@ -570,7 +560,7 @@ export const OperationalMap = memo(function OperationalMap({
               selectedEvent ? 224 : following ? 150 : scopeActivo || currentSelection?.type === 'vehicle' || highlightedRouteId || scopedCommuneCode ? 144 : 32)
               : selectedEvent || following || scopeActivo || currentSelection?.type === 'vehicle' || highlightedRouteId || scopedCommuneCode ? 80 : 32}
             activeDeliveries={snapshot.activeDeliveries}
-            autoFitKey={following ? `${following}:${snapshot.activeDeliveries?.find((delivery) => delivery.vehicleId === following)?.workOrderId ?? 'recorrido'}` : undefined}
+            autoFitKey={following ?? undefined}
             className="absolute inset-0 sm:top-[72px] lg:top-[80px]"
             autoFit
             vehicles={selectedVehicleId || layers.camiones ? vehiculosEnfocados : []}
@@ -751,10 +741,10 @@ export const OperationalMap = memo(function OperationalMap({
       </Sheet>
 
       {/* --- Que se esta mirando --- */}
-      {scopeActivo ||
+      {!following && (scopeActivo ||
       currentSelection?.type === 'vehicle' ||
       highlightedRouteId ||
-      scopedCommuneCode ? (
+      scopedCommuneCode) ? (
         <div className="absolute bottom-24 left-2.5 z-20 sm:bottom-4">
           <FocusBanner
             vehiclePlate={
@@ -850,7 +840,7 @@ export const OperationalMap = memo(function OperationalMap({
 
       {/* --- Barra de seguimiento --- */}
       {following && followedVehicle ? (
-        <div className="pointer-events-auto safe-bottom absolute inset-x-2.5 bottom-[70px] z-20 flex items-center gap-3 rounded-lg border border-brand-500/40 bg-surface-900/97 px-3 py-2.5 shadow-panel backdrop-blur sm:inset-x-auto sm:bottom-4 sm:left-1/2 sm:w-[420px] sm:-translate-x-1/2">
+        <div className="pointer-events-auto absolute bottom-4 left-2.5 right-14 z-20 flex items-center gap-2 rounded-lg border border-brand-500/40 bg-surface-900/97 px-2.5 py-2 shadow-panel backdrop-blur sm:inset-x-auto sm:left-1/2 sm:w-[420px] sm:-translate-x-1/2">
           <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand-500/20 text-brand-700">
             <Navigation className="h-4 w-4" />
           </span>
@@ -858,9 +848,9 @@ export const OperationalMap = memo(function OperationalMap({
           <div className="min-w-0 flex-1">
             <p className="truncate text-[13px] font-medium text-ink">
               Siguiendo {followedVehicle.plate}
-              <span className="ml-2 text-2xs font-normal text-ink-faint">
+              {followedVehicle.fleetCode && followedVehicle.fleetCode !== followedVehicle.plate ? <span className="ml-2 text-2xs font-normal text-ink-faint">
                 {followedVehicle.fleetCode}
-              </span>
+              </span> : null}
             </p>
             <p className="numeric truncate text-2xs text-ink-faint">
               {followedVehicle.position

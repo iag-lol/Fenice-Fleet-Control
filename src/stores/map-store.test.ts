@@ -4,6 +4,37 @@ import { useMapStore } from '@/stores/map-store';
 beforeEach(() => useMapStore.setState(useMapStore.getInitialState(), true));
 
 describe('control tower navigation', () => {
+  it('mobile follow closes the sheet, keeps the vehicle isolated and clears previous camera framing', () => {
+    const state = useMapStore.getState();
+    state.select({ type: 'vehicle', id: 'truck' });
+    state.fitPoints([{ lat: -33, lng: -70 }, { lat: -34, lng: -71 }]);
+    state.followVehicle('truck', { showDetails: false });
+    const following = useMapStore.getState();
+    expect(following.detailOpen).toBe(false);
+    expect(following.selection).toEqual({ type: 'vehicle', id: 'truck' });
+    expect(following.followingVehicleId).toBe('truck');
+    expect(following.focus).toBeNull();
+    expect(following.layers.camiones && following.layers.rutas).toBe(true);
+  });
+  it('closing and reopening a followed vehicle sheet does not cancel follow', () => {
+    useMapStore.getState().followVehicle('truck');
+    useMapStore.getState().closeDetail();
+    expect(useMapStore.getState().followingVehicleId).toBe('truck');
+    expect(useMapStore.getState().selection?.id).toBe('truck');
+    expect(useMapStore.getState().detailOpen).toBe(false);
+    useMapStore.getState().select({ type: 'vehicle', id: 'truck' });
+    expect(useMapStore.getState().detailOpen).toBe(true);
+    expect(useMapStore.getState().followingVehicleId).toBe('truck');
+  });
+  it('operation navigation hides the sheet without stopping follow; another vehicle changes the focus', () => {
+    useMapStore.getState().followVehicle('truck');
+    useMapStore.getState().setMobileOperationsOpen(true);
+    expect(useMapStore.getState().detailOpen).toBe(false);
+    expect(useMapStore.getState().followingVehicleId).toBe('truck');
+    useMapStore.getState().select({ type: 'vehicle', id: 'other' });
+    expect(useMapStore.getState().mobileOperationsOpen).toBe(false);
+    expect(useMapStore.getState().followingVehicleId).toBeNull();
+  });
   it('starts with only fleet and geofences visible, and does not isolate on selection', () => {
     const state = useMapStore.getState();
     for (const layer of ['camiones', 'geocercas'] as const) expect(state.layers[layer]).toBe(true);

@@ -58,6 +58,7 @@ import {
 import { cn } from '@/lib/cn';
 import { VEHICLE_TYPE_LABEL } from '@/lib/fuel-domain';
 import { useMapStore } from '@/stores/map-store';
+import { useIsDesktop, useIsPortraitTablet } from '@/hooks/use-media-query';
 import type { VehicleDetail } from '@/types/views';
 
 /** Ficha completa del vehiculo, con mapa propio, recorrido e historial. */
@@ -66,6 +67,8 @@ export function VehicleDetailView({ vehicleId }: { vehicleId: string }) {
   const { positions } = useLiveFleet();
   const focusOn = useMapStore((s) => s.focusOn);
   const followVehicle = useMapStore((s) => s.followVehicle);
+  const isDesktop = useIsDesktop();
+  const isPortraitTablet = useIsPortraitTablet();
   // El mapa puede ocupar toda la altura util cuando el operador lo necesita.
   const [mapExpanded, setMapExpanded] = useState(false);
   const [gpsDialogOpen, setGpsDialogOpen] = useState(false);
@@ -157,9 +160,9 @@ export function VehicleDetailView({ vehicleId }: { vehicleId: string }) {
               variant="secondary"
               size="sm"
               icon={<Navigation className="h-3.5 w-3.5" />}
-              disabled={!position}
+              disabled={!position?.valid}
               onClick={() => {
-                followVehicle(vehicleId);
+                followVehicle(vehicleId, { showDetails: isDesktop && !isPortraitTablet });
                 router.push('/control');
               }}
             >

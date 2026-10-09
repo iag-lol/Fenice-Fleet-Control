@@ -51,6 +51,8 @@ export function ControlTowerView() {
   const { positions, payload: livePayload } = useLiveFleet();
   const select = useMapStore((s) => s.select);
   const currentSelection = useMapStore((s) => s.selection);
+  const detailOpen = useMapStore((s) => s.detailOpen);
+  const closeDetail = useMapStore((s) => s.closeDetail);
 
   const [panelWidth, setPanelWidth] = useState(DEFAULT_PANEL);
   // Igual que el sidebar: abierto por defecto, salvo en tablet, donde ya
@@ -58,7 +60,8 @@ export function ControlTowerView() {
   // abrian a la vez y no dejaban espacio real para el mapa ni sus controles.
   const [panelOpen, setPanelOpen] = useState(true);
   const [hasStoredPanelPreference, setHasStoredPanelPreference] = useState(false);
-  const [mobilePanelOpen, setMobilePanelOpen] = useState(false);
+  const mobilePanelOpen = useMapStore((s) => s.mobileOperationsOpen);
+  const setMobilePanelOpen = useMapStore((s) => s.setMobileOperationsOpen);
   const [hydrated, setHydrated] = useState(false);
   const draggingRef = useRef(false);
   const panelWidthRef = useRef(panelWidth);
@@ -108,13 +111,13 @@ export function ControlTowerView() {
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [usesMobileLayout, mobilePanelOpen]);
+  }, [usesMobileLayout, mobilePanelOpen, setMobilePanelOpen]);
 
   // Al elegir una entidad desde el inventario movil, vuelve al mapa para que
   // el encuadre y la ficha seleccionada sean visibles de inmediato.
   useEffect(() => {
     if (usesMobileLayout && currentSelection) setMobilePanelOpen(false);
-  }, [currentSelection, usesMobileLayout]);
+  }, [currentSelection, usesMobileLayout, setMobilePanelOpen]);
 
   const togglePanel = useCallback(() => {
     setPanelOpen((current) => {
@@ -138,7 +141,7 @@ export function ControlTowerView() {
         : undefined,
     [map.data, livePayload?.vehicles],
   );
-  const desktopSelection = usesMobileLayout ? null : currentSelection;
+  const desktopSelection = usesMobileLayout || !detailOpen ? null : currentSelection;
   const visiblePanelWidth = desktopSelection ? Math.max(panelWidth, 400) : panelWidth;
   const refreshAll = () => {
     void map.refetch();
@@ -220,7 +223,7 @@ export function ControlTowerView() {
   return (
     <div ref={containerRef} className="relative flex h-full w-full overflow-hidden">
       <div className="relative min-w-0 flex-1">
-        <OperationalMap detailExternal={Boolean(desktopSelection)} mobileDockClearance={usesMobileLayout ? hasOperationsPanel ? 132 : 80 : 0} />
+        <OperationalMap detailExternal={Boolean(desktopSelection)} mobileDockClearance={usesMobileLayout ? 80 : 0} />
 
         {/* Alternar el panel: en el mapa cada pixel horizontal cuenta. */}
         {!usesMobileLayout && hasOperationsPanel && !desktopSelection ? (
@@ -304,7 +307,7 @@ export function ControlTowerView() {
                   </h2>
                   <button
                     type="button"
-                    onClick={() => select(null)}
+                    onClick={closeDetail}
                     aria-label="Cerrar ficha de detalle"
                     title="Cerrar ficha"
                     className="flex h-8 w-8 items-center justify-center rounded-md text-ink-faint transition-colors hover:bg-surface-800 hover:text-ink"
@@ -336,27 +339,9 @@ export function ControlTowerView() {
         </>
       ) : null}
 
-      {/* En movil no queda ninguna hoja semivisible sobre el mapa. El centro
-          operacional se abre a pantalla completa desde un unico control. */}
-      {usesMobileLayout && hasOperationsPanel && !mobilePanelOpen ? (
-        <button
-          type="button"
-          onClick={() => setMobilePanelOpen(true)}
-          aria-label="Abrir centro operacional"
-          className="mobile-layout-flex absolute bottom-[calc(66px+env(safe-area-inset-bottom,0px))] left-1/2 z-30 flex min-h-11 -translate-x-1/2 items-center gap-2 rounded-full border border-white/20 bg-[#0d2430] px-4 text-xs font-semibold text-white shadow-panel transition-transform active:scale-[0.98] md:hidden"
-        >
-          <span className="flex h-7 w-7 items-center justify-center rounded-full bg-brand-400/20 text-brand-300">
-            <ListFilter className="h-4 w-4" />
-          </span>
-          Ver operación
-          <span className="rounded-full bg-white/10 px-1.5 py-0.5 text-[10px] text-slate-300">
-            {(snapshot?.vehicles.length ?? 0) + (snapshot?.pendingWorkOrders.length ?? 0)}
-          </span>
-        </button>
-      ) : null}
-
       {usesMobileLayout && hasOperationsPanel && mobilePanelOpen ? (
         <section
+          id="mobile-operations-panel"
           className="mobile-layout-flex fixed inset-0 z-[70] flex min-h-0 flex-col bg-surface-950 animate-fade-in md:hidden"
           role="dialog"
           aria-modal="true"

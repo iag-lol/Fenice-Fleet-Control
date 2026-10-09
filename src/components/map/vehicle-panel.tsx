@@ -27,6 +27,7 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { useState } from 'react';
+import { useIsDesktop, useIsPortraitTablet } from '@/hooks/use-media-query';
 
 import { DetailList, Section } from '@/components/common/detail-list';
 import { RouteProgress } from '@/components/common/progress';
@@ -94,6 +95,10 @@ export function VehiclePanel({ vehicleId }: { vehicleId: string }) {
   const focusOn = useMapStore((s) => s.focusOn);
   const followVehicle = useMapStore((s) => s.followVehicle);
   const following = useMapStore((s) => s.followingVehicleId);
+  const setDetailOpen = useMapStore((s) => s.setDetailOpen);
+  const isDesktop = useIsDesktop();
+  const isPortraitTablet = useIsPortraitTablet();
+  const usesMobileLayout = !isDesktop || isPortraitTablet;
   const highlightRoute = useMapStore((s) => s.highlightRoute);
   const [tab, setTab] = useState<PanelTab>('informacion');
   const [moreOpen, setMoreOpen] = useState(false);
@@ -189,8 +194,8 @@ export function VehiclePanel({ vehicleId }: { vehicleId: string }) {
             variant={isFollowing ? 'primary' : 'secondary'}
             size="sm"
             icon={<Navigation className="h-3.5 w-3.5" />}
-            onClick={() => followVehicle(isFollowing ? null : vehicleId)}
-            disabled={!position}
+            onClick={() => followVehicle(isFollowing ? null : vehicleId, { showDetails: !usesMobileLayout })}
+            disabled={!position?.valid}
           >
             {isFollowing ? 'Dejar de seguir' : 'Seguir vehículo'}
           </Button>
@@ -199,8 +204,12 @@ export function VehiclePanel({ vehicleId }: { vehicleId: string }) {
             variant="secondary"
             size="sm"
             icon={<Crosshair className="h-3.5 w-3.5" />}
-            onClick={() => position && focusOn({ lat: position.lat, lng: position.lng }, 15.5)}
-            disabled={!position}
+            onClick={() => {
+              if (!position?.valid) return;
+              focusOn({ lat: position.lat, lng: position.lng }, 15.5);
+              if (usesMobileLayout) setDetailOpen(false);
+            }}
+            disabled={!position?.valid}
           >
             Centrar en mapa
           </Button>
@@ -216,6 +225,7 @@ export function VehiclePanel({ vehicleId }: { vehicleId: string }) {
               const points = vehicleOverviewPoints(routes, position?.valid ? position : null);
               highlightRoute(trajectory?.route.routeId ?? route?.routeId ?? null);
               if (points.length) useMapStore.getState().fitPoints(points);
+              if (usesMobileLayout) setDetailOpen(false);
             }}
             disabled={!route && !trajectory && !position?.valid}
           >

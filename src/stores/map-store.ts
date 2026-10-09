@@ -88,9 +88,14 @@ interface MapState {
 
   selection: MapSelection;
   select: (selection: MapSelection) => void;
+  detailOpen: boolean;
+  setDetailOpen: (open: boolean) => void;
+  closeDetail: () => void;
+  mobileOperationsOpen: boolean;
+  setMobileOperationsOpen: (open: boolean) => void;
 
   followingVehicleId: string | null;
-  followVehicle: (vehicleId: string | null) => void;
+  followVehicle: (vehicleId: string | null, options?: { showDetails?: boolean }) => void;
 
   focus: MapFocusRequest | null;
   focusOn: (center: LatLng, zoom?: number) => void;
@@ -210,20 +215,39 @@ export const useMapStore = create<MapState>((set, get) => ({
 
     return {
       selection,
-      followingVehicleId: null,
+      detailOpen: selection !== null,
+      mobileOperationsOpen: false,
+      followingVehicleId: selection?.type === 'vehicle' && selection.id === state.followingVehicleId
+        ? state.followingVehicleId : null,
       inspectedCommuneCode: null,
       highlightedRouteId: selection?.type === 'route' ? selection.id : null,
       layers: selection ? { ...state.layers, ...layerUpdates } : state.layers,
     };
   }),
 
+  detailOpen: false,
+  setDetailOpen: (open) => set({ detailOpen: open }),
+  closeDetail: () => set((state) => ({
+    detailOpen: false,
+    // Cerrar una ficha no equivale a cancelar el seguimiento.
+    selection: state.followingVehicleId ? state.selection : null,
+    highlightedRouteId: state.followingVehicleId ? state.highlightedRouteId : null,
+  })),
+  mobileOperationsOpen: false,
+  setMobileOperationsOpen: (open) => set({ mobileOperationsOpen: open, ...(open ? { detailOpen: false } : {}) }),
+
   followingVehicleId: null,
-  followVehicle: (vehicleId) =>
-    set({
+  followVehicle: (vehicleId, options) =>
+    set((state) => ({
       followingVehicleId: vehicleId,
-      // Seguir un vehiculo implica seleccionarlo: son la misma intencion.
+      // El enfoque del vehículo y la apertura de su ficha son independientes.
       selection: vehicleId ? { type: 'vehicle', id: vehicleId } : null,
-    }),
+      detailOpen: Boolean(vehicleId) && options?.showDetails !== false,
+      mobileOperationsOpen: false,
+      focus: null,
+      inspectedCommuneCode: null,
+      layers: vehicleId ? { ...state.layers, camiones: true, rutas: true } : state.layers,
+    })),
 
   focus: null,
   focusOn: (center, zoom) => {
@@ -246,7 +270,7 @@ export const useMapStore = create<MapState>((set, get) => ({
   showAll: () => set((state) => ({
     layers: { ...state.layers, camiones: true, clientes: true, rutas: true, geocercas: true, pedidos: true, alertas: true, comunas: true },
     isolate: false,
-    selection: null, followingVehicleId: null, highlightedRouteId: null,
+    selection: null, detailOpen: false, mobileOperationsOpen: false, followingVehicleId: null, highlightedRouteId: null,
     scopedCommuneCode: null, inspectedCommuneCode: null,
   })),
 
@@ -268,12 +292,14 @@ export const useMapStore = create<MapState>((set, get) => ({
       inspectedCommuneCode: code,
       // Y libera cualquier aislamiento previo, que competiria con este.
       selection: null,
+      detailOpen: false,
+      mobileOperationsOpen: false,
       followingVehicleId: null,
       highlightedRouteId: null,
     }),
 
   inspectedCommuneCode: null,
-  inspectCommune: (code) => set((state) => ({ inspectedCommuneCode: code, selection: null, followingVehicleId: null, layers: code ? { ...state.layers, comunas: true } : state.layers })),
+  inspectCommune: (code) => set((state) => ({ inspectedCommuneCode: code, selection: null, detailOpen: false, mobileOperationsOpen: false, followingVehicleId: null, layers: code ? { ...state.layers, comunas: true } : state.layers })),
 
   // El mapa aprobado sigue siendo el predeterminado: los otros modos se
   // eligen, nunca se imponen.

@@ -49,7 +49,7 @@ export function AppShell({ children, fullBleed }: AppShellProps) {
           className={cn(
             'app-shell-main min-w-0 flex-1',
             isFullBleed
-              ? 'relative overflow-hidden'
+              ? 'relative overflow-hidden pb-[calc(54px+env(safe-area-inset-bottom,0px))] md:pb-0'
               : 'overflow-y-auto px-3 pb-20 pt-3 sm:px-4 sm:pb-5 lg:px-5 lg:pt-4',
           )}
         >

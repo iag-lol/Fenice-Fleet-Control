@@ -2,13 +2,15 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutGrid, Menu, Radio, X } from 'lucide-react';
-import { useEffect } from 'react';
+import { LayoutGrid, ListFilter, Menu, Radio, X } from 'lucide-react';
+import { Fragment, useEffect } from 'react';
 
 import { BrandLockup } from '@/components/shell/brand';
 import { useMobileMenu } from '@/components/shell/mobile-menu-store';
 import { getMobilePrimary, getVisibleNavGroups, isActivePath } from '@/components/shell/navigation';
 import { cn } from '@/lib/cn';
+import { hasFeature } from '@/product/feature-access';
+import { useMapStore } from '@/stores/map-store';
 
 /**
  * Navegacion movil.
@@ -167,31 +169,57 @@ export function MobileTabBar() {
   const setOpen = useMobileMenu((s) => s.setOpen);
   const menuOpen = useMobileMenu((s) => s.open);
   const items = getMobilePrimary().slice(0, 3);
+  const operationOpen = useMapStore((s) => s.mobileOperationsOpen);
+  const setOperationOpen = useMapStore((s) => s.setMobileOperationsOpen);
+  const showOperation = pathname.startsWith('/control') && hasFeature('control-tower');
+
+  useEffect(() => {
+    setOperationOpen(false);
+  }, [pathname, setOperationOpen]);
 
   return (
     <nav
       className="mobile-layout-block safe-bottom fixed inset-x-0 bottom-0 z-40 border-t border-line bg-surface-900/95 backdrop-blur-sm md:hidden"
       aria-label="Accesos rapidos"
     >
-      <ul className="grid grid-cols-4">
+      <ul className={cn('grid', showOperation ? 'grid-cols-5' : 'grid-cols-4')}>
         {items.map((item) => {
           const active = isActivePath(pathname, item) && !menuOpen;
           const Icon = item.icon;
 
           return (
-            <li key={item.href}>
-              <Link
-                href={item.href}
-                aria-current={active ? 'page' : undefined}
-                className={cn(
-                  'flex min-h-[54px] flex-col items-center justify-center gap-1 px-1 py-1.5 transition-colors',
-                  active ? 'text-brand-700' : 'text-ink-faint active:text-ink',
-                )}
-              >
-                <Icon className="h-5 w-5" />
-                <span className="text-[10px] leading-none">{item.label.split(' ')[0]}</span>
-              </Link>
-            </li>
+            <Fragment key={item.href}>
+              <li>
+                <Link
+                  href={item.href}
+                  aria-current={active ? 'page' : undefined}
+                  className={cn(
+                    'flex min-h-[54px] flex-col items-center justify-center gap-1 px-1 py-1.5 transition-colors',
+                    active ? 'text-brand-700' : 'text-ink-faint active:text-ink',
+                  )}
+                >
+                  <Icon className="h-5 w-5" />
+                  <span className="text-[10px] leading-none">{item.label.split(' ')[0]}</span>
+                </Link>
+              </li>
+              {showOperation && item.href === '/control' ? (
+                <li className="flex min-h-[54px] items-center justify-center">
+                  <button
+                    type="button"
+                    aria-label={operationOpen ? 'Cerrar centro operacional' : 'Abrir centro operacional'}
+                    title="Centro operacional"
+                    aria-expanded={operationOpen}
+                    aria-controls="mobile-operations-panel"
+                    onClick={() => { setOpen(false); setOperationOpen(!operationOpen); }}
+                    className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-white/20 bg-[#0d2430] text-brand-300 shadow-float transition-transform active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2"
+                  >
+                    <span className="flex h-8 w-8 items-center justify-center rounded-full bg-brand-400/20">
+                      <ListFilter className="h-5 w-5" aria-hidden />
+                    </span>
+                  </button>
+                </li>
+              ) : null}
+            </Fragment>
           );
         })}
 
