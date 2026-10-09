@@ -80,3 +80,7 @@ El SQL deja preparada la base, pero estas tareas pertenecen a servicios o datos 
 ## Validación del paquete
 
 El SQL se ejecutó en PostgreSQL local mediante PGlite con la extensión `pgcrypto`. Se comprobó instalación nueva, segunda ejecución, conservación de filas y configuración, permisos, RLS, triggers, aceptación de 3DTracking y actualización de columnas/restricción antiguas. Los metadatos de Storage y los roles de Supabase se representaron en ese entorno de prueba. La operación remota de Storage y la comprobación en el proyecto real requieren la conexión indicada arriba.
+
+## Seguridad - 9 de octubre de 2026
+
+Aplicadas las migraciones `20261009071558_security_atomic_login_and_default_privileges.sql` y `20261009072730_security_login_ip_cast.sql`: bloqueo de login atómico, control de éxito contra la versión actual de la contraseña, funciones privadas y permisos por defecto restringidos. No hay SQL pendiente de estas correcciones. Ver [operación de seguridad](SEGURIDAD.md) para claves de cifrado y enlaces compartidos.

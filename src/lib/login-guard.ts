@@ -74,12 +74,12 @@ export async function isIpRateLimited(ip: string | null, now: Date = new Date())
 
     if (error) {
       console.error('[login-guard] no fue posible evaluar el limite por IP:', error.message);
-      return false;
+      return true;
     }
     return (count ?? 0) >= threshold;
   } catch (error) {
     console.error('[login-guard] no fue posible evaluar el limite por IP:', error);
-    return false;
+    return true;
   }
 }
 
@@ -102,7 +102,8 @@ export function applyFailedAttempt(
   now: Date = new Date(),
 ): UsuarioLockState {
   const env = getServerEnv();
-  const intentosFallidos = state.intentosFallidos + 1;
+  const expired = state.bloqueadoHasta && Date.parse(state.bloqueadoHasta) <= now.getTime();
+  const intentosFallidos = (expired ? 0 : state.intentosFallidos) + 1;
 
   const bloqueadoHasta =
     intentosFallidos >= env.LOGIN_MAX_ATTEMPTS

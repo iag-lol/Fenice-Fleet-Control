@@ -21,11 +21,10 @@ export async function GET(
     const detail = await loadVehicleDetail(asVehicleId(vehicleId));
     if (!detail) return apiError('Vehiculo no encontrado.', 404);
     return NextResponse.json(detail);
-  } catch (error) {
+  } catch {
     return apiError(
       'No fue posible obtener el detalle del vehiculo.',
       503,
-      error instanceof Error ? error.message : String(error),
     );
   }
 }
@@ -47,9 +46,9 @@ export async function DELETE(
     if (!(await deleteVehicleFromStore(id))) {
       return apiError('Vehiculo no encontrado.', 404);
     }
-  } catch (error) {
+  } catch {
     return apiError(
-      error instanceof Error ? error.message : 'No fue posible eliminar el vehiculo.',
+      'No fue posible eliminar el vehiculo.',
       409,
     );
   }

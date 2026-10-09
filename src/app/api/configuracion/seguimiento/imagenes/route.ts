@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { readBoundedBody } from '@/lib/request-body';
 import { apiError, assertSameOrigin, guardApi } from '@/lib/api';
 import {
   MAX_TRACKING_IMAGE_BYTES,
@@ -17,7 +18,10 @@ export async function POST(request: Request): Promise<Response> {
     MAX_TRACKING_IMAGE_BYTES + 16384
   )
     return apiError('La imagen debe pesar hasta 2 MB.', 413);
-  const form = await request.formData().catch(() => null);
+  const bytesBody = await readBoundedBody(request, MAX_TRACKING_IMAGE_BYTES + 16384);
+  if (!bytesBody) return apiError('La imagen debe pesar hasta 2 MB.', 413);
+  const bounded = new Request(request.url, { method: 'POST', headers: request.headers, body: bytesBody as BodyInit });
+  const form = await bounded.formData().catch(() => null);
   const file = form?.get('image');
   if (!(file instanceof File) || file.size > MAX_TRACKING_IMAGE_BYTES)
     return apiError('Selecciona una imagen de hasta 2 MB.', 400);

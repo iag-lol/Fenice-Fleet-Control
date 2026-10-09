@@ -123,7 +123,7 @@ export async function issueRouteToken(
       token_hash: hashToken(token),
       expira_at: expiresAt,
     });
-    if (error) console.error('[route-token] no fue posible registrar el enlace emitido:', error.message);
+    if (error) throw new Error('No fue posible registrar el enlace.');
   }
 
   return { token, routeId, expiresAt, path: `/conductor/ruta/${token}` };
@@ -138,9 +138,9 @@ async function isRevoked(token: string): Promise<boolean> {
       .maybeSingle<{ revocado_at: string | null }>();
     if (error) {
       console.error('[route-token] no fue posible verificar la revocacion:', error.message);
-      return false;
+      return true; // Fallo cerrado: sin ledger no se puede autorizar un enlace.
     }
-    return Boolean(data?.revocado_at);
+    return !data || Boolean(data.revocado_at);
   }
   return getRevokedMemory().has(token);
 }
@@ -158,6 +158,7 @@ export async function verifyRouteToken(
   options?: { now?: Date },
 ): Promise<RouteTokenVerification> {
   const now = options?.now ?? new Date();
+  if (token.length > 1024) return { valid: false, reason: 'formato_invalido' };
   const parts = token.split('.');
 
   if (parts.length !== 5) return { valid: false, reason: 'formato_invalido' };
@@ -202,7 +203,7 @@ export async function revokeRouteToken(token: string, reason?: string): Promise<
       .from(LEDGER_TABLE)
       .update({ revocado_at: new Date().toISOString(), revocado_motivo: reason ?? null })
       .eq('token_hash', hashToken(token));
-    if (error) console.error('[route-token] no fue posible revocar el enlace:', error.message);
+    if (error) throw new Error('No fue posible revocar el enlace.');
     return;
   }
   getRevokedMemory().add(token);

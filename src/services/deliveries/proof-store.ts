@@ -1,3 +1,4 @@
+import { protectSensitive, unprotectSensitive } from '@/lib/sensitive-data';
 import 'server-only';
 
 import { randomUUID } from 'node:crypto';
@@ -182,18 +183,21 @@ function buildProof(
 // Backend Supabase: fotos como bytea, no como texto base64
 // ---------------------------------------------------------------------------
 
-function dataUrlToBytea(dataUrl: string): { hex: string; mime: string } {
+function dataUrlToBytea(dataUrl: string, photoId: string): { hex: string; mime: string } {
   const match = /^data:(image\/(?:jpeg|png|webp));base64,(.+)$/.exec(dataUrl);
   if (!match) throw new Error('Formato de imagen invalido.');
   const [, mime, base64] = match as unknown as [string, string, string];
   // PostgREST espera (y devuelve) bytea como texto hexadecimal con prefijo
   // `\x`, que es el formato de salida por defecto de Postgres para bytea.
-  return { mime, hex: `\\x${Buffer.from(base64, 'base64').toString('hex')}` };
+  return { mime, hex: `\\x${Buffer.from(protectSensitive(base64, `proof-photo:${photoId}`), 'utf8').toString('hex')}` };
 }
 
-function byteaToDataUrl(hexValue: string, mime: string): string {
+function byteaToDataUrl(hexValue: string, mime: string, photoId: string): string {
   const hex = hexValue.startsWith('\\x') ? hexValue.slice(2) : hexValue;
-  return `data:${mime};base64,${Buffer.from(hex, 'hex').toString('base64')}`;
+  const bytes = Buffer.from(hex, 'hex');
+  const text = bytes.toString('utf8');
+  const base64 = text.startsWith('enc:v1:') ? unprotectSensitive(text, `proof-photo:${photoId}`) : bytes.toString('base64');
+  return `data:${mime};base64,${base64}`;
 }
 
 interface EvidenceRow {
@@ -234,7 +238,7 @@ async function rowsToProof(row: EvidenceRow): Promise<DeliveryProof> {
 
   const photos: ProofPhoto[] = ((photoRows as PhotoRow[]) ?? []).map((photo) => ({
     id: photo.id,
-    dataUrl: byteaToDataUrl(photo.imagen, photo.tipo_mime),
+    dataUrl: byteaToDataUrl(photo.imagen, photo.tipo_mime, photo.id),
     byteSize: photo.peso_bytes,
     width: photo.ancho,
     height: photo.alto,
@@ -249,9 +253,9 @@ async function rowsToProof(row: EvidenceRow): Promise<DeliveryProof> {
     vehicleId: row.vehiculo_id as DeliveryProof['vehicleId'],
     outcome: row.resultado,
     deliveredLiters: row.litros_entregados,
-    receiverName: row.receptor_nombre,
-    receiverDocument: row.receptor_documento,
-    comment: row.comentario,
+    receiverName: row.receptor_nombre === null ? null : unprotectSensitive(row.receptor_nombre, `proof:${row.orden_trabajo_id}:receptor_nombre`),
+    receiverDocument: row.receptor_documento === null ? null : unprotectSensitive(row.receptor_documento, `proof:${row.orden_trabajo_id}:receptor_documento`),
+    comment: row.comentario === null ? null : unprotectSensitive(row.comentario, `proof:${row.orden_trabajo_id}:comentario`),
     incidentReason: row.motivo_incidencia,
     photos,
     capturedPosition: row.posicion_capturada,
@@ -294,9 +298,9 @@ async function recordInSupabase(
       vehiculo_id: proof.vehicleId,
       resultado: proof.outcome,
       litros_entregados: proof.deliveredLiters,
-      receptor_nombre: proof.receiverName,
-      receptor_documento: proof.receiverDocument,
-      comentario: proof.comment,
+      receptor_nombre: proof.receiverName === null ? null : protectSensitive(proof.receiverName, `proof:${proof.workOrderId}:receptor_nombre`),
+      receptor_documento: proof.receiverDocument === null ? null : protectSensitive(proof.receiverDocument, `proof:${proof.workOrderId}:receptor_documento`),
+      comentario: proof.comment === null ? null : protectSensitive(proof.comment, `proof:${proof.workOrderId}:comentario`),
       motivo_incidencia: proof.incidentReason,
       posicion_capturada: proof.capturedPosition,
       precision_captura_metros: proof.capturedAccuracyMeters,
@@ -319,12 +323,12 @@ async function recordInSupabase(
         .maybeSingle<EvidenceRow>();
       if (raced) return { ok: true, proof: await rowsToProof(raced), duplicate: true };
     }
-    return { ok: false, error: `No fue posible registrar la evidencia: ${error?.message ?? 'sin respuesta'}` };
+    return { ok: false, error: 'No fue posible registrar la evidencia.' };
   }
 
   if (proof.photos.length > 0) {
     const photoRows = proof.photos.map((photo) => {
-      const { hex, mime } = dataUrlToBytea(photo.dataUrl);
+      const { hex, mime } = dataUrlToBytea(photo.dataUrl, photo.id);
       return {
         id: photo.id,
         evidencia_id: inserted.id,

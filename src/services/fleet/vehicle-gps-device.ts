@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { getServerEnv } from '@/config/env';
+import { isAuthorizedGpsServer } from '@/lib/gps-server-policy';
 import { getSupabaseClient, isSupabaseConfigured } from '@/lib/supabase/server-client';
 import { getVehicleByIdFromStore, listVehicles, setVehicleDeviceInMemory } from '@/services/fleet/vehicle-store';
 import { mapTraccarPosition } from '@/services/gps/traccar/traccar-mapper';
@@ -66,12 +67,10 @@ function resolveClient(serverUrl?: string | null): { client: TraccarClient; uses
   const defaults = defaultServerCredentials();
   const baseUrl = serverUrl?.trim() || defaults?.baseUrl;
   if (!baseUrl) return null;
-
-  // Un servidor distinto al configurado por variable de entorno no tiene
-  // credenciales propias en esta primera version: se prueba con las mismas
-  // (caso normal: todos los equipos comparten cuenta) y, si el servidor las
-  // rechaza o no hay ninguna configurada, el resultado de la prueba lo dice
-  // en vez de fallar en silencio.
+  // Una URL suministrada por un operador nunca recibe credenciales del
+  // servidor ni permite explorar servicios internos. Solo se usa el endpoint
+  // exacto que el administrador de infraestructura configuro en el entorno.
+  if (!isAuthorizedGpsServer(baseUrl, defaults?.baseUrl)) return null;
   const authHeader = defaults?.authHeader ?? null;
   return { client: new TraccarClient({ baseUrl, authHeader }), usesDefaultAuth: true };
 }
@@ -105,7 +104,7 @@ export async function testTraccarConnection(input: {
       deviceFound: false,
       hasPosition: false,
       message:
-        'No hay un servidor Traccar configurado. Indica uno, o configura TRACCAR_BASE_URL en el servidor.',
+        'Usa el servidor GPS autorizado en la configuracion del sistema.',
       failedStep: 'server',
     };
   }
@@ -325,7 +324,7 @@ export async function connectVehicleTraccarDevice(
       ok: false,
       error: duplicado
         ? `El identificador "${identifier}" ya esta asociado a otro vehiculo.`
-        : `No fue posible guardar el dispositivo: ${deviceError?.message ?? 'error desconocido'}.`,
+        : 'No fue posible guardar el dispositivo.',
       test,
     };
   }
@@ -336,7 +335,7 @@ export async function connectVehicleTraccarDevice(
     .eq('id', vehicleId);
 
   if (linkError) {
-    return { ok: false, error: `No fue posible asociar el dispositivo al vehiculo: ${linkError.message}`, test };
+    return { ok: false, error: 'No fue posible asociar el dispositivo al vehiculo.', test };
   }
 
   return {

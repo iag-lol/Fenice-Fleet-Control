@@ -1,9 +1,9 @@
+import { readJsonBody } from '@/lib/request-body';
 import { z } from 'zod';
 
 import { apiError, assertSameOrigin, getClientIp } from '@/lib/api';
 import { getServerEnv } from '@/config/env';
 import {
-  applyFailedAttempt,
   isIpRateLimited,
   isLocked,
   recordLoginAttempt,
@@ -54,7 +54,7 @@ export async function POST(request: Request): Promise<Response> {
     return apiError('El inicio de sesion no esta disponible: Supabase no esta configurado.', 503);
   }
 
-  const parsed = loginSchema.safeParse(await request.json().catch(() => null));
+  const parsed = loginSchema.safeParse(await readJsonBody(request));
   if (!parsed.success) {
     return apiError('Ingresa tu RUT y tu contrasena.', 400);
   }
@@ -114,26 +114,20 @@ export async function POST(request: Request): Promise<Response> {
 
   const validPassword = await verifyPassword(parsed.data.password, usuario.password_hash);
   if (!validPassword) {
-    const nextState = applyFailedAttempt({
-      intentosFallidos: usuario.intentos_fallidos,
-      bloqueadoHasta: usuario.bloqueado_hasta,
+    const policy = getServerEnv();
+    const { error: lockError } = await supabase.rpc('fenice_login_failure', {
+      p_user_id: usuario.id, p_max_attempts: policy.LOGIN_MAX_ATTEMPTS,
+      p_lock_minutes: policy.LOGIN_LOCKOUT_MINUTES,
     });
-    await supabase
-      .from('usuarios')
-      .update({ intentos_fallidos: nextState.intentosFallidos, bloqueado_hasta: nextState.bloqueadoHasta })
-      .eq('id', usuario.id);
+    if (lockError) return apiError('El inicio de sesion no esta disponible en este momento.', 503);
     return fail('credenciales_invalidas', 401);
   }
 
-  await supabase
-    .from('usuarios')
-    .update({
-      intentos_fallidos: 0,
-      bloqueado_hasta: null,
-      ultimo_login_at: new Date().toISOString(),
-      ultimo_login_ip: ip,
-    })
-    .eq('id', usuario.id);
+  const { data: authorized, error: successError } = await supabase.rpc('fenice_login_success', {
+    p_user_id: usuario.id, p_password_hash: usuario.password_hash, p_ip: ip,
+  });
+  if (successError) return apiError('El inicio de sesion no esta disponible en este momento.', 503);
+  if (!authorized) return fail('credenciales_invalidas', 401);
 
   await createSession(usuario.id, { ip, userAgent });
   await recordLoginAttempt({ rutIntentado, ip, userAgent }, { exitoso: true });

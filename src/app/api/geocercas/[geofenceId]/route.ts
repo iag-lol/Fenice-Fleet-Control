@@ -1,3 +1,4 @@
+import { readJsonBody } from '@/lib/request-body';
 import { NextResponse } from 'next/server';
 
 import { apiError, assertSameOrigin, getClientIp, guardApi } from '@/lib/api';
@@ -38,7 +39,7 @@ export async function PATCH(
   if (denied) return denied;
 
   const { geofenceId } = await params;
-  const body = await request.json().catch(() => null);
+  const body = await readJsonBody(request);
   const context = await getAuthContext();
   const ip = getClientIp(request);
 
@@ -48,8 +49,8 @@ export async function PATCH(
     let copy;
     try {
       copy = await duplicateGeofence(asGeofenceId(geofenceId));
-    } catch (error) {
-      return apiError(error instanceof Error ? error.message : 'No fue posible duplicar la geocerca.', 503);
+    } catch {
+      return apiError('No fue posible duplicar la geocerca.', 503);
     }
     if (!copy) return apiError('Geocerca no encontrada.', 404);
 
@@ -111,9 +112,9 @@ export async function DELETE(
 
   try {
     if (!(await deleteGeofence(id))) return apiError('Geocerca no encontrada.', 404);
-  } catch (error) {
+  } catch {
     return apiError(
-      error instanceof Error ? error.message : 'No fue posible eliminar la geocerca.',
+      'No fue posible eliminar la geocerca.',
       409,
     );
   }

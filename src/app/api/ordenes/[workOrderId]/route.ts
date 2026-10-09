@@ -4,6 +4,7 @@ import { getProof } from '@/services/deliveries/proof-store';
 import { getOperationsProvider } from '@/services/registry';
 import { asWorkOrderId } from '@/types/core';
 import { NextResponse } from 'next/server';
+import { issueTrackingToken } from '@/services/tracking/access-token';
 
 export const dynamic = 'force-dynamic';
 
@@ -40,7 +41,8 @@ export async function GET(
     // Basico no existe el portal del conductor y no hay nada que mostrar.
     const proof = canUseFeature('proof-of-delivery') ? await getProof(workOrder.id) : null;
 
-    return NextResponse.json({ workOrder, order, client, vehicle, driver, route, proof });
+    const trackingPath = `/seguimiento/${issueTrackingToken(workOrder.number)}`;
+    return NextResponse.json({ workOrder, order, client, vehicle, driver, route, proof, trackingPath });
   } catch (error) {
     return apiError(
       'No fue posible obtener la orden de trabajo.',

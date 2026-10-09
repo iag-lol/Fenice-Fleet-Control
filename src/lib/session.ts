@@ -27,7 +27,7 @@ import type { Role } from '@/lib/auth';
  * mismo codigo sirve para ambos sin duplicarlo.
  */
 
-export const SESSION_COOKIE_NAME = 'fenice_session';
+export const SESSION_COOKIE_NAME = process.env.NODE_ENV === 'production' ? '__Host-fenice_session' : 'fenice_session';
 
 export interface SessionUser {
   id: string;
@@ -81,6 +81,7 @@ function isKnownRole(value: string): value is Role {
  * cookie directamente de la peticion.
  */
 export async function resolveSessionByToken(token: string): Promise<SessionUser | null> {
+  if (!/^[A-Za-z0-9_-]{43}$/.test(token)) return null;
   if (!isSupabaseConfigured()) return null;
 
   const supabase = getSupabaseClient();
@@ -92,7 +93,8 @@ export async function resolveSessionByToken(token: string): Promise<SessionUser 
 
   if (error || !data) return null;
   if (data.revocada_at) return null;
-  if (new Date(data.expira_at).getTime() <= Date.now()) return null;
+  const expires = Date.parse(data.expira_at);
+  if (!Number.isFinite(expires) || expires <= Date.now()) return null;
 
   const usuario = Array.isArray(data.usuarios) ? data.usuarios[0] : data.usuarios;
   if (!usuario || !usuario.activo || !isKnownRole(usuario.rol)) return null;
@@ -147,6 +149,7 @@ export async function createSession(usuarioId: string, ctx: SessionRequestContex
   if (error) throw new Error(`No fue posible crear la sesion: ${error.message}`);
 
   const store = await cookies();
+  if (SESSION_COOKIE_NAME !== 'fenice_session') store.delete('fenice_session');
   store.set(SESSION_COOKIE_NAME, token, {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',

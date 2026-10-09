@@ -1,3 +1,4 @@
+import { readJsonBody } from '@/lib/request-body';
 import { z } from 'zod';
 
 import { apiError, guardApi } from '@/lib/api';
@@ -24,7 +25,7 @@ export async function POST(request: Request): Promise<Response> {
   const denied = await guardApi('geocercas.editar');
   if (denied) return denied;
 
-  const parsed = bodySchema.safeParse(await request.json().catch(() => null));
+  const parsed = bodySchema.safeParse(await readJsonBody(request));
   if (!parsed.success) {
     return apiError('Indica una direccion valida.', 400);
   }

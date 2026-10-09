@@ -1,3 +1,4 @@
+import { readJsonBody } from '@/lib/request-body';
 import { z } from 'zod';
 
 import { apiError, assertSameOrigin, guardApi, handleApi } from '@/lib/api';
@@ -34,7 +35,7 @@ export async function POST(request: Request): Promise<Response> {
     return apiError('El simulador solo esta disponible con GPS_PROVIDER=mock.', 409);
   }
 
-  const parsed = commandSchema.safeParse(await request.json().catch(() => null));
+  const parsed = commandSchema.safeParse(await readJsonBody(request));
   if (!parsed.success) {
     return apiError('Comando invalido. Se espera { "action": "pause" | "resume" }.', 400);
   }

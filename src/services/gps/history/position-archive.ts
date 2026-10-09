@@ -1,7 +1,8 @@
+import { protectSensitive, unprotectSensitive } from '@/lib/sensitive-data';
 import 'server-only';
 import { createHash } from 'node:crypto';
 import { appendFile, mkdir, readFile } from 'node:fs/promises';
-import { resolve } from 'node:path';
+import { basename, resolve } from 'node:path';
 import { addRoadMatches } from '@/services/gps/roads/road-matching';
 import { normalizeGpsHistory } from '@/lib/gps-history';
 import type { Position } from '@/types/core';
@@ -33,7 +34,7 @@ export class PositionArchive {
       if (groups.size === 0) return;
       await mkdir(this.directory, { recursive: true, mode: 0o700 });
       for (const [file, samples] of groups) {
-        await appendFile(file, '\n' + samples.map((p) => JSON.stringify(p)).join('\n') + '\n', { mode: 0o600 });
+        await appendFile(file, '\n' + samples.map((p) => protectSensitive(JSON.stringify(p), `gps-archive:${basename(file)}`)).join('\n') + '\n', { mode: 0o600 });
         for (const p of samples) this.latest.set(p.vehicleId, JSON.stringify(p));
       }
     });
@@ -51,7 +52,7 @@ export class PositionArchive {
       try {
         for (const line of (await readFile(file, 'utf8')).split('\n')) {
           try {
-            const p = JSON.parse(line) as Position;
+            const p = JSON.parse(unprotectSensitive(line, `gps-archive:${basename(file)}`)) as Position;
             const time = Date.parse(p.timestamp);
             if (p.vehicleId === query.vehicleId && time >= from && time <= to) positions.push(p);
           } catch { /* Tolera una ultima linea interrumpida por un reinicio. */ }

@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { clientIpFromHeaders } from '@/lib/client-ip';
 
 import {
   ForbiddenError,
@@ -21,7 +22,9 @@ export interface ApiErrorBody {
 }
 
 export function apiError(message: string, status: number, detail?: string): NextResponse<ApiErrorBody> {
-  return NextResponse.json({ error: message, ...(detail ? { detail } : {}) }, { status });
+  // Los detalles del servidor nunca forman parte del contrato publico.
+  void detail;
+  return NextResponse.json({ error: message }, { status, headers: NO_STORE_HEADERS });
 }
 
 /**
@@ -35,7 +38,7 @@ export async function handleApi<T>(
   context: string,
 ): Promise<NextResponse<T | ApiErrorBody>> {
   try {
-    return NextResponse.json(await fn());
+    return NextResponse.json(await fn(), { headers: NO_STORE_HEADERS });
   } catch (error) {
     const detail = error instanceof Error ? error.message : String(error);
     console.error(`[api] ${context}:`, detail);
@@ -72,44 +75,34 @@ export async function guardApi(permission?: Permission): Promise<Response | null
  * (Vercel u otro). El objeto `Request` estandar no expone la IP directamente.
  */
 export function getClientIp(request: Request): string | null {
-  const forwarded = request.headers.get('x-forwarded-for');
-  if (forwarded) return forwarded.split(',')[0]?.trim() ?? null;
-  return request.headers.get('x-real-ip');
+  return clientIpFromHeaders(request.headers);
 }
 
-/**
- * Verifica que una peticion que muta estado provenga del propio sitio.
- *
- * Es una capa adicional sobre la cookie de sesion `SameSite=Lax`: protege
- * ademas contra el caso de un subdominio o proxy donde `SameSite` por si solo
- * no basta. Compara el origen declarado por el navegador (`Origin`, y si no
- * viene, `Referer`) contra el HOSTNAME que el propio servidor recibio.
- *
- * Se compara contra la cabecera `Host` (o `X-Forwarded-Host` si el proxy la
- * fija, que es el estandar en Render, Railway, etc.), NUNCA contra
- * `request.url`: detras de un proxy inverso esa URL puede reflejar un puerto
- * o host interno distinto al dominio publico que uso el navegador, lo que
- * hacia fallar la comparacion SIEMPRE y bloqueaba toda escritura en
- * produccion. Tambien se ignora el puerto en ambos lados: el navegador omite
- * el 443 implicito en `Origin` pero algunos proxies si lo agregan a `Host`.
+/** Verifica el origen completo y Fetch Metadata. La lista de produccion
+ * proviene del entorno, nunca de X-Forwarded-Host suministrado en la solicitud.
+ * Clientes de servidor sin Origin siguen necesitando una credencial valida.
  */
 export function assertSameOrigin(request: Request): Response | null {
+  const fetchSite = request.headers.get('sec-fetch-site');
+  if (fetchSite && fetchSite !== 'same-origin' && fetchSite !== 'none') {
+    return apiError('Solicitud rechazada: origen no confiable.', 403);
+  }
   const origin = request.headers.get('origin') ?? request.headers.get('referer');
   // Clientes sin navegador (curl, integraciones de servidor) no envian
   // `Origin`: se dejan pasar, la autenticacion por sesion ya los cubre.
   if (!origin) return null;
 
-  const forwardedHost = request.headers.get('x-forwarded-host');
-  const host = forwardedHost ?? request.headers.get('host');
+  const host = request.headers.get('host');
   // Sin `Host` no hay con que comparar: no se bloquea por una cabecera que
   // deberia existir siempre en HTTP/1.1+, para no convertir un caso raro en
   // una funcionalidad rota.
-  if (!host) return null;
+  if (!host && !process.env.APP_ALLOWED_ORIGINS) return apiError('Solicitud rechazada: origen no confiable.', 403);
 
   try {
-    const originHostname = new URL(origin).hostname;
-    const requestHostname = host.split(':')[0];
-    if (originHostname !== requestHostname) {
+    const supplied = new URL(origin).origin;
+    const allowed = process.env.APP_ALLOWED_ORIGINS?.split(',').map((value) => new URL(value.trim()).origin)
+      ?? [new URL(request.url).origin];
+    if (!allowed.includes(supplied)) {
       return apiError('Solicitud rechazada: origen no confiable.', 403);
     }
     return null;

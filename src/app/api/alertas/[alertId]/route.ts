@@ -1,3 +1,4 @@
+import { readJsonBody } from '@/lib/request-body';
 import { z } from 'zod';
 
 import { apiError, assertSameOrigin, getClientIp, guardApi } from '@/lib/api';
@@ -30,7 +31,7 @@ export async function PATCH(
   const denied = await guardApi('alertas.resolver');
   if (denied) return denied;
 
-  const parsed = patchSchema.safeParse(await request.json().catch(() => null));
+  const parsed = patchSchema.safeParse(await readJsonBody(request));
   if (!parsed.success) {
     return apiError('Estado invalido. Valores permitidos: nueva, revisada, resuelta.', 400);
   }

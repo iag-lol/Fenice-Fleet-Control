@@ -32,7 +32,7 @@ export const maxDuration = 60;
  * endpoint.
  */
 export async function GET(request: Request): Promise<Response> {
-  const denied = await guardApi();
+  const denied = await guardApi('flota.ver');
   if (denied) return denied;
 
   const provider = getGpsProvider();
@@ -57,6 +57,8 @@ export async function GET(request: Request): Promise<Response> {
         if (closed || publishing) return;
         publishing = true;
         try {
+          // Revocaciones y caducidad tambien cortan conexiones ya abiertas.
+          if (await guardApi('flota.ver')) { cleanup(); return; }
           const { positions, vehicles, availabilityWarnings } = await loadFleetTelemetry();
 
           // El proveedor "unavailable" nunca lanza: sus metodos resuelven
@@ -87,10 +89,9 @@ export async function GET(request: Request): Promise<Response> {
           };
 
           send('positions', payload);
-        } catch (error) {
+        } catch {
           send('gps-error', {
             message: 'Conexion GPS temporalmente no disponible.',
-            detail: error instanceof Error ? error.message : String(error),
             at: new Date().toISOString(),
           });
         } finally {

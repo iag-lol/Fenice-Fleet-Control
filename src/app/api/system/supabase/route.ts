@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 
-import { NO_STORE_HEADERS } from '@/lib/api';
+import { guardApi, NO_STORE_HEADERS } from '@/lib/api';
 import { getServerEnv } from '@/config/env';
 import { getSupabaseClient, isSupabaseConfigured } from '@/lib/supabase/server-client';
 
@@ -36,15 +36,11 @@ function decodeLegacyKeyRole(key: string): string | null {
 /**
  * Diagnostico de la conexion a Supabase.
  *
- * Deliberadamente PUBLICO (sin `guardApi`): es lo primero que hay que revisar
- * cuando el login no funciona, y en ese momento el login mismo (que si exige
- * sesion) todavia no sirve para nada — pedirle sesion a este endpoint seria
- * un candado sin llave. No expone `SUPABASE_URL` ni la clave completa: solo
- * si estan presentes, que rol declara la clave (cuando se puede saber), si
- * la conexion funciona, y el mensaje de error de Supabase cuando no (ninguno
- * de estos filtra secretos, igual que `/api/system/gps`).
+ * Diagnostico reservado a administradores autenticados.
  */
 export async function GET(): Promise<Response> {
+  const denied = await guardApi('configuracion.editar');
+  if (denied) return denied;
   const env = getServerEnv();
   const configured = isSupabaseConfigured();
 

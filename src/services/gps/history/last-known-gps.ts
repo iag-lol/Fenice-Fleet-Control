@@ -1,8 +1,9 @@
+import { protectSensitive, unprotectSensitive } from '@/lib/sensitive-data';
 import 'server-only';
 
 import { createHash, randomUUID } from 'node:crypto';
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
-import { resolve } from 'node:path';
+import { basename, resolve } from 'node:path';
 import { evaluateConnectionState } from '@/lib/engines/gps-health';
 import { isUsableCoordinate } from '@/lib/geo';
 import { acquireGpsCacheLock } from './cache-lock';
@@ -30,7 +31,7 @@ export function withLastKnownGps(base: GpsProvider, directory: string, namespace
 
   const load = () => loaded ??= (async () => {
     try {
-      const data = JSON.parse(await readFile(filename, 'utf8')) as SavedFleet;
+      const data = JSON.parse(unprotectSensitive(await readFile(filename, 'utf8'), `gps-cache:${basename(filename)}`)) as SavedFleet;
       if (data.version !== 1 || !Array.isArray(data.positions) ||
         (data.vehicles !== null && !Array.isArray(data.vehicles))) return;
       saved = {
@@ -44,7 +45,7 @@ export function withLastKnownGps(base: GpsProvider, directory: string, namespace
 
   const mergeDiskPositions = async () => {
     try {
-      const disk = JSON.parse(await readFile(filename, 'utf8')) as SavedFleet;
+      const disk = JSON.parse(unprotectSensitive(await readFile(filename, 'utf8'), `gps-cache:${basename(filename)}`)) as SavedFleet;
       if (disk.version !== 1 || !Array.isArray(disk.positions)) return;
       const latest = new Map(disk.positions.filter(usable).map((p) => [p.vehicleId, p]));
       for (const p of saved.positions) {
@@ -66,7 +67,7 @@ export function withLastKnownGps(base: GpsProvider, directory: string, namespace
         await mergeDiskPositions();
         const payload = JSON.stringify(saved);
         const temporary = `${filename}.${randomUUID()}.tmp`;
-        await writeFile(temporary, payload, { mode: 0o600 });
+        await writeFile(temporary, protectSensitive(payload, `gps-cache:${basename(filename)}`), { mode: 0o600 });
         await rename(temporary, filename);
         serialized = payload;
       } finally { await release(); }

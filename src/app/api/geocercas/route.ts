@@ -1,3 +1,4 @@
+import { readJsonBody } from '@/lib/request-body';
 import { NextResponse } from 'next/server';
 
 import { apiError, assertSameOrigin, getClientIp, guardApi, handleApi } from '@/lib/api';
@@ -32,7 +33,7 @@ export async function POST(request: Request): Promise<Response> {
   const denied = await guardApi('geocercas.editar');
   if (denied) return denied;
 
-  const parsed = geofenceInputSchema.safeParse(await request.json().catch(() => null));
+  const parsed = geofenceInputSchema.safeParse(await readJsonBody(request));
 
   if (!parsed.success) {
     return NextResponse.json(
@@ -47,13 +48,13 @@ export async function POST(request: Request): Promise<Response> {
   let created;
   try {
     created = await createGeofence(parsed.data);
-  } catch (error) {
+  } catch {
     // El detalle (ej. una politica de Row Level Security bloqueando el
     // insert) viaja en el mensaje de error: quien crea geocercas ya tiene el
     // permiso `geocercas.editar`, y ese detalle tecnico es lo que permite
     // diagnosticar una configuracion de Supabase incorrecta sin mirar logs
     // del servidor.
-    return apiError(error instanceof Error ? error.message : 'No fue posible guardar la geocerca.', 503);
+    return apiError('No fue posible guardar la geocerca.', 503);
   }
 
   const context = await getAuthContext();

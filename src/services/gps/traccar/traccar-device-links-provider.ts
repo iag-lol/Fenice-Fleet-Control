@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { normalizeGpsHistory } from '@/lib/gps-history';
+import { isAuthorizedGpsServer } from '@/lib/gps-server-policy';
 import { evaluateConnectionState } from '@/lib/engines/gps-health';
 import { getOperationalSettings } from '@/services/settings/settings-store';
 import { getServerEnv } from '@/config/env';
@@ -60,6 +61,7 @@ async function resolveLinkedGroups(): Promise<LinkedGroup[]> {
 
     const serverUrl = device.serverUrl || env.TRACCAR_BASE_URL;
     if (!serverUrl) continue;
+    if (!isAuthorizedGpsServer(serverUrl, env.TRACCAR_BASE_URL)) continue;
 
     const link: DeviceVehicleLink = {
       traccarDeviceId,
@@ -74,9 +76,7 @@ async function resolveLinkedGroups(): Promise<LinkedGroup[]> {
 
   return [...byServer.entries()].map(([serverUrl, links]) => ({
     serverUrl,
-    // Servidores distintos al configurado comparten igual las mismas
-    // credenciales (ver `vehicle-gps-device.ts`): es la limitacion aceptada
-    // de esta primera version, documentada ahi mismo.
+    // Solo el endpoint autorizado recibe las credenciales de la cuenta.
     client: new TraccarClient({ baseUrl: serverUrl, authHeader: defaultAuth }),
     links,
   }));

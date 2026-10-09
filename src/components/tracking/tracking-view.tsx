@@ -244,8 +244,8 @@ export function TrackingView({
       <Input
         id="tracking-reference"
         value={reference}
-        onChange={(event) => setReference(event.target.value.toUpperCase())}
-        placeholder="Número de pedido o de OT"
+        onChange={(event) => setReference(event.target.value)}
+        placeholder="Código seguro de seguimiento"
         autoComplete="off"
         spellCheck={false}
         className="min-w-0 flex-1"

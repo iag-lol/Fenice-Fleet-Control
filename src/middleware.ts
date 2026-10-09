@@ -4,6 +4,8 @@ import { getServerEnv } from '@/config/env';
 import { getBlockedRoutes } from '@/product/feature-access';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { resolveSessionByToken, SESSION_COOKIE_NAME } from '@/lib/session';
+import { clientIpFromHeaders } from '@/lib/client-ip';
+import { buildContentSecurityPolicy } from '@/lib/security-policy';
 
 /**
  * Control de acceso por plan a nivel de ruta.
@@ -51,9 +53,7 @@ function isSensitivePublicPath(pathname: string): boolean {
  * ese modulo importa de `@/lib/auth`, que no es seguro de traer al bundle de
  * Edge del middleware (es donde vivia el bug historico de `node:crypto`). */
 function clientIp(request: NextRequest): string {
-  const forwarded = request.headers.get('x-forwarded-for');
-  if (forwarded) return forwarded.split(',')[0]?.trim() || 'desconocida';
-  return request.headers.get('x-real-ip') ?? 'desconocida';
+  return clientIpFromHeaders(request.headers) ?? 'desconocida';
 }
 
 const RATE_LIMIT_WINDOW_MS = 60_000;
@@ -72,6 +72,26 @@ function tooManyRequests(retryAfterSeconds: number): NextResponse {
 export async function middleware(request: NextRequest): Promise<NextResponse> {
   const { pathname } = request.nextUrl;
   const isApi = pathname.startsWith('/api/');
+  const nonce = btoa(crypto.randomUUID());
+  const policy = buildContentSecurityPolicy(nonce, process.env.NODE_ENV !== 'production');
+  const requestHeaders = new Headers(request.headers);
+  requestHeaders.set('x-nonce', nonce);
+  requestHeaders.set('Content-Security-Policy', policy);
+  const secure = (response: NextResponse) => {
+    response.headers.set('Content-Security-Policy', policy);
+    response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate');
+    response.headers.set('Referrer-Policy', 'no-referrer');
+    return response;
+  };
+  // Archivos de configuracion y control de versiones nunca son paginas.
+  if (/\/(?:\.env(?:\.[^/]*)?|\.git|\.fenice)(?:\/|$)/i.test(pathname)) {
+    return secure(new NextResponse(null, { status: 404 }));
+  }
+  const declaredBytes = Number(request.headers.get('content-length'));
+  const maxBytes = pathname.startsWith('/api/conductor/') ? 6 * 1024 * 1024 : 3 * 1024 * 1024;
+  if (isApi && Number.isFinite(declaredBytes) && declaredBytes > maxBytes) {
+    return secure(NextResponse.json({ error: 'Solicitud demasiado grande.' }, { status: 413 }));
+  }
 
   // Limite de tasa: aplica a paginas y a la API por igual, ANTES de
   // cualquier otra comprobacion. Es deliberadamente lo primero que corre el
@@ -80,12 +100,12 @@ export async function middleware(request: NextRequest): Promise<NextResponse> {
   const sensitive = isSensitivePublicPath(pathname);
   const limit = sensitive ? SENSITIVE_RATE_LIMIT : GENERAL_RATE_LIMIT;
   const rate = checkRateLimit(`${sensitive ? 'sens' : 'gen'}:${ip}`, limit, RATE_LIMIT_WINDOW_MS);
-  if (!rate.allowed) return tooManyRequests(rate.retryAfterSeconds);
+  if (!rate.allowed) return secure(tooManyRequests(rate.retryAfterSeconds));
 
   // La API gestiona su propia autenticacion y autorizacion por endpoint
   // (`guardApi()`), no por ruta: lo unico que le corresponde a este
   // middleware para `/api/**` es el limite de tasa de arriba.
-  if (isApi) return NextResponse.next();
+  if (isApi) return secure(NextResponse.next({ request: { headers: requestHeaders } }));
 
   const blocked = BLOCKED.some(
     (route) => pathname === route || pathname.startsWith(`${route}/`),
@@ -95,7 +115,7 @@ export async function middleware(request: NextRequest): Promise<NextResponse> {
     // Se reescribe a una ruta inexistente para que Next sirva su pagina de
     // "no encontrado" con el estado correcto, sin revelar que la pantalla
     // existe pero esta restringida.
-    return NextResponse.rewrite(new URL('/404', request.url), { status: 404 });
+    return secure(NextResponse.rewrite(new URL('/404', request.url), { status: 404, request: { headers: requestHeaders } }));
   }
 
   const env = getServerEnv();
@@ -106,11 +126,11 @@ export async function middleware(request: NextRequest): Promise<NextResponse> {
     if (!session) {
       const loginUrl = new URL('/login', request.url);
       loginUrl.searchParams.set('next', pathname);
-      return NextResponse.redirect(loginUrl);
+      return secure(NextResponse.redirect(loginUrl));
     }
   }
 
-  return NextResponse.next();
+  return secure(NextResponse.next({ request: { headers: requestHeaders } }));
 }
 
 export const config = {

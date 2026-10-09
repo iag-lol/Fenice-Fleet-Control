@@ -1,3 +1,4 @@
+import { readJsonBody } from '@/lib/request-body';
 import { NextResponse } from 'next/server';
 
 import { apiError, assertSameOrigin, NO_STORE_HEADERS } from '@/lib/api';
@@ -45,7 +46,7 @@ export async function POST(
   const stop = findOwnStop(result.session, decodeURIComponent(workOrderId) as WorkOrderId);
   if (!stop) return apiError('Esta parada no pertenece a tu ruta.', 404);
 
-  const parsed = deliveryProofInputSchema.safeParse(await request.json().catch(() => null));
+  const parsed = deliveryProofInputSchema.safeParse(await readJsonBody(request, 6 * 1024 * 1024));
   if (!parsed.success) {
     return NextResponse.json(
       {

@@ -1,3 +1,4 @@
+import { readJsonBody } from '@/lib/request-body';
 import { NextResponse } from 'next/server';
 import { apiError, assertSameOrigin, guardApi } from '@/lib/api';
 import { trackingContentSchema } from '@/config/tracking-content';
@@ -27,7 +28,7 @@ export async function PUT(request: Request): Promise<Response> {
   const denied = await guardApi('configuracion.editar');
   if (denied) return denied;
   const parsed = trackingContentSchema.safeParse(
-    await request.json().catch(() => null),
+    await readJsonBody(request),
   );
   if (!parsed.success)
     return apiError(

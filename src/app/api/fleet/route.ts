@@ -1,3 +1,4 @@
+import { readJsonBody } from '@/lib/request-body';
 import { NextResponse } from 'next/server';
 
 import { assertSameOrigin, getClientIp, guardApi, handleApi } from '@/lib/api';
@@ -23,7 +24,7 @@ export async function POST(request: Request): Promise<Response> {
   const denied = await guardApi('flota.editar');
   if (denied) return denied;
 
-  const parsed = vehicleInputSchema.safeParse(await request.json().catch(() => null));
+  const parsed = vehicleInputSchema.safeParse(await readJsonBody(request));
   if (!parsed.success) {
     return NextResponse.json(
       {

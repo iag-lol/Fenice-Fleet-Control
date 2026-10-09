@@ -3,6 +3,9 @@ import type { Metadata, Viewport } from 'next';
 import { AppProviders } from '@/components/providers';
 import './globals.css';
 
+// Cada documento necesita un nonce CSP propio; nunca prerenderizar su HTML.
+export const dynamic = 'force-dynamic';
+
 export const metadata: Metadata = {
   title: {
     default: 'Fenice Fleet Control',

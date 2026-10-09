@@ -15,10 +15,12 @@ import bcrypt from 'bcryptjs';
 const COST_FACTOR = 12;
 
 export async function hashPassword(plain: string): Promise<string> {
+  if (Buffer.byteLength(plain, 'utf8') > 72) throw new Error('La contrasena supera el limite seguro de 72 bytes.');
   return bcrypt.hash(plain, COST_FACTOR);
 }
 
 export async function verifyPassword(plain: string, hash: string): Promise<boolean> {
+  if (Buffer.byteLength(plain, 'utf8') > 72) return false;
   return bcrypt.compare(plain, hash);
 }
 
@@ -44,6 +46,7 @@ export function getDecoyHash(): Promise<string> {
 /** Requisitos minimos de una contrasena nueva (alta de usuario, no login). */
 export function validatePasswordStrength(password: string): string[] {
   const errors: string[] = [];
+  if (Buffer.byteLength(password, 'utf8') > 72) errors.push('Debe tener como maximo 72 bytes en UTF-8.');
 
   if (password.length < 10) {
     errors.push('Debe tener al menos 10 caracteres.');

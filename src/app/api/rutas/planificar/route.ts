@@ -1,3 +1,4 @@
+import { readJsonBody } from '@/lib/request-body';
 import { z } from 'zod';
 
 import { apiError, assertSameOrigin, guardApi, handleApi } from '@/lib/api';
@@ -31,7 +32,7 @@ export async function POST(request: Request): Promise<Response> {
   const denied = await guardApi('rutas.editar');
   if (denied) return denied;
 
-  const parsed = bodySchema.safeParse(await request.json().catch(() => null));
+  const parsed = bodySchema.safeParse(await readJsonBody(request));
   if (!parsed.success) {
     return apiError('Se esperan al menos 2 paradas, cada una con lat y lng validos.', 400);
   }

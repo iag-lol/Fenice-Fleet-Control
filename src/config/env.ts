@@ -23,6 +23,8 @@ const serverEnvSchema = z.object({
    * `sesiones`.
    */
   AUTH_ENABLED: booleanFromEnv.default('false'),
+  DATA_ENCRYPTION_KEY: z.string().regex(/^[A-Za-z0-9+/]{43}=$/).optional(),
+  DATA_ENCRYPTION_PREVIOUS_KEYS: z.string().optional(),
 
   // --- Supabase: base interna de la plataforma ---
   // Aloja login (usuarios/sesiones), flota, rutas, geocercas, alertas,
@@ -187,6 +189,12 @@ const serverEnvSchema = z.object({
   PROOF_PHOTO_MAX_BYTES: z.coerce.number().int().positive().default(900_000),
   PROOF_MAX_PHOTOS: z.coerce.number().int().positive().max(10).default(4),
 }).superRefine((env, ctx) => {
+  if (process.env.RENDER === 'true' && !env.AUTH_ENABLED) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['AUTH_ENABLED'], message: 'Debe estar activado en produccion.' });
+  }
+  if (process.env.RENDER === 'true' && !env.DATA_ENCRYPTION_KEY) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['DATA_ENCRYPTION_KEY'], message: 'Requerido para cifrar datos en produccion.' });
+  }
   // El login (tablas `usuarios`/`sesiones`) necesita Supabase de verdad.
   // Fallar aqui, con nombre y apellido de lo que falta, es mejor que dejar
   // que la primera consulta explote con un mensaje generico de conexion.

@@ -54,6 +54,7 @@ export class TraccarClient {
           Accept: 'application/json',
         },
         cache: 'no-store',
+        redirect: 'error',
         signal: AbortSignal.timeout(10_000),
       });
     } catch (error) {

@@ -1,3 +1,4 @@
+import { readJsonBody } from '@/lib/request-body';
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 
@@ -42,7 +43,7 @@ export async function PUT(
   const denied = await guardApi('flota.editar');
   if (denied) return denied;
 
-  const parsed = bodySchema.safeParse(await request.json().catch(() => null));
+  const parsed = bodySchema.safeParse(await readJsonBody(request));
   if (!parsed.success) {
     return NextResponse.json({ error: 'Datos de conexion GPS invalidos.' }, { status: 400 });
   }

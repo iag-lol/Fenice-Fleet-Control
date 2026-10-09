@@ -1,3 +1,4 @@
+import { readJsonBody } from '@/lib/request-body';
 import { assertSameOrigin, getClientIp, guardApi, handleApi } from '@/lib/api';
 import { getAuthContext } from '@/lib/auth';
 import { logAction } from '@/lib/audit';
@@ -25,7 +26,7 @@ export async function PUT(request: Request): Promise<Response> {
   const denied = await guardApi('configuracion.editar');
   if (denied) return denied;
 
-  const body = await request.json().catch(() => null);
+  const body = await readJsonBody(request);
   const result = await updateOperationalSettings(body);
 
   if (!result.ok) {

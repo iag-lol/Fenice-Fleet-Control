@@ -31,7 +31,7 @@ export default async function SeguimientoPorReferenciaPage({
         </div>
       }
     >
-      <TrackingView presetReference={decodeURIComponent(reference).toUpperCase()} />
+      <TrackingView presetReference={reference} />
     </Suspense>
   );
 }

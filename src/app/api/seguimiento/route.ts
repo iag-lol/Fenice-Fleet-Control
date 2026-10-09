@@ -1,6 +1,8 @@
 import { apiError, NO_STORE_HEADERS } from '@/lib/api';
 import { loadTrackingSession } from '@/services/aggregation/tracking-aggregator';
 import { NextResponse } from 'next/server';
+import { getAuthContext } from '@/lib/auth';
+import { resolveTrackingToken } from '@/services/tracking/access-token';
 
 export const dynamic = 'force-dynamic';
 
@@ -13,7 +15,13 @@ export const dynamic = 'force-dynamic';
  * oraculo que permita enumerar numeros de orden validos.
  */
 export async function GET(request: Request): Promise<Response> {
-  const reference = new URL(request.url).searchParams.get('ref')?.trim() ?? '';
+  const supplied = new URL(request.url).searchParams.get('ref')?.trim() ?? '';
+  let reference = resolveTrackingToken(supplied);
+  if (!reference && !supplied.startsWith('trk1.')) {
+    const auth = await getAuthContext();
+    if (auth.openAccess || (auth.authenticated && auth.permissions.has('ordenes.ver'))) reference = supplied;
+  }
+  if (!reference) return apiError('Enlace de seguimiento invalido o vencido.', 404);
 
   if (reference.length < 4) {
     return apiError('Ingresa un numero de pedido u orden de trabajo valido.', 400);

@@ -37,6 +37,7 @@ import { useMapStore } from '@/stores/map-store';
 import type { Client, DeliveryProof, Driver, Order, Route, Vehicle, WorkOrder } from '@/types/core';
 
 interface WorkOrderDetailResponse {
+  trackingPath: string;
   workOrder: WorkOrder;
   order: Order | null;
   client: Client | null;
@@ -138,7 +139,7 @@ export function WorkOrderDetailView({ workOrderId }: { workOrderId: string }) {
             ) : null}
 
             <LinkButton
-              href={`/seguimiento/${encodeURIComponent(workOrder.number)}`}
+              href={data.trackingPath}
               target="_blank"
               rel="noopener noreferrer"
               variant="secondary"
@@ -153,7 +154,7 @@ export function WorkOrderDetailView({ workOrderId }: { workOrderId: string }) {
               size="sm"
               icon={linkCopied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
               onClick={() => {
-                const link = `${window.location.origin}/seguimiento/${encodeURIComponent(workOrder.number)}`;
+                const link = `${window.location.origin}${data.trackingPath}`;
                 void navigator.clipboard.writeText(link);
                 setLinkCopied(true);
                 setTimeout(() => setLinkCopied(false), 2000);

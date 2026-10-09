@@ -1,3 +1,4 @@
+import { readJsonBody } from '@/lib/request-body';
 import { NextResponse } from 'next/server';
 
 import { apiError, assertSameOrigin, guardApi, NO_STORE_HEADERS } from '@/lib/api';
@@ -33,7 +34,7 @@ export async function POST(
   const route = await getOperationsProvider().getRouteById(routeId as RouteId);
   if (!route) return apiError('La ruta no existe.', 404);
 
-  const body = (await request.json().catch(() => null)) as { ttlHours?: number } | null;
+  const body = (await readJsonBody(request)) as { ttlHours?: number } | null;
   const ttlHours =
     typeof body?.ttlHours === 'number' && body.ttlHours > 0 && body.ttlHours <= 168
       ? Math.floor(body.ttlHours)

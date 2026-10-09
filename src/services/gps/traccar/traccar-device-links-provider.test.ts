@@ -21,6 +21,13 @@ function base(): GpsProvider {
 const query = { vehicleId: id, from: '2026-09-12T00:00:00Z', to: '2026-09-13T00:00:00Z', limit: 2 };
 beforeEach(() => { mocks.request.mockReset(); mocks.vehicles.mockReset(); });
 describe('linked Traccar history', () => {
+  it('never contacts a foreign server saved in a device link', async () => {
+    mocks.vehicles.mockResolvedValue([{ id, device: { provider: 'traccar', externalId: '42', imei: 'imei', id: 'dev-42', serverUrl: 'http://169.254.169.254' } }] as Vehicle[]);
+    const original = base();
+    await withTraccarDeviceLinks(original).getPositionHistory(query);
+    expect(mocks.request).not.toHaveBeenCalled();
+    expect(original.getPositionHistory).toHaveBeenCalledWith(query);
+  });
   it('reads the linked device server instead of the unavailable fleet-wide provider', async () => {
     mocks.vehicles.mockResolvedValue([{ id, device: { provider: 'traccar', externalId: '42', imei: 'imei', id: 'dev-42' } }] as Vehicle[]);
     mocks.request.mockResolvedValue([0, 10, 20].map((seconds) => ({
