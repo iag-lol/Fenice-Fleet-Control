@@ -30,6 +30,7 @@ import type { Role } from '@/lib/auth';
 export const SESSION_COOKIE_NAME = process.env.NODE_ENV === 'production' ? '__Host-fenice_session' : 'fenice_session';
 
 export interface SessionUser {
+  sessionId: string;
   id: string;
   rut: string;
   nombreCompleto: string;
@@ -109,6 +110,7 @@ export async function resolveSessionByToken(token: string): Promise<SessionUser 
     });
 
   return {
+    sessionId: data.id,
     id: usuario.id,
     rut: usuario.rut,
     nombreCompleto: usuario.nombre_completo,

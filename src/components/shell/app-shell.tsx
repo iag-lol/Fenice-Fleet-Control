@@ -7,6 +7,7 @@ import { Header } from '@/components/shell/header';
 import { MobileMenuSheet, MobileTabBar } from '@/components/shell/mobile-nav';
 import { PwaProvider } from '@/components/shell/pwa-provider';
 import { AlertToasts } from '@/features/medium/notifications/alert-toasts';
+import { NotificationCenterProvider } from '@/features/medium/notifications/notification-context';
 import { Sidebar } from '@/components/shell/sidebar';
 import { useAppHeight } from '@/hooks/use-app-height';
 import { cn } from '@/lib/cn';
@@ -33,6 +34,7 @@ export function AppShell({ children, fullBleed }: AppShellProps) {
   }, [pathname]);
 
   return (
+    <NotificationCenterProvider>
     <div
       data-testid="app-shell"
       data-shell-instance={shellInstance}
@@ -73,5 +75,6 @@ export function AppShell({ children, fullBleed }: AppShellProps) {
           pantalla, no solo en el centro de alertas. */}
       <AlertToasts />
     </div>
+    </NotificationCenterProvider>
   );
 }

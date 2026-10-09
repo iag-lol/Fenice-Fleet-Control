@@ -45,6 +45,7 @@ function memoryStore(): Map<string, Alert> {
 }
 
 interface AlertRow {
+  notification_revision?: number;
   id: string;
   tipo: Alert['type'];
   categoria: Alert['category'];
@@ -68,6 +69,7 @@ interface AlertRow {
 
 function rowToAlert(row: AlertRow): Alert {
   return {
+    notificationRevision: row.notification_revision ?? 1,
     id: asAlertId(row.id),
     type: row.tipo,
     category: row.categoria,
@@ -118,12 +120,16 @@ export async function listAlerts(query: AlertQuery = {}): Promise<Alert[]> {
   const { data, error } = await builder;
   if (error) {
     console.error('[alert-store] no fue posible listar alertas:', error.message);
-    return [];
+    throw new Error('No fue posible consultar las alertas.');
   }
   return (data as AlertRow[]).map(rowToAlert);
 }
 
 export interface CreateAlertInput {
+  clientId?: Alert['clientId'];
+  clientName?: string | null;
+  workOrderId?: Alert['workOrderId'];
+  workOrderNumber?: string | null;
   /** Id deterministico (ej. `geocerca-entrada:<geofenceId>:<vehicleId>:<timestamp>`): protege contra duplicados si el mismo evento se evalua mas de una vez. */
   id: string;
   type: AlertType;
@@ -159,10 +165,10 @@ export async function createAlert(input: CreateAlertInput): Promise<void> {
       timestamp: input.timestamp,
       vehicleId: input.vehicleId ?? null,
       vehiclePlate: input.vehiclePlate ?? null,
-      clientId: null,
-      clientName: null,
-      workOrderId: null,
-      workOrderNumber: null,
+      clientId: input.clientId ?? null,
+      clientName: input.clientName ?? null,
+      workOrderId: input.workOrderId ?? null,
+      workOrderNumber: input.workOrderNumber ?? null,
       position: input.position ?? null,
       state: 'nueva',
       acknowledgedAt: null,
@@ -173,6 +179,10 @@ export async function createAlert(input: CreateAlertInput): Promise<void> {
   }
 
   const row = {
+    cliente_id: input.clientId ?? null,
+    cliente_nombre: input.clientName ?? null,
+    orden_trabajo_id: input.workOrderId ?? null,
+    orden_trabajo_numero: input.workOrderNumber ?? null,
     id: input.id,
     tipo: input.type,
     categoria: input.category,
@@ -202,6 +212,8 @@ export async function updateAlertState(id: AlertId, state: AlertState): Promise<
     const now = new Date().toISOString();
     const updated: Alert = {
       ...existing,
+      notificationRevision: existing.state === 'resuelta' && state === 'nueva'
+        ? (existing.notificationRevision ?? 1) + 1 : existing.notificationRevision ?? 1,
       state,
       acknowledgedAt: state === 'revisada' ? now : existing.acknowledgedAt,
       resolvedAt: state === 'resuelta' ? now : existing.resolvedAt,

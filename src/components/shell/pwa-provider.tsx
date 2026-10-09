@@ -31,7 +31,7 @@ export function PwaProvider() {
     // Se registra tras la carga para no competir por ancho de banda con el
     // primer render, que es lo que el operador esta esperando.
     const registrar = (): void => {
-      void navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch(() => {
+      void navigator.serviceWorker.register('/sw.js', { scope: '/', updateViaCache: 'none' }).catch(() => {
         // Sin trabajador la aplicacion funciona igual: solo se pierde el
         // arranque sin conexion. No es motivo para molestar a nadie.
       });

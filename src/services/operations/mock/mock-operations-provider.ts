@@ -828,7 +828,7 @@ export class MockOperationsProvider implements ExternalOperationsProvider {
     // contra geocercas reales (ver `geofence-detector.ts`). Se combinan para
     // no perder ninguna: un vehiculo conectado por "Conectar GPS" aparece
     // aqui aunque el resto de la flota siga siendo la de demostracion.
-    let alerts = [...(await listRealAlerts()), ...this.buildAlerts()];
+    let alerts = [...(await listRealAlerts(query)), ...this.buildAlerts()];
 
     if (query.states?.length) {
       const wanted = new Set(query.states);

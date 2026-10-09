@@ -47,12 +47,12 @@ function obtenerContexto(): AudioContext | null {
  * usuario. Se intenta reanudar el contexto y, si no se puede, se calla sin
  * error: el aviso visual ya cumplio su funcion.
  */
-export function playAlertSound(severity: Severity): void {
+export async function playAlertSound(severity: Severity): Promise<boolean> {
   const ctx = obtenerContexto();
-  if (!ctx) return;
+  if (!ctx) return false;
 
-  void ctx.resume().catch(() => {});
-  if (ctx.state !== 'running') return;
+  try { await ctx.resume(); } catch { return false; }
+  if (ctx.state !== 'running') return false;
 
   const tonos = TONOS[severity];
   const inicio = ctx.currentTime;
@@ -75,6 +75,7 @@ export function playAlertSound(severity: Severity): void {
     oscilador.start(desde);
     oscilador.stop(desde + duracion + 0.02);
   });
+  return true;
 }
 
 /**

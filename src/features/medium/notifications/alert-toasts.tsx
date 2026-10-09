@@ -8,7 +8,7 @@ import { primeAlertSound } from '@/lib/alert-sound';
 import { formatRelative } from '@/lib/format';
 import { cn } from '@/lib/cn';
 import type { AlertSeverity } from '@/types/core';
-import { useAlertNotifications } from './use-alert-notifications';
+import { useNotificationCenter } from './notification-context';
 
 /**
  * Alertas flotantes.
@@ -47,7 +47,7 @@ const ETIQUETA: Record<AlertSeverity, string> = {
 
 export function AlertToasts() {
   const { visible, dismiss, dismissAll, preferences, setPreferences, permission, requestPermission } =
-    useAlertNotifications();
+    useNotificationCenter();
 
   /**
    * Los navegadores solo autorizan el audio despues de una interaccion real.

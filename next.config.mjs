@@ -25,6 +25,7 @@ const nextConfig = {
   outputFileTracingExcludes: { '*': ['./.fenice/**/*'] },
   eslint: { dirs: ['src'] },
   transpilePackages: ['maplibre-gl'],
+  serverExternalPackages: ['web-push'],
   async headers() {
     return [{ source: '/:path*', headers: SECURITY_HEADERS }];
   },

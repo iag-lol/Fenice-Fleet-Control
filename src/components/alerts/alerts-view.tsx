@@ -19,6 +19,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useMemo, useState, type ReactNode } from 'react';
 
 import { PageHeader } from '@/components/common/page-header';
+import { NotificationSettings } from '@/features/medium/notifications/notification-settings';
 import { SEVERITY_LABEL, SeverityBadge } from '@/components/common/status';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -148,6 +149,8 @@ export function AlertsView() {
         title="Centro de alertas"
         description="Incidencias detectadas por los motores de GPS, ruta, geocerca y operacion."
       />
+
+      <NotificationSettings />
 
       <div className="mb-4 grid grid-cols-3 gap-2.5 sm:gap-3">
         {(['critical', 'warning', 'info'] as AlertSeverity[]).map((key) => {

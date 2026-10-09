@@ -25,6 +25,10 @@ const serverEnvSchema = z.object({
   AUTH_ENABLED: booleanFromEnv.default('false'),
   DATA_ENCRYPTION_KEY: z.string().regex(/^[A-Za-z0-9+/]{43}=$/).optional(),
   DATA_ENCRYPTION_PREVIOUS_KEYS: z.string().optional(),
+  WEB_PUSH_PUBLIC_KEY: z.string().optional(),
+  WEB_PUSH_PRIVATE_KEY: z.string().optional(),
+  WEB_PUSH_SUBJECT: z.string().default('https://fleet.fenice.cl'),
+  ALERT_WORKER_ENABLED: booleanFromEnv.default('false'),
 
   // --- Supabase: base interna de la plataforma ---
   // Aloja login (usuarios/sesiones), flota, rutas, geocercas, alertas,

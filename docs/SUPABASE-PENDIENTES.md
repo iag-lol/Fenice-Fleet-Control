@@ -84,3 +84,7 @@ El SQL se ejecutó en PostgreSQL local mediante PGlite con la extensión `pgcryp
 ## Seguridad - 9 de octubre de 2026
 
 Aplicadas las migraciones `20261009071558_security_atomic_login_and_default_privileges.sql` y `20261009072730_security_login_ip_cast.sql`: bloqueo de login atómico, control de éxito contra la versión actual de la contraseña, funciones privadas y permisos por defecto restringidos. No hay SQL pendiente de estas correcciones. Ver [operación de seguridad](SEGURIDAD.md) para claves de cifrado y enlaces compartidos.
+
+## Notificaciones operacionales
+
+Aplicadas las migraciones `operational_push_notifications`, `notification_device_receipts` y `notification_subscription_limits_and_logout`. Agregan dos tablas privadas (20 tablas internas en total), cola transaccional, recepción del equipo, límite de suscripciones y cancelación al cerrar sesión. No quedó SQL pendiente. Consultar [notificaciones](NOTIFICACIONES.md) para instalar, activar y probar en cada equipo.

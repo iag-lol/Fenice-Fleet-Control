@@ -29,7 +29,7 @@ export function AlertsBell() {
 
   const { data } = useQuery({
     queryKey: ['alerts', 'summary'],
-    refetchInterval: 45_000,
+    refetchInterval: 15_000,
     queryFn: async (): Promise<{ alerts: Alert[] }> => {
       const response = await fetch('/api/alertas');
       if (!response.ok) throw new Error('Alertas no disponibles');
@@ -121,6 +121,8 @@ export function AlertsBell() {
               ))}
             </ul>
           )}
+
+          <Link href="/alertas#notificaciones" onClick={() => setOpen(false)} className="block border-t border-line px-3 py-2.5 text-center text-xs font-semibold text-brand-700 hover:bg-surface-800">Sonido y notificaciones de este equipo</Link>
 
           <Link
             href="/alertas"

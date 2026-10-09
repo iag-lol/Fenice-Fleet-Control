@@ -694,6 +694,7 @@ export type AlertSeverity = 'info' | 'warning' | 'critical';
 export type AlertCategory = 'gps' | 'ruta' | 'geocerca' | 'cliente' | 'operacion';
 
 export type AlertType =
+  | 'gps_evento_equipo'
   // GPS
   | 'gps_offline'
   | 'gps_sin_posicion_reciente'
@@ -721,6 +722,8 @@ export type AlertType =
 export type AlertState = 'nueva' | 'revisada' | 'resuelta';
 
 export interface Alert {
+  /** Cambia al reabrir o elevar gravedad; permite avisar sin duplicar. */
+  notificationRevision?: number;
   id: AlertId;
   type: AlertType;
   category: AlertCategory;
