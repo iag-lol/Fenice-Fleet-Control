@@ -8,7 +8,9 @@
 const SECURITY_HEADERS = [
   { key: 'X-Frame-Options', value: 'DENY' },
   { key: 'X-Content-Type-Options', value: 'nosniff' },
-  { key: 'Referrer-Policy', value: 'no-referrer' },
+  // El mapa exige un Referer valido. Compartir solo el origen protege las
+  // rutas y los tokens de seguimiento, incluso en peticiones al mismo dominio.
+  { key: 'Referrer-Policy', value: 'strict-origin' },
   {
     key: 'Permissions-Policy',
     value: 'geolocation=(self), camera=(), microphone=(), payment=(), usb=()',

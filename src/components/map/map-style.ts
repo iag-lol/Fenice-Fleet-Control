@@ -254,11 +254,7 @@ export function resolveMapStyle(mode: MapViewMode = 'standard'): ResolvedMapStyl
   if (mode === 'dark') {
     return {
       style: rasterStyle(
-        [
-          'https://a.tile.openstreetmap.org/{z}/{x}/{y}.png',
-          'https://b.tile.openstreetmap.org/{z}/{x}/{y}.png',
-          'https://c.tile.openstreetmap.org/{z}/{x}/{y}.png',
-        ],
+        ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
         MAP_PROVIDERS.osm.attribution,
         { toned: true, night: true },
       ),
@@ -354,11 +350,7 @@ function resolveStandardStyle(): ResolvedMapStyle {
 function resolveDefault(): ResolvedMapStyle {
   return {
     style: rasterStyle(
-      [
-        'https://a.tile.openstreetmap.org/{z}/{x}/{y}.png',
-        'https://b.tile.openstreetmap.org/{z}/{x}/{y}.png',
-        'https://c.tile.openstreetmap.org/{z}/{x}/{y}.png',
-      ],
+      ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
       MAP_PROVIDERS.osm.attribution,
       { toned: true },
     ),

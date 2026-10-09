@@ -1,5 +1,5 @@
 export function buildContentSecurityPolicy(nonce: string, development = false): string {
-  const maps = 'https://*.tile.openstreetmap.org https://server.arcgisonline.com https://api.maptiler.com https://api.mapbox.com https://*.tiles.mapbox.com https://demotiles.maplibre.org';
+  const maps = 'https://tile.openstreetmap.org https://*.tile.openstreetmap.org https://server.arcgisonline.com https://api.maptiler.com https://api.mapbox.com https://*.tiles.mapbox.com https://demotiles.maplibre.org';
   return [
     "default-src 'self'",
     `script-src 'self' 'nonce-${nonce}'${development ? " 'unsafe-eval'" : ''}`,

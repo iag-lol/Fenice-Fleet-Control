@@ -80,7 +80,8 @@ export async function middleware(request: NextRequest): Promise<NextResponse> {
   const secure = (response: NextResponse) => {
     response.headers.set('Content-Security-Policy', policy);
     response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate');
-    response.headers.set('Referrer-Policy', 'no-referrer');
+    // OSM necesita identificar el origen; nunca enviamos rutas ni tokens.
+    response.headers.set('Referrer-Policy', 'strict-origin');
     return response;
   };
   // Archivos de configuracion y control de versiones nunca son paginas.
