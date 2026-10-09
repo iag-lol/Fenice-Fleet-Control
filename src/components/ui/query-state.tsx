@@ -71,7 +71,7 @@ export function GpsDegradedNotice({
 }) {
   return (
     <div role="status" className="flex items-start gap-2.5 rounded-xl border border-amber-300 border-l-4 border-l-amber-500 bg-amber-50 px-3 py-2.5 shadow-panel">
-      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-800">
+      <span aria-hidden className="hidden h-8 w-8 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-800 min-[360px]:flex">
         <WifiOff className="h-4 w-4" />
       </span>
       <div className="min-w-0 flex-1">

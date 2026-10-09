@@ -66,7 +66,10 @@ export function FocusBanner({
 
   return (
     <div role="status" className="pointer-events-auto flex max-w-full flex-wrap items-center gap-2 rounded-xl border border-brand-200 border-l-4 border-l-brand-600 bg-white px-2.5 py-2 shadow-panel">
-      <span className="text-2xs font-bold uppercase tracking-wider text-brand-900">{label}</span>
+      <span className="text-2xs font-bold uppercase tracking-wider text-brand-900">
+        <span className="min-[360px]:hidden">{vehiclePlate || isolate ? 'Solo' : 'Foco'}</span>
+        <span className="hidden min-[360px]:inline">{label}</span>
+      </span>
 
       {focos.map((foco) => (
         <span
