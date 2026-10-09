@@ -745,7 +745,7 @@ export const OperationalMap = memo(function OperationalMap({
       currentSelection?.type === 'vehicle' ||
       highlightedRouteId ||
       scopedCommuneCode) ? (
-        <div className="absolute bottom-24 left-2.5 z-20 sm:bottom-4">
+        <div className="absolute bottom-4 left-2.5 right-14 z-20 sm:right-auto">
           <FocusBanner
             vehiclePlate={
               currentSelection?.type === 'vehicle'
@@ -782,7 +782,7 @@ export const OperationalMap = memo(function OperationalMap({
             onClearRoute={() => highlightRoute(null)}
             onClearCommune={() => scopeToCommune(null)}
           />
-          {selectedTrajectory ? <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 rounded-md bg-surface-900/90 px-2 py-1.5 text-[10px] text-ink-muted">
+          {selectedTrajectory ? <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 rounded-md border border-line bg-white px-2 py-1.5 text-[10px] text-ink-muted shadow-float">
             {selectedTrajectory.summary.coverage === 0 ? <span className="text-status-warning">Recorrido por verificar</span> : <>
             <span>Distancia GPS estimada <strong className="numeric text-ink">{formatDistance(selectedTrajectory.totalMeters)}</strong></span>
             <span>Marcha observada <strong className="numeric text-ink">{formatDuration(selectedTrajectory.summary.movingSeconds)}</strong></span>
@@ -805,7 +805,7 @@ export const OperationalMap = memo(function OperationalMap({
         trayecto elegido a la vez, ambas franjas conviven sin superponerse.
       */}
       {selectedEvent ? (
-        <div className="pointer-events-auto safe-bottom absolute inset-x-2.5 bottom-[132px] z-20 flex items-start gap-3 rounded-lg border border-line-strong bg-surface-900/97 px-3 py-2.5 shadow-panel backdrop-blur sm:inset-x-auto sm:bottom-20 sm:left-1/2 sm:w-[420px] sm:-translate-x-1/2">
+        <div className="pointer-events-auto safe-bottom absolute inset-x-2.5 bottom-[132px] z-20 flex items-start gap-3 rounded-lg border border-line-strong bg-white px-3 py-2.5 shadow-panel sm:inset-x-auto sm:bottom-20 sm:left-1/2 sm:w-[420px] sm:-translate-x-1/2">
           {(() => {
             const style = TRAJECTORY_EVENT_STYLE[selectedEvent.type];
             const Icon = style.icon;
@@ -840,8 +840,8 @@ export const OperationalMap = memo(function OperationalMap({
 
       {/* --- Barra de seguimiento --- */}
       {following && followedVehicle ? (
-        <div className="pointer-events-auto absolute bottom-4 left-2.5 right-14 z-20 flex items-center gap-2 rounded-lg border border-brand-500/40 bg-surface-900/97 px-2.5 py-2 shadow-panel backdrop-blur sm:inset-x-auto sm:left-1/2 sm:w-[420px] sm:-translate-x-1/2">
-          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand-500/20 text-brand-700">
+        <div className="pointer-events-auto absolute bottom-4 left-2.5 right-14 z-20 flex items-center gap-2 rounded-lg border border-brand-200 bg-white px-2.5 py-2 shadow-panel sm:inset-x-auto sm:left-1/2 sm:w-[420px] sm:-translate-x-1/2">
+          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand-100 text-brand-800">
             <Navigation className="h-4 w-4" />
           </span>
 

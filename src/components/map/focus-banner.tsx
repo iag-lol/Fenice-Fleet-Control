@@ -65,18 +65,18 @@ export function FocusBanner({
   const label = vehiclePlate || isolate ? 'Viendo solo' : 'Seleccionado';
 
   return (
-    <div className="pointer-events-auto flex max-w-[calc(100vw-1.25rem)] flex-wrap items-center gap-2 rounded-lg border border-brand-500/45 bg-surface-900/96 px-2.5 py-2 shadow-float backdrop-blur">
-      <span className="text-2xs font-semibold uppercase tracking-wider text-ink-faint">{label}</span>
+    <div role="status" className="pointer-events-auto flex max-w-full flex-wrap items-center gap-2 rounded-xl border border-brand-200 border-l-4 border-l-brand-600 bg-white px-2.5 py-2 shadow-panel">
+      <span className="text-2xs font-bold uppercase tracking-wider text-brand-900">{label}</span>
 
       {focos.map((foco) => (
         <span
           key={foco.id}
-          className="inline-flex items-center gap-1.5 rounded-md bg-brand-500/12 py-1 pl-2 pr-1 text-xs font-medium text-brand-700"
+          className="inline-flex min-w-0 max-w-full items-center gap-1.5 rounded-md bg-brand-100 py-1 pl-2 pr-1 text-xs font-semibold text-brand-900"
         >
           {foco.icono}
           <span className="numeric max-w-[9rem] truncate">{foco.texto}</span>
           {foco.subtexto ? (
-            <span className="numeric shrink-0 rounded bg-surface-900/60 px-1 py-0.5 text-2xs text-brand-700/80">
+            <span className="numeric shrink-0 rounded bg-white px-1 py-0.5 text-2xs text-brand-800">
               {foco.subtexto}
             </span>
           ) : null}
@@ -84,7 +84,7 @@ export function FocusBanner({
             type="button"
             onClick={foco.quitar}
             aria-label={`Quitar el foco en ${foco.texto}`}
-            className="flex h-6 w-6 items-center justify-center rounded text-brand-700/70 hover:bg-surface-800 hover:text-ink"
+            className="flex h-7 w-7 shrink-0 items-center justify-center rounded text-brand-900 hover:bg-white"
           >
             <X className="h-3.5 w-3.5" />
           </button>
@@ -92,21 +92,23 @@ export function FocusBanner({
       ))}
 
       {vehiclePlate ? (
-        <span className="inline-flex items-center gap-1.5 px-2 text-2xs text-ink-muted">
+        <span className="hidden items-center gap-1.5 px-2 text-2xs font-medium text-ink sm:inline-flex">
           <EyeOff className="h-3.5 w-3.5" /> Solo este vehículo
         </span>
       ) : <button
         type="button"
         onClick={() => setIsolate(!isolate)}
+        aria-label={isolate ? `Mostrar todos (${hiddenCount} ocultos)` : 'Ver solo lo seleccionado'}
         title={
           isolate
             ? 'Mostrar tambien el resto de la operacion'
             : 'Ocultar el resto y dejar solo lo enfocado'
         }
-        className="inline-flex min-h-11 items-center gap-1.5 rounded-md border border-line-strong px-2 text-2xs font-medium text-ink-muted hover:text-ink sm:min-h-7"
+        className="inline-flex min-h-9 items-center gap-1.5 rounded-md border border-brand-200 bg-brand-50 px-2 text-2xs font-semibold text-brand-900 hover:bg-brand-100 sm:min-h-7"
       >
         {isolate ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
-        {isolate ? `${hiddenCount} ocultos` : 'Mostrando todos'}
+        <span className="sm:hidden">{isolate ? hiddenCount : 'Todos'}</span>
+        <span className="hidden sm:inline">{isolate ? `${hiddenCount} ocultos` : 'Mostrando todos'}</span>
       </button>}
     </div>
   );

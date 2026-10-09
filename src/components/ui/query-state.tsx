@@ -70,21 +70,25 @@ export function GpsDegradedNotice({
   onDismiss?: () => void;
 }) {
   return (
-    <div className="flex items-center gap-3 rounded-xl border border-status-warning/30 bg-status-warning/10 px-3.5 py-2.5 shadow-float">
-      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-status-warning/15 text-status-warning">
+    <div role="status" className="flex items-start gap-2.5 rounded-xl border border-amber-300 border-l-4 border-l-amber-500 bg-amber-50 px-3 py-2.5 shadow-panel">
+      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-800">
         <WifiOff className="h-4 w-4" />
       </span>
-      <p className="min-w-0 flex-1 text-xs text-ink">
-        {lastKnownAt ? 'Sin señal GPS reciente. Se conserva la última ubicación.' : 'Esperando una ubicación GPS.'}{' '}
+      <div className="min-w-0 flex-1">
+        <p className="text-xs font-semibold leading-5 text-amber-950">
+          {lastKnownAt ? 'Sin señal GPS reciente' : 'Esperando una ubicación GPS'}
+        </p>
+        {lastKnownAt ? <p className="text-[11px] leading-4 text-amber-900">Se conserva la última ubicación.</p> : null}
         {lastKnownAt ? (
-          <span className="text-ink-muted">
+          <p className="mt-0.5 text-[11px] leading-4 text-ink-muted">
             Registro: {new Intl.DateTimeFormat('es-CL', { timeZone: 'America/Santiago', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }).format(new Date(lastKnownAt))}.
-          </span>
+          </p>
         ) : null}
-      </p>
+      </div>
       {onRetry ? (
-        <Button size="sm" variant="ghost" onClick={onRetry}>
-          Reintentar
+        <Button size="icon-sm" variant="secondary" onClick={onRetry} aria-label="Reintentar actualización GPS" title="Reintentar actualización GPS" className="shrink-0 border-amber-300 bg-white text-amber-900 hover:bg-amber-100 sm:w-auto sm:px-2.5">
+          <RotateCw className="h-3.5 w-3.5" />
+          <span className="hidden sm:inline">Reintentar</span>
         </Button>
       ) : null}
       {onDismiss ? (
@@ -92,7 +96,7 @@ export function GpsDegradedNotice({
           type="button"
           onClick={onDismiss}
           aria-label="Cerrar aviso"
-          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-ink-faint hover:bg-status-warning/15 hover:text-ink"
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-amber-200 bg-white text-amber-900 hover:bg-amber-100 sm:h-8 sm:w-8"
         >
           <X className="h-3.5 w-3.5" />
         </button>
@@ -114,11 +118,11 @@ export function PendingIntegrationNotice({
   onDismiss?: () => void;
 }) {
   return (
-    <div className="flex items-start gap-3 rounded-xl border border-brand-500/25 bg-brand-500/5 px-3.5 py-2.5 shadow-float">
-      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand-500/15 text-brand-700">
+    <div className="flex items-start gap-3 rounded-xl border border-brand-200 border-l-4 border-l-brand-500 bg-brand-50 px-3.5 py-2.5 shadow-panel">
+      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand-100 text-brand-800">
         <Info className="h-4 w-4" />
       </span>
-      <p className="min-w-0 flex-1 text-xs leading-relaxed text-ink-muted">{what}</p>
+      <p className="min-w-0 flex-1 text-xs leading-relaxed text-ink">{what}</p>
       {onDismiss ? (
         <button
           type="button"
