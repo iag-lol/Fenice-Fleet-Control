@@ -27,9 +27,13 @@ const BLOCKED = getBlockedRoutes();
  * enlace firmado, no una sesion de esta plataforma).
  */
 const PUBLIC_PREFIXES = ['/login', '/seguimiento', '/conductor'];
+// Archivo de marca compartido por el seguimiento publico y el optimizador
+// de imagenes. La excepcion es exacta: no abre /brand ni otras secciones.
+const PUBLIC_ASSETS = new Set(['/brand/fenice-logo.png']);
 
 function isPublicPath(pathname: string): boolean {
-  return PUBLIC_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));
+  return PUBLIC_ASSETS.has(pathname) ||
+    PUBLIC_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));
 }
 
 /**
