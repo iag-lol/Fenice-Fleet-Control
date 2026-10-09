@@ -183,16 +183,19 @@ function buildProof(
 // Backend Supabase: fotos como bytea, no como texto base64
 // ---------------------------------------------------------------------------
 
-function dataUrlToBytea(dataUrl: string, photoId: string): { hex: string; mime: string } {
+export function dataUrlToBytea(dataUrl: string, photoId: string): { hex: string; mime: string } {
   const match = /^data:(image\/(?:jpeg|png|webp));base64,(.+)$/.exec(dataUrl);
   if (!match) throw new Error('Formato de imagen invalido.');
   const [, mime, base64] = match as unknown as [string, string, string];
   // PostgREST espera (y devuelve) bytea como texto hexadecimal con prefijo
   // `\x`, que es el formato de salida por defecto de Postgres para bytea.
-  return { mime, hex: `\\x${Buffer.from(protectSensitive(base64, `proof-photo:${photoId}`), 'utf8').toString('hex')}` };
+  const protectedBytes = protectSensitive(base64, `proof-photo:${photoId}`);
+  const bytes = protectedBytes.startsWith('enc:v1:')
+    ? Buffer.from(protectedBytes, 'utf8') : Buffer.from(base64, 'base64');
+  return { mime, hex: `\\x${bytes.toString('hex')}` };
 }
 
-function byteaToDataUrl(hexValue: string, mime: string, photoId: string): string {
+export function byteaToDataUrl(hexValue: string, mime: string, photoId: string): string {
   const hex = hexValue.startsWith('\\x') ? hexValue.slice(2) : hexValue;
   const bytes = Buffer.from(hex, 'hex');
   const text = bytes.toString('utf8');
