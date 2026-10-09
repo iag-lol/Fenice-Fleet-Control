@@ -2,7 +2,7 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { ListFilter, PanelRightClose, PanelRightOpen, RefreshCw, X } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 
 import { OperationalMap } from '@/components/map/operational-map';
 import { ClientPanel } from '@/components/map/client-panel';
@@ -64,6 +64,7 @@ export function ControlTowerView() {
   const setMobilePanelOpen = useMapStore((s) => s.setMobileOperationsOpen);
   const [hydrated, setHydrated] = useState(false);
   const draggingRef = useRef(false);
+  const dragOriginRef = useRef({ clientX: 0, width: DEFAULT_PANEL });
   const panelWidthRef = useRef(panelWidth);
   useEffect(() => {
     panelWidthRef.current = panelWidth;
@@ -150,18 +151,21 @@ export function ControlTowerView() {
   };
 
   // --- Arrastre del divisor ------------------------------------------------
-  const startDrag = useCallback(() => {
+  const startDrag = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
+    // Medir el desplazamiento desde el ancho actual evita saltos al tomar el
+    // divisor, independientemente de los margenes exteriores de la pantalla.
+    dragOriginRef.current = { clientX: event.clientX, width: visiblePanelWidth };
     draggingRef.current = true;
     document.body.style.cursor = 'col-resize';
     // Evita que el arrastre seleccione texto de la pagina.
     document.body.style.userSelect = 'none';
-  }, []);
+  }, [visiblePanelWidth]);
 
   useEffect(() => {
     const onMove = (event: PointerEvent): void => {
       if (!draggingRef.current || !containerRef.current) return;
-      const bounds = containerRef.current.getBoundingClientRect();
-      const width = Math.round(bounds.right - event.clientX);
+      const origin = dragOriginRef.current;
+      const width = Math.round(origin.width + origin.clientX - event.clientX);
       setPanelWidth(Math.max(MIN_PANEL, Math.min(MAX_PANEL, width)));
     };
 
@@ -221,8 +225,8 @@ export function ControlTowerView() {
   );
 
   return (
-    <div ref={containerRef} className="relative flex h-full w-full overflow-hidden">
-      <div className="relative min-w-0 flex-1">
+    <div ref={containerRef} className="relative flex h-full min-h-0 w-full overflow-hidden p-2 md:p-3 xl:p-4">
+      <div className="relative min-h-0 min-w-0 flex-1 overflow-hidden rounded-xl border border-line bg-surface-900 shadow-card">
         <OperationalMap detailExternal={Boolean(desktopSelection)} mobileDockClearance={usesMobileLayout ? 80 : 0} />
 
         {/* Alternar el panel: en el mapa cada pixel horizontal cuenta. */}
@@ -280,11 +284,13 @@ export function ControlTowerView() {
             }}
             aria-label="Redimensionar panel operacional"
             onPointerDown={startDrag}
-            className="w-1 shrink-0 cursor-col-resize bg-line transition-colors hover:bg-brand-400"
-          />
+            className="group flex w-3 shrink-0 cursor-col-resize touch-none items-center justify-center outline-none focus-visible:rounded-md focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-400"
+          >
+            <span aria-hidden="true" className="h-12 w-1 rounded-full bg-line-strong transition-colors group-hover:bg-brand-400 group-focus-visible:bg-brand-400" />
+          </div>
           <aside
             className={cn(
-              'h-full shrink-0 border-l border-line bg-surface-900',
+              'h-full min-h-0 shrink-0 overflow-hidden rounded-xl border border-line bg-surface-900 shadow-card',
               !hydrated && 'invisible',
             )}
             style={{ width: visiblePanelWidth }}
