@@ -1,5 +1,6 @@
 'use client';
 
+import { gpsDisplayText } from '@/lib/gps-branding';
 import { DeviceTelemetry } from '@/components/gps/device-telemetry';
 
 import { useQuery } from '@tanstack/react-query';
@@ -131,7 +132,7 @@ export function VehicleDetailView({ vehicleId }: { vehicleId: string }) {
           <span className="flex flex-wrap items-center gap-2">
             <span className="flex items-center gap-1.5">
               <Fuel className="h-3.5 w-3.5 text-ink-faint" />
-              {hasVehicleDetails ? [VEHICLE_TYPE_LABEL[vehicle.type], vehicle.brand, vehicle.model, vehicle.year > 0 ? String(vehicle.year) : ''].filter(Boolean).join(' · ') : 'Equipo GPS vinculado'}
+              {hasVehicleDetails ? [VEHICLE_TYPE_LABEL[vehicle.type], vehicle.brand, gpsDisplayText(vehicle.model), vehicle.year > 0 ? String(vehicle.year) : ''].filter(Boolean).join(' · ') : 'Equipo GPS vinculado'}
             </span>
             <span className="text-ink-faint">{vehicle.depotName}</span>
             <VehicleStatusBadge status={snapshot.status} />
@@ -147,7 +148,7 @@ export function VehicleDetailView({ vehicleId }: { vehicleId: string }) {
               onClick={() => setGpsDialogOpen(true)}
               disabled={vehicle.device?.provider === '3dtracking'}
             >
-              {vehicle.device?.provider === '3dtracking' ? 'GPS: 3DTracking' : vehicle.device?.provider === 'traccar' ? 'GPS: Traccar' : 'Conectar GPS'}
+              {vehicle.device?.provider ? 'GPS vinculado' : 'Conectar GPS'}
             </Button>
 
             <LinkButton href="#historial-gps" size="sm" variant="primary" icon={<RouteIcon className="h-3.5 w-3.5" />}>Analizar recorrido</LinkButton>
@@ -287,7 +288,7 @@ export function VehicleDetailView({ vehicleId }: { vehicleId: string }) {
                     { label: 'Ignicion', value: position?.ignition === 'on' ? 'Encendida' : position?.ignition === 'off' ? 'Apagada' : 'Sin dato' },
                     { label: 'Rumbo', value: formatHeading(position?.heading) },
                     {
-                      label: 'Odómetro del proveedor',
+                      label: 'Odómetro del equipo',
                       value: position?.odometerKm !== undefined ? `${formatNumber(position.odometerKm, 2)} km` : 'Sin dato',
                     },
                     { label: 'Precision', value: position?.accuracy ? `${position.accuracy} m` : 'Sin dato' },

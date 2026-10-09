@@ -236,7 +236,15 @@ export class TridTrackingGpsProvider implements GpsProvider {
       const known = matches[0];
       identities.set(
         String(mapped.id),
-        known ? { ...known, device: mapped.device } : mapped,
+        known ? {
+          ...known,
+          device: mapped.device ? {
+            ...mapped.device,
+            ...known.device,
+            externalId: mapped.device.externalId,
+            provider: mapped.device.provider,
+          } : known.device,
+        } : mapped,
       );
     }
     return identities;

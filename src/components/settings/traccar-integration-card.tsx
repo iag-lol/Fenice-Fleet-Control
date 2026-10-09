@@ -1,4 +1,5 @@
 'use client';
+import { gpsDisplayText } from '@/lib/gps-branding';
 
 import { useMutation } from '@tanstack/react-query';
 import { CheckCircle2, Loader2, Satellite, XCircle } from 'lucide-react';
@@ -39,14 +40,13 @@ export function TraccarIntegrationCard() {
   return (
     <Card>
       <CardHeader
-        title="Integracion GPS / Traccar"
-        description="Traccar Client (celular) o hardware GPS compatible, como un Teltonika FMC130"
+        title="Conexión GPS adicional"
+        description="Dispositivos móviles o equipos GPS compatibles"
         icon={<Satellite className="h-4 w-4" />}
       />
       <CardBody className="space-y-3">
         <p className="text-xs leading-relaxed text-ink-faint">
-          El servidor y las credenciales de Traccar se configuran una sola vez en el servidor
-          (<code>TRACCAR_BASE_URL</code> y <code>TRACCAR_TOKEN</code>, o usuario y clave). Desde
+          La conexión GPS se configura de forma segura en el servidor. Desde
           aqui puedes probar la conexion sin salir de Configuracion; para asociar un vehiculo
           concreto usa &ldquo;Conectar GPS&rdquo; en su ficha, dentro de Flota.
         </p>
@@ -104,7 +104,7 @@ export function TraccarIntegrationCard() {
               </div>
             ))}
             <p className={`pt-1 text-xs ${result.ok ? 'text-status-active' : 'text-status-warning'}`}>
-              {result.message}
+              {gpsDisplayText(result.message)}
             </p>
           </div>
         ) : null}

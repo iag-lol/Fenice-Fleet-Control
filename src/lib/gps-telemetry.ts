@@ -1,4 +1,5 @@
 import type { DeviceStatus, GpsSensorReading, GpsTelemetry, Position } from '@/types/core';
+import { gpsDisplayText } from './gps-branding';
 import { formatNumber } from './format';
 
 export function latestTelemetry(position?: Position | null, device?: DeviceStatus | null): GpsTelemetry | null {
@@ -11,7 +12,7 @@ export function uniqueSensor(telemetry: GpsTelemetry | null, metric: GpsSensorRe
 export function telemetryFlag(flag?: boolean): string { return flag === true ? 'Activa' : flag === false ? 'Sin alerta' : 'Sin dato'; }
 export function reportedEngineStatus(value?: string): string {
   const labels: Record<string, string> = { idling: 'Ralentí', running: 'En marcha', stopped: 'Detenido', off: 'Apagado', on: 'Encendido' };
-  return value ? labels[value.trim().toLowerCase()] ?? value : 'Sin dato';
+  return value ? labels[value.trim().toLowerCase()] ?? gpsDisplayText(value) : 'Sin dato';
 }
 export function sensorDisplay(sensor: GpsSensorReading | null, unit: string, decimals = 1): string {
   return sensor?.numericValue !== undefined ? `${formatNumber(sensor.numericValue, decimals)} ${unit}` : 'Sin lectura';
@@ -28,15 +29,15 @@ export function exportTelemetryCsv(plate: string, position?: Position | null, de
   const telemetry = latestTelemetry(position, device);
   const rows: unknown[][] = [['patente', 'dato', 'valor', 'unidad', 'fecha_medicion_utc', 'fecha_recepcion_utc', 'fuente']];
   const add = (name: string, value: unknown, unit: string, at?: string | null, received?: string | null) => {
-    if (value !== undefined && value !== null) rows.push([plate, name, value, unit, at ?? '', received ?? '', telemetry?.source ?? 'gps']);
+    if (value !== undefined && value !== null) rows.push([plate, name, value, unit, at ?? '', received ?? '', 'Fleet Control GPS']);
   };
-  add('odometro_proveedor', position?.odometerKm, 'km', position?.timestamp, position?.receivedAt);
+  add('odometro_gps', position?.odometerKm, 'km', position?.timestamp, position?.receivedAt);
   add('estado_motor_reportado', telemetry?.engineStatus, '', telemetry?.measuredAt, telemetry?.receivedAt);
-  add('contador_motor_proveedor', telemetry?.engineCounter, 'no_declarada', telemetry?.measuredAt, telemetry?.receivedAt);
+  add('contador_motor_gps', telemetry?.engineCounter, 'no_declarada', telemetry?.measuredAt, telemetry?.receivedAt);
   for (const input of telemetry?.inputs ?? []) add(input.label, input.active, 'boolean', telemetry?.measuredAt, telemetry?.receivedAt);
   for (const sensor of telemetry?.sensors ?? []) add(sensor.name, sensor.value, sensor.unit ?? '', sensor.measuredAt, sensor.receivedAt);
   const cell = (value: unknown) => {
-    let text = value === null || value === undefined ? '' : String(value);
+    let text = value === null || value === undefined ? '' : gpsDisplayText(String(value));
     if (/^[=+\-@\t\r]/.test(text) && !/^-?\d+(?:\.\d+)?$/.test(text)) text = `'${text}`;
     return `"${text.replace(/"/g, '""')}"`;
   };

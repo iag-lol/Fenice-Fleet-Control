@@ -224,7 +224,7 @@ export interface GpsDevice {
   serverUrl?: string;
 }
 
-export type VehicleType = 'cisterna_semirremolque' | 'cisterna_rigido' | 'camioneta_estanque';
+export type VehicleType = 'sin_dato' | 'cisterna_semirremolque' | 'cisterna_rigido' | 'camioneta_estanque';
 
 export interface Vehicle {
   id: VehicleId;

@@ -1,5 +1,6 @@
 'use client';
 
+import { gpsDisplayText } from '@/lib/gps-branding';
 import { DeviceTelemetry } from '@/components/gps/device-telemetry';
 
 import { useQuery } from '@tanstack/react-query';
@@ -174,7 +175,7 @@ export function VehiclePanel({ vehicleId }: { vehicleId: string }) {
               </span> : null}
             </div>
             <p className="mt-0.5 truncate text-xs text-ink-faint">
-              {[vehicle.brand, vehicle.model, vehicle.year > 0 ? vehicle.year : null].filter(Boolean).join(' · ') || 'Equipo GPS vinculado'}
+              {[vehicle.brand, gpsDisplayText(vehicle.model), vehicle.year > 0 ? vehicle.year : null].filter(Boolean).join(' · ') || 'Equipo GPS vinculado'}
             </p>
           </div>
         </div>
@@ -465,7 +466,7 @@ export function VehiclePanel({ vehicleId }: { vehicleId: string }) {
         <Section
           title="Condiciones del equipo GPS"
           className="rounded-lg border border-line bg-surface-900 p-3 shadow-card"
-          action={<span className="numeric text-2xs text-ink-faint">{vehicle.device?.model}</span>}
+          action={<span className="numeric text-2xs text-ink-faint">{gpsDisplayText(vehicle.device?.model)}</span>}
         >
           <p className="mb-3 text-2xs leading-relaxed text-ink-faint">
             Eventos que este equipo puede reportar una vez instalado y configurado.
@@ -498,7 +499,7 @@ export function VehiclePanel({ vehicleId }: { vehicleId: string }) {
       <div className="flex items-center gap-2 px-1">
         <Truck className="h-3.5 w-3.5 text-ink-faint" />
         <p className="text-2xs text-ink-faint">
-          Equipo {vehicle.device?.model ?? 'no instalado'}
+          Equipo {gpsDisplayText(vehicle.device?.model) || 'no instalado'}
           {vehicle.device ? ` · IMEI ${vehicle.device.imei}` : ''}
         </p>
       </div>

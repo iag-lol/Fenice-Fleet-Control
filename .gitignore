@@ -21,3 +21,4 @@ graphify-out/
 
 # Archivo privado de telemetria (nunca publicar ni versionar)
 .fenice/
+supabase/.temp/

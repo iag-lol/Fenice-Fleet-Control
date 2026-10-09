@@ -261,8 +261,8 @@ create table if not exists vehiculos (
   modelo             text not null default '',
   anio               integer,
   tipo               text not null default 'cisterna_semirremolque',
-  capacidad_litros   numeric not null check (capacidad_litros > 0),
-  compartimentos     integer not null default 1 check (compartimentos > 0),
+  capacidad_litros   numeric not null check (capacidad_litros >= 0),
+  compartimentos     integer not null default 1 check (compartimentos >= 0),
   dispositivo_id     uuid references dispositivos_gps(id) on delete set null,
   conductor_id       uuid references conductores(id) on delete set null,
   base_despacho      text,
@@ -271,10 +271,24 @@ create table if not exists vehiculos (
   actualizado_at     timestamptz not null default now(),
 
   constraint vehiculos_tipo_valido
-    check (tipo in ('cisterna_semirremolque', 'cisterna_rigido', 'camioneta_estanque'))
+    check (tipo in ('sin_dato', 'cisterna_semirremolque', 'cisterna_rigido', 'camioneta_estanque'))
 );
 comment on table vehiculos is 'Camiones cisterna de la flota.';
 comment on column vehiculos.base_despacho is 'Planta de almacenamiento de origen (texto libre).';
+
+-- El alta de una unidad GPS puede preceder la ficha técnica del camión.
+-- Cero representa un dato pendiente, nunca una capacidad supuesta.
+alter table vehiculos drop constraint if exists vehiculos_capacidad_litros_check;
+alter table vehiculos add constraint vehiculos_capacidad_litros_check check (capacidad_litros >= 0);
+alter table vehiculos drop constraint if exists vehiculos_compartimentos_check;
+alter table vehiculos add constraint vehiculos_compartimentos_check check (compartimentos >= 0);
+comment on column vehiculos.capacidad_litros is 'Capacidad real en litros; 0 indica que aún no está informada.';
+comment on column vehiculos.compartimentos is 'Cantidad real de compartimentos; 0 indica que aún no está informada.';
+alter table vehiculos drop constraint if exists vehiculos_tipo_valido;
+alter table vehiculos add constraint vehiculos_tipo_valido
+  check (tipo in ('sin_dato', 'cisterna_semirremolque', 'cisterna_rigido', 'camioneta_estanque'));
+create unique index if not exists vehiculos_dispositivo_unico
+  on vehiculos(dispositivo_id) where dispositivo_id is not null;
 
 create index if not exists idx_vehiculos_conductor on vehiculos(conductor_id);
 

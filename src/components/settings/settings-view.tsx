@@ -1,4 +1,5 @@
 'use client';
+import { gpsDisplayText } from '@/lib/gps-branding';
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
@@ -540,14 +541,14 @@ export function SettingsView() {
           <CardBody className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <IntegrationTile
               title="Telemetria GPS"
-              value={data.gps.label}
+              value={gpsDisplayText(data.gps.label)}
               simulated={data.gps.simulated}
               statusLabel={data.gps.provider === 'unavailable' ? 'Sin conexion' : data.gps.simulated ? 'Demo' : 'Configurado'}
               unavailable={data.gps.provider === 'unavailable'}
               detail={
                 data.gps.simulated
-                  ? 'Simulador integrado. Activa 3DTracking o Traccar desde la configuracion del servidor.'
-                  : data.gps.provider === 'unavailable' ? 'Proveedor sin conexion. Usa la prueba GPS para revisar la configuracion.' : `Consulta mediante ${data.gps.transport}.`
+                  ? 'Simulador integrado. Configura la conexión GPS real en el servidor.'
+                  : data.gps.provider === 'unavailable' ? 'Conexión GPS no disponible. Usa la prueba de conexión para revisar la configuración.' : `Consulta mediante ${data.gps.transport}.`
               }
             />
             <IntegrationTile
@@ -564,7 +565,7 @@ export function SettingsView() {
             />
             <IntegrationTile
               title="Calculo de ETA"
-              value={data.routingProvider === 'estimated' ? 'Estimacion interna' : data.routingProvider}
+              value={data.routingProvider === 'estimated' ? 'Estimación interna' : 'Rutas por calles'}
               simulated={data.routingProvider === 'estimated'}
               statusLabel={data.routingProvider === 'estimated' ? 'Estimacion' : 'Configurado'}
               detail={
@@ -575,7 +576,7 @@ export function SettingsView() {
             />
             <IntegrationTile
               title="Geocodificacion"
-              value={data.geocodingProvider === 'none' ? 'Desactivada' : data.geocodingProvider}
+              value={data.geocodingProvider === 'none' ? 'Desactivada' : 'Direcciones y coordenadas'}
               simulated={data.geocodingProvider === 'none'}
               statusLabel={data.geocodingProvider === 'none' ? 'Desactivado' : 'Configurado'}
               detail={

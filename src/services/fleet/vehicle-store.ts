@@ -88,7 +88,7 @@ function rowToVehicle(row: VehicleRow): Vehicle {
     fleetCode: row.codigo_flota,
     brand: row.marca,
     model: row.modelo,
-    year: row.anio ?? new Date().getFullYear(),
+    year: row.anio ?? 0,
     type: row.tipo,
     capacityLiters: row.capacidad_litros,
     compartments: row.compartimentos,
@@ -167,7 +167,7 @@ export async function listVehicles(): Promise<Vehicle[]> {
 
   if (error) {
     console.error('[vehicle-store] no fue posible listar la flota:', error.message);
-    return [];
+    throw new Error('No fue posible consultar la flota guardada.');
   }
   return (data as VehicleRow[]).map(rowToVehicle);
 }
@@ -181,7 +181,8 @@ export async function getVehicleByIdFromStore(id: VehicleId): Promise<Vehicle | 
     .eq('id', id)
     .maybeSingle<VehicleRow>();
 
-  if (error || !data) return null;
+  if (error) throw new Error('No fue posible consultar el vehículo guardado.');
+  if (!data) return null;
   return rowToVehicle(data);
 }
 

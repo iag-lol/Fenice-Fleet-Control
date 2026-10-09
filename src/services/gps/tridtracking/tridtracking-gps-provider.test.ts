@@ -83,11 +83,12 @@ describe('FMC130 en 3DTracking para RBDC59', () => {
   it('conserva identidad local en posicion, estado e historial y usa UID externo en la API', async () => {
     const gps = provider();
     const localId = 'local-truck' as VehicleId;
-    mocks.vehicles.mockResolvedValue([{ id: localId, plate: 'RBDC59', capacityLiters: 30000, device: { imei: unit.Imei } }] as Vehicle[]);
+    mocks.vehicles.mockResolvedValue([{ id: localId, plate: 'RBDC59', capacityLiters: 30000, device: { imei: unit.Imei, model: 'FMC130', installedAt: '2026-10-09T10:00:00Z' } }] as Vehicle[]);
     const [positions, devices, vehicles] = await Promise.all([gps.getAllCurrentPositions(), gps.getDeviceStatus(localId), gps.getVehicles()]);
     expect(positions[0]?.vehicleId).toBe(localId);
     expect(devices[0]?.vehicleId).toBe(localId);
     expect(vehicles[0]?.capacityLiters).toBe(30000);
+    expect(vehicles[0]?.device).toMatchObject({ model: 'FMC130', installedAt: '2026-10-09T10:00:00Z', externalId: uid, provider: '3dtracking' });
     mocks.call.mockResolvedValueOnce({ Position: [rawPosition(from)], StartId: 99, IsCurrent: true });
     expect((await gps.getPositionHistory({ vehicleId: localId, from, to }))[0]?.vehicleId).toBe(localId);
     expect(mocks.call).toHaveBeenLastCalledWith('/api/v1.0/data/positionslist', { Uid: uid, StartHourUtc: '2026-10-09T12:00:00.000Z' });

@@ -1,5 +1,17 @@
 # Pendientes de Supabase para Fenice
 
+## Estado verificado el 9 de octubre de 2026
+
+La revisión remota confirmó las 18 tablas internas con RLS y permisos de servidor, el bucket privado de publicidad con los MIME requeridos, la restricción GPS compatible y el límite de velocidad. Render está conectado al proyecto **Fleet Control Fenice** con una clave de servidor válida. No hace falta volver a ejecutar la instalación completa.
+
+Se aplicaron las migraciones `gps_fleet_unknown_details_and_unique_links` y `gps_vehicle_type_unknown`, incluidas en `supabase/migrations`. Permiten registrar una unidad antes de conocer su ficha técnica (capacidad y compartimentos en 0, año nulo, tipo `sin_dato`) e impiden asociar el mismo GPS a dos vehículos. No modifican las fichas existentes. RBDC59 y el FMC130 confirmado ya quedaron registrados y vinculados mediante IMEI y UID externo, sin inventar características del camión.
+
+Las credenciales GPS se configuraron en Render, con demostración apagada y acceso administrativo protegido. La creación del primer administrador requiere el RUT, nombre y contraseña que defina el titular; la tabla `usuarios` estaba vacía en esta revisión. El archivo propio de recorridos aún requiere un volumen persistente y un grabador supervisado en producción. El catálogo y la última posición continúan consultándose desde la API GPS; no son posiciones almacenadas en Supabase.
+
+Para los próximos ocho equipos, registrar sus patentes e IMEI confirmados y vincular cada uno a un vehículo. El conector descubre nuevas unidades del catálogo al renovarlo; las pruebas existentes cubren nueve unidades simultáneas sin mezclar posiciones, estados ni historiales. No registrar unidades de ejemplo en producción.
+
+## Instalación o recuperación del esquema
+
 El archivo [supabase/schema.sql](../supabase/schema.sql) reúne la instalación y las actualizaciones que requiere la versión actual de Fleet Control. Se puede aplicar a un proyecto nuevo o volver a ejecutar sobre el esquema anterior de este repositorio. Crea las tablas faltantes, conserva las filas existentes y actualiza los campos conocidos de compatibilidad. El proyecto remoto todavía necesita sus credenciales en el servidor.
 
 ## Ejecutar el SQL
@@ -57,8 +69,8 @@ Después, abre `/api/system/supabase`: debe informar conexión correcta. Inicia 
 
 El SQL deja preparada la base, pero estas tareas pertenecen a servicios o datos reales:
 
-- **RBDC59:** registrar el camión con sus datos reales y vincular el FMC130 en **Flota → Conectar GPS**, una vez conocido su IMEI. El proveedor será 3DTracking. No se crea una asociación ficticia.
-- **GPS real:** configurar usuario y contraseña de 3DTracking, SIM/APN y destino del equipo indicado por ese proveedor. Supabase no recibe directamente el protocolo del FMC130.
+- **RBDC59:** ya registrado y vinculado al FMC130 confirmado. Completar marca, modelo, año, tipo, capacidad y compartimentos cuando se conozcan.
+- **GPS real:** credenciales de consulta configuradas en Render. En terreno, confirmar alimentación, SIM/APN y transmisión reciente. Supabase no recibe directamente el protocolo del FMC130.
 - **Clientes y OT:** conectar el ERP de Fenice en modo de solo lectura. Esos datos no se trasladan a las tablas internas de Supabase mediante este script.
 - **Historial GPS:** definir `GPS_HISTORY_DIR` en un volumen persistente y ejecutar `npm run gps:record` bajo un proceso que se reinicie al fallar. La publicidad guardada en Storage no implica que el archivo de posiciones GPS también esté en Supabase.
 - **Alertas reales:** desplegar el proceso que evalúa los motores operacionales e inserta alertas de la flota real. Las tablas ya existen; un SQL de instalación no reemplaza ese proceso.

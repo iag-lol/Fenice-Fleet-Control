@@ -1,4 +1,5 @@
 'use client';
+import { gpsDisplayText } from '@/lib/gps-branding';
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { CheckCircle2, Loader2, Satellite, Unlink, XCircle } from 'lucide-react';
@@ -107,15 +108,14 @@ export function ConnectGpsDialog({ open, onClose, vehicleId, vehicleLabel }: Con
     <Sheet open={open} onClose={onClose} title="Conectar GPS" description={vehicleLabel}>
       <div className="space-y-4 p-4">
         <div>
-          <label className="field-label">Proveedor</label>
+          <label className="field-label">Conexión</label>
           <Select
             value="traccar"
             disabled
-            options={[{ value: 'traccar', label: 'Traccar' }]}
+            options={[{ value: 'traccar', label: 'GPS Fleet Control' }]}
           />
           <p className="mt-1 text-2xs text-ink-faint">
-            Funciona con Traccar Client (celular) y con hardware GPS que reporte a un servidor
-            Traccar, como un Teltonika FMC130.
+            Permite vincular dispositivos móviles y equipos GPS compatibles a Fleet Control.
           </p>
         </div>
 
@@ -131,12 +131,12 @@ export function ConnectGpsDialog({ open, onClose, vehicleId, vehicleLabel }: Con
             disabled={busy}
           />
           <p className="mt-1 text-2xs text-ink-faint">
-            El &ldquo;Device Identifier&rdquo; configurado en Traccar Client, o el IMEI del equipo.
+            El identificador configurado en el dispositivo o el IMEI del equipo.
           </p>
         </div>
 
         <div>
-          <label className="field-label">Servidor Traccar (opcional)</label>
+          <label className="field-label">Servidor GPS (opcional)</label>
           <Input
             value={serverUrl}
             onChange={(e) => {
@@ -162,7 +162,7 @@ export function ConnectGpsDialog({ open, onClose, vehicleId, vehicleLabel }: Con
         </Button>
 
         {testResult ? <ConnectionTestSummary result={testResult} /> : null}
-        {test.isError ? <p className="text-xs text-status-dormant">{test.error.message}</p> : null}
+        {test.isError ? <p className="text-xs text-status-dormant">{gpsDisplayText(test.error.message)}</p> : null}
 
         <div className="flex gap-2 border-t border-line pt-4">
           {data?.device ? (
@@ -213,9 +213,9 @@ function ConnectionTestSummary({ result }: { result: TraccarConnectionTest }) {
           <span className={row.ok ? 'text-ink' : 'text-ink-faint'}>{row.label}</span>
         </div>
       ))}
-      <p className="text-xs text-ink-muted">En el FMC130 verifica SIM y APN, servidor y puerto Teltonika, y frecuencia de envío. Prueba que los registros pendientes se recuperen al volver la cobertura. En un celular, permite ubicación en segundo plano.</p>
+      <p className="text-xs text-ink-muted">En el FMC130 verifica SIM y APN, servidor y puerto de comunicación, y frecuencia de envío. Prueba que los registros pendientes se recuperen al volver la cobertura. En un celular, permite ubicación en segundo plano.</p>
       <p className={`pt-1 text-xs ${result.ok && result.hasPosition ? 'text-status-active' : 'text-status-warning'}`}>
-        {result.message}
+        {gpsDisplayText(result.message)}
       </p>
       {result.ok ? (
         <div className="pt-1">

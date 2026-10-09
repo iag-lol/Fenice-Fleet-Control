@@ -15,11 +15,17 @@ it('prefiere telemetría del equipo aun sin ubicación; conserva fechas y export
   const device = { telemetry: t } as DeviceStatus;
   expect(latestTelemetry(position, device)).toBe(t);
   const csv = exportTelemetryCsv('TEST01', position, device);
-  expect(csv).toContain('"contador_motor_proveedor","0","no_declarada"'); expect(csv).toContain('"Alimentación","false"');
+  expect(csv).toContain('"contador_motor_gps","0","no_declarada"'); expect(csv).toContain('"Alimentación","false"');
   expect(csv).toContain('"Nivel","0","%","2026-10-08T15:05:00Z"');
 });
 it('el informe CSV neutraliza fórmulas y escapa comillas sin ejecutar datos del proveedor', () => {
   const t = { ...telemetry, sensors: [{ name: '=HYPERLINK("x")', type: null, value: '+CMD', unit: 'V', measuredAt: null, receivedAt: null }] };
   const csv = exportTelemetryCsv('TEST01', { telemetry: t } as Position);
   expect(csv).toContain("'=HYPERLINK"); expect(csv).toContain("'+CMD"); expect(csv).toContain('""x""');
+});
+
+it('los informes descargables usan Fleet Control y no publican marcas de integración', () => {
+  const csv = exportTelemetryCsv('TEST01', { telemetry: { ...telemetry, engineCounter: 42,
+    sensors: [{ name: '3DTracking Sensor', type: null, value: '12', unit: 'V', measuredAt: null, receivedAt: null }] } } as Position);
+  expect(csv).toContain('Fleet Control GPS'); expect(csv).not.toMatch(/3dtracking|traccar|movilmaster|teltonika|proveedor/i);
 });

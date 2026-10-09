@@ -9,6 +9,7 @@ import type { ClientSegment, VehicleType } from '@/types/core';
  */
 
 export const VEHICLE_TYPE_LABEL: Record<VehicleType, string> = {
+  sin_dato: 'Tipo sin informar',
   cisterna_semirremolque: 'Cisterna semirremolque',
   cisterna_rigido: 'Cisterna rigido',
   camioneta_estanque: 'Camioneta estanque',

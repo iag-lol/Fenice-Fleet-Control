@@ -21,6 +21,7 @@ import { useLiveFleet, useSecondsSince } from '@/hooks/use-live-fleet';
 import { VEHICLE_STATUS_LABEL } from '@/lib/engines/gps-health';
 import { formatElapsed, formatSpeed, normalizeSearch } from '@/lib/format';
 import { cn } from '@/lib/cn';
+import { gpsDisplayText } from '@/lib/gps-branding';
 import type { VehicleOperationalStatus, VehicleSnapshot } from '@/types/core';
 
 const STATUS_OPTIONS = [
@@ -108,7 +109,7 @@ export function FleetView() {
       sortValue: (row) => `${row.vehicle.brand} ${row.vehicle.model}`,
       cell: (row) => (
         <span className="text-ink-muted">
-          {row.vehicle.brand} {row.vehicle.model}
+          {gpsDisplayText(`${row.vehicle.brand} ${row.vehicle.model}`) || 'Sin dato'}
         </span>
       ),
     },
