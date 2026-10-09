@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import { exportTelemetryCsv, fuelDisplay, latestTelemetry, telemetryFlag, uniqueSensor } from './gps-telemetry';
+import { exportTelemetryCsv, fuelDisplay, latestTelemetry, reportedOperationStatus, telemetryFlag, uniqueSensor } from './gps-telemetry';
 import type { DeviceStatus, GpsTelemetry, Position } from '@/types/core';
 const telemetry: GpsTelemetry = { source: '3dtracking', measuredAt: '2026-10-08T15:00:00Z', receivedAt: null, inputs: [], sensors: [] };
 it('sin datos no se presenta lleno, vacío, saludable ni sin alertas', () => {
@@ -15,8 +15,16 @@ it('prefiere telemetría del equipo aun sin ubicación; conserva fechas y export
   const device = { telemetry: t } as DeviceStatus;
   expect(latestTelemetry(position, device)).toBe(t);
   const csv = exportTelemetryCsv('TEST01', position, device);
-  expect(csv).toContain('"contador_motor_gps","0","no_declarada"'); expect(csv).toContain('"Alimentación","false"');
+  expect(csv).toContain('"contador_equipo_gps","0","no_declarada"'); expect(csv).toContain('"Alimentación","false"');
   expect(csv).toContain('"Nivel","0","%","2026-10-08T15:05:00Z"');
+});
+it('idling con contacto activo no acredita un motor encendido ni horas de motor', () => {
+  const t = { ...telemetry, engineStatus: 'idling', engineCounter: 107256 };
+  expect(reportedOperationStatus(t.engineStatus)).toBe('Contacto activo, sin marcha reportada');
+  const csv = exportTelemetryCsv('TEST01', { telemetry: t } as Position);
+  expect(csv).toContain('"estado_operativo_gps","idling"');
+  expect(csv).toContain('"contador_equipo_gps","107256","no_declarada"');
+  expect(csv).not.toMatch(/estado_motor|contador_motor|ralentí/i);
 });
 it('el informe CSV neutraliza fórmulas y escapa comillas sin ejecutar datos del proveedor', () => {
   const t = { ...telemetry, sensors: [{ name: '=HYPERLINK("x")', type: null, value: '+CMD', unit: 'V', measuredAt: null, receivedAt: null }] };

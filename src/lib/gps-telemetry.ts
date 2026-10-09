@@ -10,8 +10,10 @@ export function uniqueSensor(telemetry: GpsTelemetry | null, metric: GpsSensorRe
   return found.length === 1 ? found[0]! : null;
 }
 export function telemetryFlag(flag?: boolean): string { return flag === true ? 'Activa' : flag === false ? 'Sin alerta' : 'Sin dato'; }
-export function reportedEngineStatus(value?: string): string {
-  const labels: Record<string, string> = { idling: 'Ralentí', running: 'En marcha', stopped: 'Detenido', off: 'Apagado', on: 'Encendido' };
+/** El estado operativo GPS no acredita que el motor funcione: con contacto
+ * activo y el camion parado puede llegar `idling` aunque el motor este apagado. */
+export function reportedOperationStatus(value?: string): string {
+  const labels: Record<string, string> = { idling: 'Contacto activo, sin marcha reportada', running: 'Marcha reportada', stopped: 'Sin marcha reportada', off: 'Contacto apagado', on: 'Contacto encendido' };
   return value ? labels[value.trim().toLowerCase()] ?? gpsDisplayText(value) : 'Sin dato';
 }
 export function sensorDisplay(sensor: GpsSensorReading | null, unit: string, decimals = 1): string {
@@ -32,8 +34,8 @@ export function exportTelemetryCsv(plate: string, position?: Position | null, de
     if (value !== undefined && value !== null) rows.push([plate, name, value, unit, at ?? '', received ?? '', 'Fleet Control GPS']);
   };
   add('odometro_gps', position?.odometerKm, 'km', position?.timestamp, position?.receivedAt);
-  add('estado_motor_reportado', telemetry?.engineStatus, '', telemetry?.measuredAt, telemetry?.receivedAt);
-  add('contador_motor_gps', telemetry?.engineCounter, 'no_declarada', telemetry?.measuredAt, telemetry?.receivedAt);
+  add('estado_operativo_gps', telemetry?.engineStatus, '', telemetry?.measuredAt, telemetry?.receivedAt);
+  add('contador_equipo_gps', telemetry?.engineCounter, 'no_declarada', telemetry?.measuredAt, telemetry?.receivedAt);
   for (const input of telemetry?.inputs ?? []) add(input.label, input.active, 'boolean', telemetry?.measuredAt, telemetry?.receivedAt);
   for (const sensor of telemetry?.sensors ?? []) add(sensor.name, sensor.value, sensor.unit ?? '', sensor.measuredAt, sensor.receivedAt);
   const cell = (value: unknown) => {

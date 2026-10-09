@@ -4,7 +4,7 @@ import { Download } from 'lucide-react';
 import type { DeviceStatus, GpsSensorReading, Position } from '@/types/core';
 import { DetailList } from '@/components/common/detail-list';
 import { formatNumber, formatSmartDateTime } from '@/lib/format';
-import { exportTelemetryCsv, fuelDisplay, latestTelemetry, reportedEngineStatus, sensorDisplay, telemetryFlag, uniqueSensor } from '@/lib/gps-telemetry';
+import { exportTelemetryCsv, fuelDisplay, latestTelemetry, reportedOperationStatus, sensorDisplay, telemetryFlag, uniqueSensor } from '@/lib/gps-telemetry';
 
 export function DeviceTelemetry({ plate, position, device }: { plate: string; position?: Position | null; device?: DeviceStatus | null }) {
   const telemetry = latestTelemetry(position, device);
@@ -24,7 +24,7 @@ export function DeviceTelemetry({ plate, position, device }: { plate: string; po
     </div>
     <DetailList columns={2} items={[
       { label: 'Odómetro del equipo', value: position?.odometerKm !== undefined ? `${formatNumber(position.odometerKm, 2)} km` : 'Sin dato' },
-      { label: 'Estado motor reportado', value: reportedEngineStatus(telemetry?.engineStatus) },
+      { label: 'Estado operativo GPS', value: reportedOperationStatus(telemetry?.engineStatus) },
       { label: 'Alerta alimentación externa', value: telemetryFlag(telemetry?.externalPowerFailure) },
       { label: 'Alerta batería del GPS', value: telemetryFlag(telemetry?.lowBattery) },
       { label: 'Voltaje alimentación', value: reading(uniqueSensor(telemetry, 'supply_voltage'), 'V', 2) },
@@ -35,7 +35,7 @@ export function DeviceTelemetry({ plate, position, device }: { plate: string; po
       ...(uniqueSensor(telemetry, 'engine_temperature') ? [{ label: 'Temperatura motor', value: reading(uniqueSensor(telemetry, 'engine_temperature'), '°C') }] : []),
     ]} />
     {telemetry?.inputs.some((s) => !['externalpowerfailure', 'batterylevellow'].includes(s.code.toLowerCase())) ? <details className="rounded-md border border-line px-2.5 py-2 text-2xs text-ink-muted"><summary className="cursor-pointer">Señales adicionales</summary><ul className="mt-2 space-y-2">{telemetry.inputs.filter((s) => !['externalpowerfailure', 'batterylevellow'].includes(s.code.toLowerCase())).map((s) => <li key={s.code} className="flex justify-between gap-3"><span>{gpsDisplayText(s.label)}</span><span>{s.active === true ? 'Activa' : s.active === false ? 'No activa' : 'Sin dato'}</span></li>)}</ul></details> : null}
-    {telemetry?.engineCounter !== undefined ? <details className="rounded-md border border-line bg-surface-800/50 px-2.5 py-2 text-2xs text-ink-faint"><summary className="cursor-pointer">Contador del equipo</summary><div className="mt-2 flex items-center justify-between"><span>Motor · unidad no declarada</span><span className="numeric font-medium text-ink">{formatNumber(telemetry.engineCounter, Number.isInteger(telemetry.engineCounter) ? 0 : 2)}</span></div></details> : null}
+    {telemetry?.engineCounter !== undefined ? <details className="rounded-md border border-line bg-surface-800/50 px-2.5 py-2 text-2xs text-ink-faint"><summary className="cursor-pointer">Contador del equipo</summary><div className="mt-2 flex items-center justify-between"><span>Registro acumulado · unidad no declarada</span><span className="numeric font-medium text-ink">{formatNumber(telemetry.engineCounter, Number.isInteger(telemetry.engineCounter) ? 0 : 2)}</span></div></details> : null}
     {telemetry?.sensors.length ? <details className="rounded-md border border-line px-2.5 py-2 text-xs text-ink-muted"><summary className="cursor-pointer">Sensores reportados · {telemetry.sensors.length}</summary><ul className="mt-2 space-y-2">{telemetry.sensors.map((sensor, i) => <li key={`${gpsDisplayText(sensor.name)}-${i}`} className="border-t border-line pt-2"><div className="flex justify-between gap-3"><span>{gpsDisplayText(sensor.name)}</span><span className="numeric font-medium text-ink">{gpsDisplayText(sensor.value)} {gpsDisplayText(sensor.unit)}</span></div><span className="text-[10px] text-ink-faint">{formatSmartDateTime(sensor.measuredAt)}</span></li>)}</ul></details> : null}
   </div>;
 }
