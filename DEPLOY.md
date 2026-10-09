@@ -1,4 +1,19 @@
-# Publicar la demo para Fenice
+# Despliegue de Fenice Fleet Control
+
+## Producción actual — verificada el 9 de octubre de 2026
+
+Dirección de la plataforma: **https://fleet.fenice.cl**.
+
+- Servicio Render: `Fenice-Fleet-Control`, repositorio `iag-lol/Fenice-Fleet-Control`, rama `main`.
+- DNS de `fenice.cl` administrado en GoDaddy: `fleet` es un CNAME a `fenice-fleet-control.onrender.com`, TTL de 1 hora. El registro ya existía; se completó su asociación al servicio Render.
+- Dominio verificado y conexión HTTPS validada con certificado de confianza. HTTP redirige a HTTPS.
+- El dominio ocupa el segundo de los dos dominios incluidos en el workspace; no agrega un costo de dominio.
+- La administración mantiene `AUTH_ENABLED=true` y la demostración apagada. La base interna es **Fleet Control Fenice**; ver [estado de Supabase](docs/SUPABASE-PENDIENTES.md).
+- Comprobación: `/login` devuelve 200 con TLS autorizado, la raíz conduce al login en el mismo dominio, el diagnóstico confirma Supabase conectado y las posiciones GPS exigen autenticación (401 sin sesión).
+
+## Guía histórica de demostración
+
+Las instrucciones que siguen describen una demostración anterior. Sus ejemplos con autenticación desactivada no corresponden a la producción actual.
 
 Guia para dejar la plataforma accesible por internet y que el cliente pueda
 verla desde cualquier dispositivo.
