@@ -115,6 +115,13 @@ describe('deriveVehicleStatus', () => {
     ).toBe('offline');
   });
 
+  it.each(['moving', 'uncertain'] as const)('la perdida de posicion tiene prioridad sobre la actividad %s anterior', (motionEvidence) => {
+    const position = { ...movingPosition, timestamp: agoIso(300), motionEvidence };
+    const connection = evaluateConnectionState(position.timestamp, gps, NOW).state;
+    expect(connection).toBe('lost');
+    expect(deriveVehicleStatus({ position, connection, gps })).toBe('offline');
+  });
+
   it('marca offline si no hay posicion alguna', () => {
     expect(deriveVehicleStatus({ position: null, connection: 'online', gps })).toBe('offline');
   });

@@ -79,7 +79,9 @@ export interface VehicleStatusInput {
  */
 export function deriveVehicleStatus(input: VehicleStatusInput): VehicleOperationalStatus {
   if (input.inMaintenance) return 'mantenimiento';
-  if (input.connection === 'offline' || input.connection === 'unknown' || !input.position) {
+  // Sin posicion reciente desde el umbral de perdida, aunque el modem siga
+  // comunicando. Este estado operativo se muestra como "Sin GPS reciente".
+  if (input.connection === 'lost' || input.connection === 'offline' || input.connection === 'unknown' || !input.position) {
     return 'offline';
   }
 
