@@ -2,7 +2,7 @@ import type { DeviceStatus, GpsSensorReading, GpsTelemetry, Position } from '@/t
 import { gpsDisplayText } from './gps-branding';
 import { formatNumber } from './format';
 
-export function latestTelemetry(position?: Position | null, device?: DeviceStatus | null): GpsTelemetry | null {
+export function latestTelemetry(position?: Pick<Position, 'telemetry'> | null, device?: Pick<DeviceStatus, 'telemetry'> | null): GpsTelemetry | null {
   const current = position?.telemetry;
   const status = device?.telemetry;
   if (!current || !status) return status ?? current ?? null;

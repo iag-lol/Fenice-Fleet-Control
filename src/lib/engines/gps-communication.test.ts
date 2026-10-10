@@ -33,4 +33,10 @@ describe('comunicacion independiente de la posicion', () => {
     expect(position.timestamp).toBe(at(36000));
     expect(gpsCommunication({ lastCommunicationAt: at(86400) }, { ...position, receivedAt: at(86400) }, gps, now).state).toBe('offline');
   });
+  it('una alarma de alimentacion reportada impide tratar una interrupcion como espera normal', () => {
+    const position = { receivedAt: at(7200), ignition: 'off', speed: 0, speedKnown: true, valid: true,
+      telemetry: { source: '3dtracking', measuredAt: at(7200), receivedAt: at(7200), externalPowerFailure: true, inputs: [], sensors: [] } } satisfies Partial<Position>;
+    expect(gpsCommunication({ lastCommunicationAt: at(7200) }, position, gps, now).state).toBe('offline');
+    expect(gpsCommunication({ lastCommunicationAt: at(30) }, position, gps, now).state).toBe('online');
+  });
 });
