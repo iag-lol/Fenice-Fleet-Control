@@ -31,6 +31,7 @@ import {
 } from '@/lib/format';
 import { cn } from '@/lib/cn';
 import { useMapStore } from '@/stores/map-store';
+import { matchesVehicleGroup, vehicleGroup, VEHICLE_GROUP_LABEL, VEHICLE_GROUP_FILTER_OPTIONS, type VehicleGroupFilter } from '@/lib/vehicle-groups';
 import type {
   Alert,
   Position,
@@ -134,6 +135,9 @@ export function OperationsPanel({
   const fitPoints = useMapStore((s) => s.fitPoints);
   const inspectCommune = useMapStore((s) => s.inspectCommune);
   const select = useMapStore((s) => s.select);
+  const vehicleGroupFilter = useMapStore(s => s.vehicleGroupFilter);
+  const setVehicleGroupFilter = useMapStore(s => s.setVehicleGroupFilter);
+  const groupedVehicles = useMemo(() => (snapshot?.vehicles ?? []).filter(v => matchesVehicleGroup(v.vehicle, vehicleGroupFilter)), [snapshot?.vehicles, vehicleGroupFilter]);
 
   const term = normalizeSearch(search);
 
@@ -154,7 +158,7 @@ export function OperationsPanel({
     openAlertInventory.length === 0;
 
   const vehicles = useMemo(() => {
-    const list = (snapshot?.vehicles ?? []).filter(
+    const list = groupedVehicles.filter(
       (v) => tab !== 'vehiculos' || !status || v.activityStatus === status,
     );
     const filtered =
@@ -162,7 +166,7 @@ export function OperationsPanel({
         ? list
         : list.filter((v) =>
             normalizeSearch(
-              `${v.vehicle.plate} ${v.vehicle.fleetCode} ${v.driver?.fullName ?? ''} ${v.insideGeofenceName ?? ''} ${ACTIVITY_LABEL[v.activityStatus]}`,
+              `${v.vehicle.plate} ${v.vehicle.fleetCode} ${VEHICLE_GROUP_LABEL[vehicleGroup(v.vehicle)]} ${v.driver?.fullName ?? ''} ${v.insideGeofenceName ?? ''} ${ACTIVITY_LABEL[v.activityStatus]}`,
             ).includes(term),
           );
 
@@ -180,7 +184,7 @@ export function OperationsPanel({
       moving: 5,
     };
     return [...filtered].sort((a, b) => priority[a.activityStatus] - priority[b.activityStatus]);
-  }, [snapshot, term, status, tab]);
+  }, [groupedVehicles, term, status, tab]);
 
   const workOrders = useMemo(() => {
     const list = (snapshot?.pendingWorkOrders ?? []).filter(
@@ -286,12 +290,12 @@ export function OperationsPanel({
     clientes: snapshot?.clients.length ?? 0,
     geocercas: snapshot?.geofences.length ?? 0,
     comunas: communes.length,
-    vehiculos: snapshot?.vehicles.length ?? 0,
+    vehiculos: groupedVehicles.length,
     ordenes: snapshot?.pendingWorkOrders.length ?? 0,
     alertas: openAlertInventory.length,
     rutas: snapshot?.routes.length ?? 0,
   };
-  const filtered = Boolean(term || status);
+  const filtered = Boolean(term || status || (tab === 'vehiculos' && vehicleGroupFilter !== 'todos'));
 
   return (
     <div className="flex h-full min-w-0 flex-col bg-surface-900">
@@ -384,6 +388,9 @@ export function OperationsPanel({
             placeholder={SEARCH_PLACEHOLDER[tab]}
           />
         </div>
+        {tab === 'vehiculos' ? <Select value={vehicleGroupFilter} aria-label="Filtrar vehículos por grupo"
+          className="min-w-0 flex-[1_1_100%]" options={VEHICLE_GROUP_FILTER_OPTIONS}
+          onChange={event => { setVehicleGroupFilter(event.target.value as VehicleGroupFilter); setLimit(PAGE_SIZE); }} /> : null}
         {statusOptions.length ? (
           <Select
             className="min-w-0 flex-[0_1_140px] md:flex-[1_1_100%]"
@@ -402,6 +409,7 @@ export function OperationsPanel({
             onClick={() => {
               setSearch('');
               setStatus('');
+              if (tab === 'vehiculos') setVehicleGroupFilter('todos');
               setLimit(PAGE_SIZE);
             }}
             className="min-h-9 shrink-0 rounded px-2 text-2xs font-medium text-brand-700 hover:bg-surface-800"
@@ -425,7 +433,7 @@ export function OperationsPanel({
                 />
                 <span className="min-w-0 flex-1 truncate">{ACTIVITY_LABEL[activity]}</span>
                 <span className="numeric rounded-full bg-surface-900 px-1.5 text-[10px] text-ink-faint shadow-card">
-                  {(snapshot?.vehicles ?? []).filter((vehicle) => vehicle.activityStatus === activity).length}
+                  {groupedVehicles.filter((vehicle) => vehicle.activityStatus === activity).length}
                 </span>
               </div>
             ))}
@@ -617,6 +625,7 @@ export function OperationsPanel({
                           {formatSpeed(live?.speedKnown === false ? null : live?.speed ?? null)}
                         </span>
                       </div>
+                      <p className="mt-1 text-2xs text-brand-700">{VEHICLE_GROUP_LABEL[vehicleGroup(snap.vehicle)]}</p>
 
                       <p className="mt-0.5 truncate text-2xs text-ink-faint">
                         {ACTIVITY_LABEL[snap.activityStatus]}

@@ -230,7 +230,8 @@ export interface GpsDevice {
   serverUrl?: string;
 }
 
-export type VehicleType = 'sin_dato' | 'cisterna_semirremolque' | 'cisterna_rigido' | 'camioneta_estanque';
+export type VehicleType = 'sin_dato' | 'cisterna_semirremolque' | 'cisterna_rigido' | 'camioneta_estanque' | 'personal';
+export type VehicleGroup = 'camiones' | 'camionetas' | 'personal';
 
 export interface Vehicle {
   id: VehicleId;
@@ -242,6 +243,7 @@ export interface Vehicle {
   model: string;
   year: number;
   type: VehicleType;
+  group?: VehicleGroup | null;
   /**
    * Capacidad total del estanque, en litros.
    *

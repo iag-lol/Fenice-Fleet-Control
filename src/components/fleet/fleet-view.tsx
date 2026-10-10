@@ -22,6 +22,7 @@ import { VEHICLE_STATUS_LABEL } from '@/lib/engines/gps-health';
 import { formatElapsed, formatSpeed, normalizeSearch } from '@/lib/format';
 import { cn } from '@/lib/cn';
 import { gpsDisplayText } from '@/lib/gps-branding';
+import { matchesVehicleGroup, vehicleGroup, VEHICLE_GROUP_LABEL, VEHICLE_GROUP_FILTER_OPTIONS, type VehicleGroupFilter } from '@/lib/vehicle-groups';
 import type { VehicleOperationalStatus, VehicleSnapshot } from '@/types/core';
 
 const STATUS_OPTIONS = [
@@ -40,6 +41,7 @@ export function FleetView() {
   const secondsSinceUpdate = useSecondsSince(lastUpdateAt);
 
   const [search, setSearch] = useState('');
+  const [group, setGroup] = useState<VehicleGroupFilter>('todos');
   const [status, setStatus] = useState(searchParams.get('estado') ?? '');
   const [creating, setCreating] = useState(false);
   const [deleting, setDeleting] = useState<VehicleSnapshot | null>(null);
@@ -59,6 +61,7 @@ export function FleetView() {
     const term = normalizeSearch(search);
 
     return data.filter((snapshot) => {
+      if (!matchesVehicleGroup(snapshot.vehicle, group)) return false;
       if (status && snapshot.status !== status) return false;
       if (term.length === 0) return true;
 
@@ -67,7 +70,7 @@ export function FleetView() {
       );
       return haystack.includes(term);
     });
-  }, [data, search, status]);
+  }, [data, search, status, group]);
 
   const counts = useMemo(() => {
     const result = { en_ruta: 0, detenido: 0, offline: 0 };
@@ -79,11 +82,12 @@ export function FleetView() {
     return result;
   }, [data]);
 
-  const hasFilters = search.trim().length > 0 || status.length > 0;
+  const hasFilters = search.trim().length > 0 || status.length > 0 || group !== 'todos';
 
   const clearFilters = (): void => {
     setSearch('');
     setStatus('');
+    setGroup('todos');
     router.replace('/flota');
   };
 
@@ -99,6 +103,7 @@ export function FleetView() {
         <div className="min-w-0">
           <p className="truncate font-medium text-ink">{row.vehicle.plate}</p>
           <p className="numeric truncate text-2xs text-ink-faint">{row.vehicle.fleetCode}</p>
+          <p className="mt-1 text-2xs text-brand-700">{VEHICLE_GROUP_LABEL[vehicleGroup(row.vehicle)]}</p>
         </div>
       ),
     },
@@ -292,6 +297,8 @@ export function FleetView() {
             aria-label="Filtrar por estado"
           />
 
+          <Select value={group} onChange={event => setGroup(event.target.value as VehicleGroupFilter)}
+            options={VEHICLE_GROUP_FILTER_OPTIONS} aria-label="Filtrar vehículos por grupo" className="sm:w-56" />
           {hasFilters ? (
             <Button
               variant="ghost"

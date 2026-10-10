@@ -22,7 +22,7 @@ import { useMapStore, type MapLayerId } from '@/stores/map-store';
 import type { HeatmapMode } from '@/types/views';
 
 const LAYERS: { id: MapLayerId; label: string; icon: typeof Truck; hint: string }[] = [
-  { id: 'camiones', label: 'Camiones', icon: Truck, hint: 'Posicion y estado de la flota' },
+  { id: 'camiones', label: 'Vehículos', icon: Truck, hint: 'Posicion y estado de todos los grupos de la flota' },
   { id: 'clientes', label: 'Clientes', icon: Building2, hint: 'Pines por estado comercial' },
   { id: 'rutas', label: 'Rutas', icon: RouteIcon, hint: 'Planificada, ejecutada y paradas' },
   { id: 'geocercas', label: 'Geocercas', icon: Shield, hint: 'Perimetros de entrega y zonas' },

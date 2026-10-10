@@ -205,6 +205,7 @@ export async function loadMapSnapshot(): Promise<MapSnapshot> {
     .filter((a) => isUsableCoordinate(a.position))
     .map((a) => ({
       alertId: a.id,
+      vehicleId: a.vehicleId,
       severity: a.severity,
       title: a.title,
       lat: a.position!.lat,

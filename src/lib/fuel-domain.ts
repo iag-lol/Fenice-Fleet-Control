@@ -13,6 +13,7 @@ export const VEHICLE_TYPE_LABEL: Record<VehicleType, string> = {
   cisterna_semirremolque: 'Cisterna semirremolque',
   cisterna_rigido: 'Cisterna rigido',
   camioneta_estanque: 'Camioneta estanque',
+  personal: 'Vehículo personal',
 };
 
 export const CLIENT_SEGMENT_LABEL: Record<ClientSegment, string> = {

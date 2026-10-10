@@ -4,6 +4,7 @@ import { create } from 'zustand';
 
 import type { MapViewMode } from '@/components/map/map-style';
 import { boundsForPoints } from '@/lib/map-navigation';
+import type { VehicleGroupFilter } from '@/lib/vehicle-groups';
 import type { BoundingBox, ClientActivityStatus, LatLng } from '@/types/core';
 import type { HeatmapMode } from '@/types/views';
 
@@ -84,6 +85,8 @@ interface MapState {
 
   /** Filtro de flota independiente del de clientes. */
   vehicleStatusFilter: string[];
+  vehicleGroupFilter: VehicleGroupFilter;
+  setVehicleGroupFilter: (group: VehicleGroupFilter) => void;
   setVehicleStatusFilter: (statuses: string[]) => void;
 
   selection: MapSelection;
@@ -180,10 +183,11 @@ export const useMapStore = create<MapState>((set, get) => ({
 
   filters: DEFAULT_CLIENT_FILTERS,
   setFilters: (updater) => set((state) => ({ filters: { ...state.filters, ...updater } })),
-  resetFilters: () => set({ filters: DEFAULT_CLIENT_FILTERS }),
+  resetFilters: () => { set({ filters: DEFAULT_CLIENT_FILTERS }); get().setVehicleGroupFilter('todos'); },
   activeFilterCount: () => {
-    const { filters } = get();
+    const { filters, vehicleGroupFilter } = get();
     let count = 0;
+    if (vehicleGroupFilter !== 'todos') count += 1;
     if (filters.statuses.length !== 3) count += 1;
     if (filters.communeCodes.length > 0) count += 1;
     if (filters.search.trim().length > 0) count += 1;
@@ -195,6 +199,11 @@ export const useMapStore = create<MapState>((set, get) => ({
   },
 
   vehicleStatusFilter: [],
+  vehicleGroupFilter: 'todos',
+  setVehicleGroupFilter: (vehicleGroupFilter) => set(state => ({ vehicleGroupFilter,
+    ...(state.selection?.type === 'vehicle' || state.selection?.type === 'route' || state.followingVehicleId
+      ? { selection: null, detailOpen: false, followingVehicleId: null, highlightedRouteId: null } : {}),
+  })),
   setVehicleStatusFilter: (statuses) => set({ vehicleStatusFilter: statuses }),
 
   selection: null,

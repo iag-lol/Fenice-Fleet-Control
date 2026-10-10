@@ -2,6 +2,7 @@
 
 import { gpsDisplayText } from '@/lib/gps-branding';
 import { DeviceTelemetry } from '@/components/gps/device-telemetry';
+import { VehicleGroupEditor } from '@/components/fleet/vehicle-group-editor';
 
 import { useQuery } from '@tanstack/react-query';
 import {
@@ -313,6 +314,7 @@ export function VehiclePanel({ vehicleId }: { vehicleId: string }) {
       <div className="space-y-2.5 bg-surface-800/45 p-2.5 pb-4">
       {tab === 'informacion' ? (
       <>
+      <VehicleGroupEditor key={vehicle.id} vehicle={vehicle} />
       {/* --- Estado en tiempo real --- */}
       <Section
         title={vehicleSnapshot.device?.connection === 'online' ? 'Estado en tiempo real' : position ? 'Último registro GPS' : 'Estado GPS'}

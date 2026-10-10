@@ -5,6 +5,7 @@ import { z } from 'zod';
 
 import { getDemoDataset } from '@/demo';
 import { getSupabaseClient, isSupabaseConfigured } from '@/lib/supabase/server-client';
+import { VEHICLE_GROUPS, vehicleGroup } from '@/lib/vehicle-groups';
 import { asDeviceId, asDriverId, asVehicleId, type GpsDevice, type Vehicle, type VehicleId } from '@/types/core';
 
 /**
@@ -16,7 +17,8 @@ import { asDeviceId, asDriverId, asVehicleId, type GpsDevice, type Vehicle, type
 
 const TABLE = 'vehiculos';
 
-export const VEHICLE_TYPES = ['cisterna_semirremolque', 'cisterna_rigido', 'camioneta_estanque'] as const;
+export const VEHICLE_TYPES = ['cisterna_semirremolque', 'cisterna_rigido', 'camioneta_estanque', 'personal'] as const;
+export const vehicleGroupInputSchema = z.object({ group: z.enum(VEHICLE_GROUPS).nullable() }).strict();
 
 export const vehicleInputSchema = z.object({
   plate: z
@@ -30,14 +32,38 @@ export const vehicleInputSchema = z.object({
   model: z.string().trim().max(60).default(''),
   year: z.coerce.number().int().min(1980).max(new Date().getFullYear() + 1).nullable().optional(),
   type: z.enum(VEHICLE_TYPES),
+  group: z.enum(VEHICLE_GROUPS).nullable().optional(),
   /** El operador lo ingresa en metros cubicos; se guarda en litros (x1000). */
-  capacityM3: z.coerce.number().positive().max(60),
-  compartments: z.coerce.number().int().positive().max(10).default(1),
+  capacityM3: z.coerce.number().min(0).max(60),
+  compartments: z.coerce.number().int().min(0).max(10).default(1),
   depotName: z.string().trim().max(120).default(''),
   active: z.boolean().default(true),
+}).superRefine((input, ctx) => {
+  if (input.type !== 'personal' && input.capacityM3 <= 0) ctx.addIssue({ code: 'custom', path: ['capacityM3'], message: 'Indica una capacidad mayor a cero para vehículos de carga.' });
+  if (input.type !== 'personal' && input.compartments <= 0) ctx.addIssue({ code: 'custom', path: ['compartments'], message: 'Indica al menos un compartimento.' });
 });
 
 export type VehicleInput = z.infer<typeof vehicleInputSchema>;
+
+function defaultGroup(type: Vehicle['type']): Vehicle['group'] {
+  const group = vehicleGroup({ type });
+  return group === 'sin_grupo' ? null : group;
+}
+
+export async function updateVehicleGroup(id: VehicleId, group: NonNullable<Vehicle['group']> | null): Promise<Vehicle | null> {
+  if (!isSupabaseConfigured()) {
+    const vehicle = memoryStore().get(id);
+    if (!vehicle) return null;
+    const updated = { ...vehicle, group };
+    memoryStore().set(id, updated);
+    return updated;
+  }
+  const { data, error } = await getSupabaseClient().from(TABLE)
+    .update({ grupo_vehiculo: group, actualizado_at: new Date().toISOString() }).eq('id', id)
+    .select('*, dispositivos_gps(*)').maybeSingle<VehicleRow>();
+  if (error) throw new Error('No fue posible guardar el grupo del vehículo.');
+  return data ? rowToVehicle(data) : null;
+}
 
 interface DeviceRow {
   id: string;
@@ -58,6 +84,7 @@ interface VehicleRow {
   modelo: string;
   anio: number | null;
   tipo: Vehicle['type'];
+  grupo_vehiculo: Vehicle['group'];
   capacidad_litros: number;
   compartimentos: number;
   conductor_id: string | null;
@@ -90,6 +117,7 @@ function rowToVehicle(row: VehicleRow): Vehicle {
     model: row.modelo,
     year: row.anio ?? 0,
     type: row.tipo,
+    group: row.grupo_vehiculo,
     capacityLiters: row.capacidad_litros,
     compartments: row.compartimentos,
     device: deviceRow ? rowToDevice(deviceRow) : null,
@@ -107,6 +135,7 @@ function inputToRow(input: VehicleInput) {
     modelo: input.model,
     anio: input.year ?? null,
     tipo: input.type,
+    grupo_vehiculo: input.group === undefined ? defaultGroup(input.type) : input.group,
     capacidad_litros: Math.round(input.capacityM3 * 1000),
     compartimentos: input.compartments,
     base_despacho: input.depotName || null,
@@ -140,6 +169,7 @@ function createInMemory(input: VehicleInput): Vehicle {
     model: input.model,
     year: input.year ?? new Date().getFullYear(),
     type: input.type,
+    group: input.group === undefined ? defaultGroup(input.type) : input.group,
     capacityLiters: Math.round(input.capacityM3 * 1000),
     compartments: input.compartments,
     device: null,

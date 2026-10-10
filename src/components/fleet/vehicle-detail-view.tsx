@@ -2,6 +2,7 @@
 
 import { gpsDisplayText } from '@/lib/gps-branding';
 import { DeviceTelemetry } from '@/components/gps/device-telemetry';
+import { VehicleGroupEditor } from '@/components/fleet/vehicle-group-editor';
 
 import { useQuery } from '@tanstack/react-query';
 import {
@@ -193,6 +194,7 @@ export function VehicleDetailView({ vehicleId }: { vehicleId: string }) {
       />
 
       <div className="space-y-4">
+        <VehicleGroupEditor key={vehicle.id} vehicle={vehicle} />
         {data.telemetryWarnings?.length ? <div role="status" className="flex gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800"><AlertTriangle className="h-4 w-4 shrink-0" /><div>{data.telemetryWarnings.map((message) => <p key={message}>{message}</p>)}</div></div> : null}
         {/* --- Cifras de la jornada --- */}
         <Card>

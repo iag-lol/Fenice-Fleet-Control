@@ -1,12 +1,31 @@
 import { apiError, assertSameOrigin, getClientIp, guardApi } from '@/lib/api';
+import { readJsonBody } from '@/lib/request-body';
 import { getAuthContext } from '@/lib/auth';
 import { logAction } from '@/lib/audit';
 import { loadVehicleDetail } from '@/services/aggregation/fleet-aggregator';
-import { deleteVehicleFromStore } from '@/services/fleet/vehicle-store';
+import { deleteVehicleFromStore, updateVehicleGroup, vehicleGroupInputSchema } from '@/services/fleet/vehicle-store';
 import { asVehicleId } from '@/types/core';
 import { NextResponse } from 'next/server';
 
 export const dynamic = 'force-dynamic';
+
+export async function PATCH(request: Request, { params }: { params: Promise<{ vehicleId: string }> }): Promise<Response> {
+  const originError = assertSameOrigin(request);
+  if (originError) return originError;
+  const denied = await guardApi('flota.editar');
+  if (denied) return denied;
+  const parsed = vehicleGroupInputSchema.safeParse(await readJsonBody(request));
+  if (!parsed.success) return apiError('Selecciona un grupo válido.', 400);
+  const { vehicleId } = await params;
+  try {
+    const vehicle = await updateVehicleGroup(asVehicleId(vehicleId), parsed.data.group);
+    if (!vehicle) return apiError('Vehículo no encontrado.', 404);
+    const context = await getAuthContext();
+    void logAction({ userId: context.userId, action: 'vehiculo.agrupar', entity: 'vehiculos', entityId: vehicleId,
+      detail: { grupo: parsed.data.group }, ip: getClientIp(request) });
+    return NextResponse.json(vehicle);
+  } catch { return apiError('No fue posible guardar el grupo del vehículo.', 503); }
+}
 
 export async function GET(
   _request: Request,

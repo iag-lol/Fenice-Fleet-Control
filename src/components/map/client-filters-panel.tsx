@@ -9,6 +9,7 @@ import { NumberField, SearchInput, Select } from '@/components/ui/input';
 import { CLIENT_STATUS_LABEL } from '@/lib/engines/client-activity';
 import { cn } from '@/lib/cn';
 import { DEFAULT_CLIENT_FILTERS, useMapStore } from '@/stores/map-store';
+import { VEHICLE_GROUP_FILTER_OPTIONS, type VehicleGroupFilter } from '@/lib/vehicle-groups';
 import type { ClientActivityStatus } from '@/types/core';
 import type { ClientMapPoint } from '@/types/views';
 
@@ -39,6 +40,8 @@ export function ClientFiltersPanel({ allClients, visibleCount, totalCount }: Cli
   const setFilters = useMapStore((s) => s.setFilters);
   const resetFilters = useMapStore((s) => s.resetFilters);
   const activeFilterCount = useMapStore((s) => s.activeFilterCount());
+  const vehicleGroupFilter = useMapStore(s => s.vehicleGroupFilter);
+  const setVehicleGroupFilter = useMapStore(s => s.setVehicleGroupFilter);
 
   const communes = useMemo(() => {
     const map = new Map<string, { code: string; name: string; count: number }>();
@@ -80,7 +83,7 @@ export function ClientFiltersPanel({ allClients, visibleCount, totalCount }: Cli
       <div className="flex items-center justify-between gap-2">
         <p className="flex items-center gap-2 text-[13px] font-medium text-ink">
           <Filter className="h-4 w-4 text-brand-700" />
-          Filtros de clientes
+          Filtros del mapa
           {activeFilterCount > 0 ? <Badge tone="brand">{activeFilterCount}</Badge> : null}
         </p>
         <Button
@@ -94,6 +97,13 @@ export function ClientFiltersPanel({ allClients, visibleCount, totalCount }: Cli
         </Button>
       </div>
 
+      <div className="rounded-lg border border-line bg-surface-800 p-3">
+        <label className="field-label" htmlFor="map-vehicle-group">Grupo de vehículos</label>
+        <Select id="map-vehicle-group" value={vehicleGroupFilter}
+          onChange={event => setVehicleGroupFilter(event.target.value as VehicleGroupFilter)}
+          options={VEHICLE_GROUP_FILTER_OPTIONS} />
+        <p className="mt-2 text-2xs text-ink-muted">Carga de combustible reúne camiones y camionetas.</p>
+      </div>
       {/* Recuento de visibles: la operacion necesita saber cuanto esta ocultando. */}
       <p className="rounded-md border border-line bg-surface-800 px-3 py-2 text-xs text-ink">
         <span className="numeric font-semibold text-brand-700">{visibleCount}</span> de{' '}

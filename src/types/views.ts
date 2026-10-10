@@ -175,6 +175,7 @@ export interface RouteGeometry {
 
 export interface AlertMapPoint {
   alertId: string;
+  vehicleId?: string | null;
   severity: AlertSeverity;
   title: string;
   lat: number;

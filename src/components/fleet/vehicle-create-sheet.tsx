@@ -12,6 +12,7 @@ const VEHICLE_TYPE_OPTIONS: { value: VehicleType; label: string }[] = [
   { value: 'cisterna_semirremolque', label: 'Cisterna semirremolque' },
   { value: 'cisterna_rigido', label: 'Cisterna rigido' },
   { value: 'camioneta_estanque', label: 'Camioneta estanque' },
+  { value: 'personal', label: 'Vehículo personal' },
 ];
 
 interface FormState {
@@ -65,8 +66,8 @@ export function VehicleCreateSheet({ open, onClose }: VehicleCreateSheetProps) {
           model: form.model,
           year: form.year ? Number(form.year) : null,
           type: form.type,
-          capacityM3: Number(form.capacityM3),
-          compartments: Number(form.compartments),
+          capacityM3: form.type === 'personal' ? 0 : Number(form.capacityM3),
+          compartments: form.type === 'personal' ? 0 : Number(form.compartments),
           depotName: form.depotName,
           active: form.active,
         }),
@@ -90,7 +91,7 @@ export function VehicleCreateSheet({ open, onClose }: VehicleCreateSheetProps) {
   });
 
   const capacityLiters = Number(form.capacityM3) > 0 ? Math.round(Number(form.capacityM3) * 1000) : null;
-  const valid = form.plate.trim().length >= 5 && form.fleetCode.trim().length > 0 && Number(form.capacityM3) > 0;
+  const valid = form.plate.trim().length >= 5 && form.fleetCode.trim().length > 0 && (form.type === 'personal' || Number(form.capacityM3) > 0);
 
   return (
     <Sheet
@@ -170,7 +171,7 @@ export function VehicleCreateSheet({ open, onClose }: VehicleCreateSheetProps) {
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
+        {form.type !== 'personal' ? <div className="grid grid-cols-2 gap-3">
           <NumberField
             label="Capacidad"
             suffix="m³"
@@ -188,7 +189,7 @@ export function VehicleCreateSheet({ open, onClose }: VehicleCreateSheetProps) {
             onChange={(event) => update({ compartments: event.target.value })}
             hint="Cuantos productos distintos puede llevar a la vez"
           />
-        </div>
+        </div> : null}
 
         <div>
           <label className="field-label" htmlFor="veh-base">

@@ -49,6 +49,7 @@ import { useLiveFleet } from '@/hooks/use-live-fleet';
 import { OPERATION_BOUNDS } from '@/config/map-viewport';
 import { cn } from '@/lib/cn';
 import { useMapStore } from '@/stores/map-store';
+import { matchesVehicleGroup, VEHICLE_GROUP_FILTER_OPTIONS } from '@/lib/vehicle-groups';
 import { mapQuery, communesQuery, systemModeQuery } from '@/hooks/use-control-data';
 import { useVehicleTrajectory, type TrajectoryEventType } from '@/hooks/use-vehicle-trajectory';
 import { operationPoints, vehicleOverviewPoints } from '@/lib/map-navigation';
@@ -135,6 +136,8 @@ export const OperationalMap = memo(function OperationalMap({
   const layers = useMapStore((s) => s.layers);
   const heatmapMode = useMapStore((s) => s.heatmapMode);
   const filters = useMapStore((s) => s.filters);
+  const vehicleGroupFilter = useMapStore(s => s.vehicleGroupFilter);
+  const setVehicleGroupFilter = useMapStore(s => s.setVehicleGroupFilter);
   const activeFilterCount = useMapStore((s) => s.activeFilterCount());
   const selection = useMapStore((s) => s.select);
   const currentSelection = useMapStore((s) => s.selection);
@@ -211,10 +214,15 @@ export const OperationalMap = memo(function OperationalMap({
   // El stream GPS incluye la instantanea de estados calculada por el
   // servidor. Tiene prioridad sobre `/api/map`, que solo se refresca cada
   // 30 s, para que KPI y marcadores cambien en el mismo pulso que la posicion.
-  const vehicleSnapshots = useMemo(
+  const allVehicleSnapshots = useMemo(
     () => livePayload?.vehicles ?? snapshot?.vehicles ?? [],
     [livePayload?.vehicles, snapshot?.vehicles],
   );
+  const vehicleSnapshots = useMemo(() => allVehicleSnapshots.filter(v => matchesVehicleGroup(v.vehicle, vehicleGroupFilter)
+    || (currentSelection?.type === 'vehicle' && currentSelection.id === v.vehicle.id)),
+    [allVehicleSnapshots, vehicleGroupFilter, currentSelection]);
+  const groupRoutes = useMemo(() => (snapshot?.routes ?? []).filter(route => vehicleGroupFilter === 'todos'
+    || vehicleSnapshots.some(v => v.vehicle.id === route.vehicleId)), [snapshot?.routes, vehicleGroupFilter, vehicleSnapshots]);
 
   const vehicles: FleetMapVehicle[] = useMemo(() => {
     return vehicleSnapshots.map((v) => ({
@@ -253,8 +261,8 @@ export const OperationalMap = memo(function OperationalMap({
   const scopeActivo = isScoped(scope);
 
   const routesEnfocadas = useMemo(
-    () => (snapshot?.routes ? scopeRoutes(snapshot.routes, scope) : []),
-    [snapshot?.routes, scope],
+    () => scopeRoutes(groupRoutes, scope),
+    [groupRoutes, scope],
   );
   const vehiculosEnfocados = useMemo(
     () => scopeVehicles(vehicles, scope, snapshot?.routes ?? []),
@@ -402,7 +410,7 @@ export const OperationalMap = memo(function OperationalMap({
   const fitOperation = useCallback(() => {
     const store = useMapStore.getState();
     store.showAll();
-    const points = snapshot ? operationPoints(snapshot) : [];
+    const points = snapshot && vehicleGroupFilter === 'todos' ? operationPoints(snapshot) : vehicleOverviewPoints(groupRoutes, null);
     points.push(...vehicles.flatMap((v) => (v.position ? [v.position] : [])));
     if (points.length) store.fitPoints(points);
     else
@@ -413,7 +421,7 @@ export const OperationalMap = memo(function OperationalMap({
         },
         10.4,
       );
-  }, [snapshot, vehicles, focusOn]);
+  }, [snapshot, vehicles, focusOn, vehicleGroupFilter, groupRoutes]);
 
   // Pantalla completa dentro de la aplicacion.
   const toggleFullscreen = useCallback(() => {
@@ -559,7 +567,7 @@ export const OperationalMap = memo(function OperationalMap({
             deliveryDockBottom={mobileDockClearance > 0 ? Math.max(mobileDockClearance,
               selectedEvent ? 224 : following ? 150 : scopeActivo || currentSelection?.type === 'vehicle' || highlightedRouteId || scopedCommuneCode ? 144 : 32)
               : selectedEvent || following || scopeActivo || currentSelection?.type === 'vehicle' || highlightedRouteId || scopedCommuneCode ? 80 : 32}
-            activeDeliveries={snapshot.activeDeliveries}
+            activeDeliveries={(snapshot.activeDeliveries ?? []).filter(delivery => vehicleGroupFilter === 'todos' || vehicleSnapshots.some(v => v.vehicle.id === delivery.vehicleId))}
             autoFitKey={following ?? undefined}
             className="absolute inset-0 sm:top-[72px] lg:top-[80px]"
             autoFit
@@ -568,7 +576,7 @@ export const OperationalMap = memo(function OperationalMap({
             clients={clientesEnfocados}
             routes={routesConProgreso}
             geofences={selectedVehicleId ? [] : snapshot.geofences}
-            alerts={selectedVehicleId ? [] : snapshot.alerts}
+            alerts={selectedVehicleId ? [] : snapshot.alerts.filter(alert => vehicleGroupFilter === 'todos' || !alert.vehicleId || vehicleSnapshots.some(v => v.vehicle.id === alert.vehicleId))}
             workOrders={pedidosEnfocados}
             communes={selectedVehicleId ? [] : communeFeatures}
             heatmapPoints={selectedVehicleId ? [] : heatmapPoints}
@@ -702,7 +710,7 @@ export const OperationalMap = memo(function OperationalMap({
         </div>
       ) : null}
       {/* Aviso compacto y descartable, centrado bajo los controles. */}
-      {gpsError && !gpsNoticeDismissed ? (
+      {gpsError && !gpsNoticeDismissed && (vehicleGroupFilter === 'todos' || vehicleSnapshots.length > 0) ? (
         <div className="pointer-events-auto absolute inset-x-2.5 top-28 z-[5] sm:inset-x-auto sm:left-1/2 sm:top-[132px] sm:w-[430px] sm:-translate-x-1/2 lg:top-[140px]">
           {mode?.gps.provider === 'unavailable' ? (
             <PendingIntegrationNotice
@@ -866,11 +874,16 @@ export const OperationalMap = memo(function OperationalMap({
       ) : null}
 
       {/* --- Filtros --- */}
+      {vehicleGroupFilter !== 'todos' && !scopeActivo && !following && currentSelection?.type !== 'vehicle' && !highlightedRouteId ? <div role="status" className="absolute bottom-3 left-3 z-20 flex max-w-[calc(100%-5rem)] items-center gap-2 rounded-lg border border-line bg-surface-900 px-3 py-2 shadow-card">
+        <span className="text-xs font-medium text-brand-700">{VEHICLE_GROUP_FILTER_OPTIONS.find(option => option.value === vehicleGroupFilter)?.label}</span>
+        <span className="text-2xs text-ink-muted">{vehicleSnapshots.length} {vehicleSnapshots.length === 1 ? 'vehículo' : 'vehículos'}</span>
+        <button type="button" aria-label="Mostrar todos los grupos" className="flex h-8 w-8 shrink-0 items-center justify-center rounded hover:bg-surface-800" onClick={() => setVehicleGroupFilter('todos')}>×</button>
+      </div> : null}
       <Sheet
         open={filtersOpen}
         onClose={() => setFiltersOpen(false)}
         title="Filtros del mapa"
-        description="Combina estado comercial, sector y antiguedad"
+        description="Grupos de vehículos, clientes y territorio"
         side="left"
         transparentOverlay
       >
