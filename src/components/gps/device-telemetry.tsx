@@ -28,7 +28,7 @@ export function DeviceTelemetry({ plate, position, device }: { plate: string; po
     <DetailList columns={2} items={[
       { label: 'Odómetro del equipo', value: position?.odometerKm !== undefined ? `${formatNumber(position.odometerKm, 2)} km` : 'Sin dato' },
       { label: 'Estado GPS', value: reportedOperationStatus(telemetry?.engineStatus) },
-      { label: 'Alimentación externa', value: telemetryFlag(telemetry?.externalPowerFailure) },
+      { label: 'Alerta de alimentación', value: telemetryFlag(telemetry?.externalPowerFailure) },
       { label: 'Alerta batería del GPS', value: telemetryFlag(telemetry?.lowBattery) },
       ...(supply ? [{ label: 'Voltaje alimentación', value: reading(supply, 'V', 2) }] : []),
       ...(backup ? [{ label: 'Batería interna GPS', value: reading(backup, 'V', 2) }] : []),
