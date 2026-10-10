@@ -31,7 +31,7 @@ import {
 import { containsPoint } from '@/lib/engines/geofence-engine';
 import { projectOnPolyline } from '@/lib/geo';
 import { FocusBanner } from '@/components/map/focus-banner';
-import { ClientFiltersPanel, applyClientFilters } from '@/components/map/client-filters-panel';
+import { ClientFiltersPanel, MapFiltersFooter, applyClientFilters } from '@/components/map/client-filters-panel';
 import { FleetMap, type FleetMapVehicle } from '@/components/map/fleet-map';
 import { LayerControl } from '@/components/map/layer-control';
 import { MapViewQuickToggle, ViewModeControl } from '@/components/map/view-mode-control';
@@ -886,21 +886,22 @@ export const OperationalMap = memo(function OperationalMap({
         description="Grupos de vehículos, clientes y territorio"
         side="left"
         transparentOverlay
+        floating
+        footer={<MapFiltersFooter onClose={() => setFiltersOpen(false)} visibleVehicles={vehicleSnapshots.length}
+          totalVehicles={allVehicleSnapshots.length} visibleClients={visibleClients.length} totalClients={allClients.length} />}
       >
         <ClientFiltersPanel
           allClients={allClients}
           visibleCount={visibleClients.length}
           totalCount={allClients.length}
+          vehicles={allVehicleSnapshots}
         />
-        <div className="border-t border-line p-3 sm:hidden">
-          <div className="mb-3">
-            <p className="field-label">Capas visibles</p>
+        <details className="mx-4 mb-4 rounded-xl border border-line p-3 sm:hidden">
+          <summary className="cursor-pointer text-xs font-medium text-ink">Capas visibles</summary>
+          <div className="mt-3">
             <LayerControl inline />
           </div>
-          <Button block variant="primary" onClick={() => setFiltersOpen(false)}>
-            Ver mapa con estos filtros
-          </Button>
-        </div>
+        </details>
       </Sheet>
 
       {/* --- Ficha de detalle: lateral, compacta y sin bloquear el mapa. --- */}

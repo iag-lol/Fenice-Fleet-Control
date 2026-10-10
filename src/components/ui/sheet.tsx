@@ -26,6 +26,9 @@ export interface SheetProps {
    * patron nativo.
    */
   transparentOverlay?: boolean;
+  /** Tarjeta de herramientas anclada dentro de su contenedor en escritorio. */
+  floating?: boolean;
+  footer?: ReactNode;
 }
 
 /**
@@ -43,6 +46,8 @@ export function Sheet({
   side = 'right',
   className,
   transparentOverlay,
+  floating = false,
+  footer,
 }: SheetProps) {
   useEffect(() => {
     if (!open) return;
@@ -70,7 +75,8 @@ export function Sheet({
         'app-sheet-root fixed inset-0 z-50 flex',
         // Las fichas del mapa viven bajo el header de escritorio. Asi la
         // busqueda, el reloj y el estado GPS siguen visibles y utilizables.
-        transparentOverlay && 'sm:top-14',
+        transparentOverlay && !floating && 'sm:top-14',
+        floating && 'map-filter-sheet sm:absolute sm:inset-0',
         // El contenedor tambien cubre toda la pantalla. Desactivar solo el
         // velo no basta: el propio contenedor seguia siendo el objetivo del
         // puntero y bloqueaba el mapa. En escritorio dejamos pasar los
@@ -100,10 +106,12 @@ export function Sheet({
           // Movil: hoja inferior con esquinas superiores redondeadas.
           'mt-auto max-h-[88vh] animate-sheet-up rounded-t-xl border-t safe-bottom',
           // Escritorio: panel lateral a altura completa.
-          'sm:mt-0 sm:max-h-none sm:animate-fade-in sm:rounded-none sm:border-t-0',
+          'sm:mt-0 sm:animate-fade-in sm:rounded-none sm:border-t-0',
+          !floating && 'sm:max-h-none',
           side === 'right'
             ? 'sm:ml-auto sm:h-full sm:w-[360px] sm:border-l lg:w-[clamp(320px,24vw,420px)]'
             : 'sm:mr-auto sm:h-full sm:w-[360px] sm:border-r lg:w-[clamp(320px,24vw,420px)]',
+          floating && 'sm:ml-3 sm:mr-auto sm:mt-[128px] sm:mb-3 sm:h-auto sm:max-h-[calc(100%_-_140px)] sm:w-[420px] sm:self-start sm:rounded-2xl sm:border lg:w-[440px]',
           className,
         )}
       >
@@ -113,7 +121,7 @@ export function Sheet({
         </div>
 
         {title ? (
-          <div className="flex items-start justify-between gap-3 border-b border-line px-4 py-3">
+          <div className={cn('flex items-start justify-between gap-3 border-b border-line px-4 py-3', floating && 'sm:py-2.5')}>
             <div className="min-w-0">
               <h2 className="truncate text-sm font-semibold text-ink">{title}</h2>
               {description ? <p className="mt-0.5 text-xs text-ink-faint">{description}</p> : null}
@@ -129,7 +137,8 @@ export function Sheet({
           </div>
         ) : null}
 
-        <div className="flex-1 overflow-y-auto overscroll-contain">{children}</div>
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">{children}</div>
+        {footer ? <div className="shrink-0 border-t border-line bg-surface-900">{footer}</div> : null}
       </div>
     </div>
   );

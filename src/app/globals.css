@@ -178,6 +178,9 @@ body {
     top: 0 !important;
     pointer-events: auto !important;
   }
+  .map-filter-sheet {
+    position: fixed !important;
+  }
 
   .app-sheet-overlay {
     pointer-events: auto !important;
