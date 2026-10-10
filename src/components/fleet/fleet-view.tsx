@@ -362,6 +362,7 @@ export function FleetView() {
                       <p className="numeric truncate text-2xs text-ink-faint">
                         {row.vehicle.fleetCode} · {row.vehicle.brand} {row.vehicle.model}
                       </p>
+                      <p className="mt-1 text-2xs text-brand-700">{VEHICLE_GROUP_LABEL[vehicleGroup(row.vehicle)]}</p>
                     </div>
                     <VehicleStatusBadge status={row.status} />
                   </div>

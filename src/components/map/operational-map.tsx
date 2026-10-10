@@ -898,7 +898,7 @@ export const OperationalMap = memo(function OperationalMap({
             <LayerControl inline />
           </div>
           <Button block variant="primary" onClick={() => setFiltersOpen(false)}>
-            Ver {visibleClients.length} clientes en el mapa
+            Ver mapa con estos filtros
           </Button>
         </div>
       </Sheet>
