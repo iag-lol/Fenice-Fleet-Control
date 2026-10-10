@@ -100,9 +100,10 @@ function resolveTransport(): Promise<void> {
 }
 
 function receivePositions(incoming: Position[], payload = snapshot.payload): void {
+  const hasCommunicatingDevice = payload?.vehicles.some(v => v.device?.communication === 'online' || v.device?.communication === 'standby') ?? false;
   if (incoming.length === 0) {
     if (snapshot.error !== 'No hay posiciones GPS recibidas.' || snapshot.payload !== payload || !snapshot.sourceResponding) {
-      emit({ ...snapshot, payload, sourceResponding: true, error: 'No hay posiciones GPS recibidas.' });
+      emit({ ...snapshot, payload, sourceResponding: true, error: hasCommunicatingDevice ? null : 'No hay posiciones GPS recibidas.' });
     }
     return;
   }
@@ -117,7 +118,7 @@ function receivePositions(incoming: Position[], payload = snapshot.payload): voi
   const hasFreshFix = incoming.some((p) => p.valid && Number.isFinite(Date.parse(p.timestamp)) &&
     now - Date.parse(p.timestamp) <= 180_000 && Date.parse(p.timestamp) - now <= 60_000);
   emit({ ...snapshot, positions, payload, sourceResponding: true,
-    error: hasFreshFix ? null : 'La fuente responde, pero no entrega posiciones GPS recientes.',
+    error: hasFreshFix || hasCommunicatingDevice ? null : 'La fuente responde, pero no entrega posiciones GPS recientes.',
     lastUpdateAt: latestGpsTimestamp(incoming, snapshot.lastUpdateAt, now),
   });
 }

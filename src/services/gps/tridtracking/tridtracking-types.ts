@@ -39,6 +39,10 @@ export interface TridSensorReading {
   ServerTimeUtc?: string | null;
   SensorType?: string | null;
 }
+export interface TridSensorReadingList {
+  SensorReadings?: TridSensorReading[] | null;
+  StartId?: number | null;
+}
 
 export interface TridPosition {
   Unit?: { Uid?: string | null; Name?: string | null; Imei?: string | null } | null;

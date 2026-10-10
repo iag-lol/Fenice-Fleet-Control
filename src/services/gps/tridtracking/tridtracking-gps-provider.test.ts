@@ -23,6 +23,36 @@ function provider() {
   });
   return new TridTrackingGpsProvider();
 }
+
+it('lee sensores por el endpoint dedicado, conserva fecha/unidad y excluye otra unidad', async () => {
+  mocks.call.mockImplementation(async (path: string) => {
+    if (path.endsWith('/unit/list') || path.endsWith('latestpositionslist')) return [unit];
+    if (path.endsWith('sensorreadingslist')) return { SensorReadings: [
+      { UnitUid: uid, Name: 'Alimentacion', SensorType: 'ExternalVoltage', Value: '24670', MeasurementSign: 'mV', ReadingTimeUtc: from },
+      { UnitUid: 'another-unit', Name: 'Combustible', SensorType: 'FuelLevel', Value: '90', MeasurementSign: '%', ReadingTimeUtc: from },
+    ], StartId: 987 };
+    return { AlertList: [] };
+  });
+  const gps = new TridTrackingGpsProvider();
+  await gps.getDeviceStatus();
+  const devices = await gps.getDeviceStatus();
+  expect(devices[0]?.telemetry?.sensors).toHaveLength(1);
+  expect(devices[0]?.telemetry?.sensors[0]).toMatchObject({ metric: 'supply_voltage', numericValue: 24.67, measuredAt: new Date(from).toISOString() });
+  expect(mocks.call.mock.calls.filter(([path]) => path.endsWith('sensorreadingslist'))).toHaveLength(1);
+});
+
+it('una consulta opcional de sensores pendiente no bloquea las posiciones ni el estado del GPS', async () => {
+  mocks.call.mockImplementation(async (path: string) => {
+    if (path.endsWith('/unit/list') || path.endsWith('latestpositionslist')) return [unit];
+    if (path.endsWith('sensorreadingslist')) return new Promise(() => {});
+    return { AlertList: [] };
+  });
+  const gps = new TridTrackingGpsProvider();
+  expect(await gps.getDeviceStatus()).toHaveLength(1);
+  expect(await gps.getAllCurrentPositions()).toHaveLength(1);
+  await gps.getDeviceStatus();
+  expect(mocks.call.mock.calls.filter(([path]) => path.endsWith('sensorreadingslist'))).toHaveLength(1);
+});
 describe('FMC130 en 3DTracking para RBDC59', () => {
   it('incorpora nueve GPS con una consulta de catálogo y una de posiciones, sin mezclar identidades', async () => {
     const units = Array.from({ length: 9 }, (_, i) => ({ ...unit, Uid: `supplier-${i}`, Name: `TEST0${i}`,

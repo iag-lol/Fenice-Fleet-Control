@@ -1,10 +1,31 @@
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_OPERATIONAL_SETTINGS } from '@/config/operational';
 import { gpsHealthAlert, hardwareAlert, routeAlerts, clientActivityAlert } from './real-alert-rules';
-import type { Position, GpsEvent, Route, Client } from '@/types/core';
+import type { DeviceStatus, Position, GpsEvent, Route, Client } from '@/types/core';
 const now = new Date('2026-10-09T08:00:00Z');
 const position = { vehicleId: 'fixture-vehicle', deviceId: 'fixture-device', timestamp: '2026-10-09T07:59:45Z', lat: -33.45, lng: -70.66, speed: 0, speedKnown: true, valid: true } as Position;
 describe('reglas reales conservadoras', () => {
+  it('un camion parado con heartbeat no genera una alerta de desconexion por su posicion antigua', () => {
+    const old = { ...position, timestamp: '2026-10-09T06:00:00Z', ignition: 'off' as const };
+    const device = { vehicleId: position.vehicleId, lastCommunicationAt: '2026-10-09T07:51:00Z' } as DeviceStatus;
+    expect(gpsHealthAlert(position.vehicleId, 'TEST01', old, 'fixture-device', DEFAULT_OPERATIONAL_SETTINGS, now, device)).toBeNull();
+  });
+  it('la desconexion real usa la fecha de la ultima comunicacion, sin afirmar una ubicacion nueva', () => {
+    const device = { vehicleId: position.vehicleId, lastCommunicationAt: '2026-10-09T07:40:00Z' } as DeviceStatus;
+    const alert = gpsHealthAlert(position.vehicleId, 'TEST01', { ...position, timestamp: '2026-10-09T06:00:00Z' }, 'fixture-device', DEFAULT_OPERATIONAL_SETTINGS, now, device);
+    expect(alert).toMatchObject({ type: 'gps_offline', timestamp: '2026-10-09T07:51:00.000Z', position: null });
+    expect(alert?.title).toContain('sin comunicación reciente');
+  });
+  it('un heartbeat de otra unidad no suprime la alerta de este equipo', () => {
+    const device = { vehicleId: 'other-unit', lastCommunicationAt: '2026-10-09T07:59:00Z' } as DeviceStatus;
+    expect(gpsHealthAlert(position.vehicleId, 'TEST01', { ...position, timestamp: '2026-10-09T06:00:00Z' },
+      'fixture-device', DEFAULT_OPERATIONAL_SETTINGS, now, device)?.type).toBe('gps_offline');
+  });
+  it('el contacto apagado no produce una alarma critica durante el plazo de espera configurado', () => {
+    const p = { ...position, timestamp: '2026-10-09T06:00:00Z', ignition: 'off' as const, speed: 0 };
+    const d = { vehicleId: position.vehicleId, lastCommunicationAt: '2026-10-09T06:30:00Z' } as DeviceStatus;
+    expect(gpsHealthAlert(position.vehicleId, 'TEST01', p, 'fixture-device', DEFAULT_OPERATIONAL_SETTINGS, now, d)).toBeNull();
+  });
   it('la ausencia de movimiento no se interpreta como GPS desconectado', () => { expect(gpsHealthAlert(position.vehicleId, 'TEST01', position, 'fixture-device', DEFAULT_OPERATIONAL_SETTINGS, now)).toBeNull(); });
   it('un registro antiguo genera falta de posicion reciente con su instante real', () => {
     const stale = { ...position, timestamp: '2026-10-09T07:00:00Z' };

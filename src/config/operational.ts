@@ -26,6 +26,8 @@ export const operationalSettingsSchema = z.object({
     signalLostSeconds: z.number().int().min(30).max(7200),
     /** Segundos sin posicion para declarar el vehiculo offline. */
     offlineSeconds: z.number().int().min(60).max(86_400),
+    /** Aviso de falta de novedades cuando la ultima lectura confirma contacto apagado. */
+    parkedCommunicationSeconds: z.number().int().min(600).max(604800).default(86400),
     /** Cadencia de refresco cuando se usa polling como fallback. */
     refreshIntervalMs: z.number().int().min(3000).max(120_000),
     /** km/h por debajo de los cuales se considera detenido. */
@@ -65,6 +67,7 @@ export const DEFAULT_OPERATIONAL_SETTINGS: OperationalSettings = {
     staleSeconds: 60,
     signalLostSeconds: 180,
     offlineSeconds: 600,
+    parkedCommunicationSeconds: 86400,
     refreshIntervalMs: 15_000,
     movingSpeedThresholdKmh: 3,
   },

@@ -12,6 +12,9 @@ export function DeviceTelemetry({ plate, position, device }: { plate: string; po
     ? <span className="flex flex-col"><span>{sensorDisplay(sensor, unit, decimals)}</span><span className="mt-0.5 text-[10px] font-normal text-ink-faint">{sensor.measuredAt ? formatSmartDateTime(sensor.measuredAt) : 'Sin fecha'}</span></span>
     : 'Sin lectura';
   const fuel = telemetry?.sensors.filter((s) => s.metric === 'fuel_percent' || s.metric === 'fuel_liters') ?? [];
+  const supply = uniqueSensor(telemetry, 'supply_voltage');
+  const backup = uniqueSensor(telemetry, 'backup_voltage');
+  const charge = uniqueSensor(telemetry, 'backup_percent');
   const download = () => {
     const url = URL.createObjectURL(new Blob([exportTelemetryCsv(plate, position, device)], { type: 'text/csv;charset=utf-8' }));
     const link = document.createElement('a'); link.href = url; link.download = `telemetria-${plate.replace(/[^a-z0-9-]/gi, '')}.csv`; link.click();
@@ -24,13 +27,13 @@ export function DeviceTelemetry({ plate, position, device }: { plate: string; po
     </div>
     <DetailList columns={2} items={[
       { label: 'Odómetro del equipo', value: position?.odometerKm !== undefined ? `${formatNumber(position.odometerKm, 2)} km` : 'Sin dato' },
-      { label: 'Estado operativo GPS', value: reportedOperationStatus(telemetry?.engineStatus) },
-      { label: 'Alerta alimentación externa', value: telemetryFlag(telemetry?.externalPowerFailure) },
+      { label: 'Estado GPS', value: reportedOperationStatus(telemetry?.engineStatus) },
+      { label: 'Alimentación externa', value: telemetryFlag(telemetry?.externalPowerFailure) },
       { label: 'Alerta batería del GPS', value: telemetryFlag(telemetry?.lowBattery) },
-      { label: 'Voltaje alimentación', value: reading(uniqueSensor(telemetry, 'supply_voltage'), 'V', 2) },
-      { label: 'Batería interna GPS', value: reading(uniqueSensor(telemetry, 'backup_voltage'), 'V', 2) },
-      { label: 'Carga batería GPS', value: reading(uniqueSensor(telemetry, 'backup_percent'), '%') },
-      { label: 'Nivel combustible', value: fuel.length === 1 ? reading(fuel[0]!, fuel[0]!.metric === 'fuel_percent' ? '%' : 'L') : fuelDisplay(telemetry) },
+      ...(supply ? [{ label: 'Voltaje alimentación', value: reading(supply, 'V', 2) }] : []),
+      ...(backup ? [{ label: 'Batería interna GPS', value: reading(backup, 'V', 2) }] : []),
+      ...(charge ? [{ label: 'Carga batería GPS', value: reading(charge, '%') }] : []),
+      ...(fuel.length ? [{ label: 'Nivel combustible', value: fuel.length === 1 ? reading(fuel[0]!, fuel[0]!.metric === 'fuel_percent' ? '%' : 'L') : fuelDisplay(telemetry) }] : []),
       ...(uniqueSensor(telemetry, 'engine_rpm') ? [{ label: 'RPM reportadas', value: reading(uniqueSensor(telemetry, 'engine_rpm'), 'rpm', 0) }] : []),
       ...(uniqueSensor(telemetry, 'engine_temperature') ? [{ label: 'Temperatura motor', value: reading(uniqueSensor(telemetry, 'engine_temperature'), '°C') }] : []),
     ]} />

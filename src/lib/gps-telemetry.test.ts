@@ -5,6 +5,12 @@ const telemetry: GpsTelemetry = { source: '3dtracking', measuredAt: '2026-10-08T
 it('sin datos no se presenta lleno, vacío, saludable ni sin alertas', () => {
   expect(fuelDisplay(telemetry)).toBe('Sin lectura'); expect(telemetryFlag(undefined)).toBe('Sin dato'); expect(telemetryFlag(false)).toBe('Sin alerta');
 });
+it('un estado cacheado no oculta una alarma nueva y los sensores conservan su fecha propia', () => {
+  const position = { telemetry: { ...telemetry, measuredAt: '2026-10-08T15:10:00Z', receivedAt: '2026-10-08T15:10:02Z', externalPowerFailure: true } } as Position;
+  const device = { telemetry: { ...telemetry, externalPowerFailure: false, sensors: [{ name: 'Voltaje', type: 'ExternalVoltage', value: '24.5', unit: 'V', measuredAt: '2026-10-08T15:11:00Z', receivedAt: null, metric: 'supply_voltage', numericValue: 24.5 }] } } as DeviceStatus;
+  expect(latestTelemetry(position, device)).toMatchObject({ externalPowerFailure: true, measuredAt: '2026-10-08T15:10:00Z',
+    sensors: [expect.objectContaining({ numericValue: 24.5, measuredAt: '2026-10-08T15:11:00Z' })] });
+});
 it('no suma niveles ni mezcla dos estanques', () => {
   const t = { ...telemetry, sensors: ['Tracción', 'Carga'].map((name) => ({ name, type: 'FuelLevel', value: '50', unit: '%', measuredAt: null, receivedAt: null, metric: 'fuel_percent' as const, numericValue: 50 })) };
   expect(fuelDisplay(t)).toBe('2 sensores'); expect(uniqueSensor(t, 'fuel_percent')).toBeNull();

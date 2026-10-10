@@ -48,6 +48,7 @@ function seedFromEnv(): OperationalSettings {
       staleSeconds: env.GPS_STALE_SECONDS,
       signalLostSeconds: env.GPS_SIGNAL_LOST_SECONDS,
       offlineSeconds: env.GPS_OFFLINE_SECONDS,
+      parkedCommunicationSeconds: DEFAULT_OPERATIONAL_SETTINGS.gps.parkedCommunicationSeconds,
       refreshIntervalMs: env.GPS_REFRESH_INTERVAL_MS,
       movingSpeedThresholdKmh: DEFAULT_OPERATIONAL_SETTINGS.gps.movingSpeedThresholdKmh,
     },
@@ -73,6 +74,7 @@ interface SettingsRow {
   gps_segundos_retraso: number;
   gps_segundos_posible_perdida: number;
   gps_segundos_offline: number;
+  gps_segundos_offline_contacto_apagado?: number;
   gps_intervalo_refresco_ms: number;
   gps_umbral_movimiento_kmh: number;
   ruta_desvio_metros: number;
@@ -96,6 +98,7 @@ function rowToSettings(row: SettingsRow): OperationalSettings {
       staleSeconds: row.gps_segundos_retraso,
       signalLostSeconds: row.gps_segundos_posible_perdida,
       offlineSeconds: row.gps_segundos_offline,
+      parkedCommunicationSeconds: row.gps_segundos_offline_contacto_apagado ?? DEFAULT_OPERATIONAL_SETTINGS.gps.parkedCommunicationSeconds,
       refreshIntervalMs: row.gps_intervalo_refresco_ms,
       movingSpeedThresholdKmh: row.gps_umbral_movimiento_kmh,
     },
@@ -124,6 +127,7 @@ function settingsToRow(settings: OperationalSettings): SettingsRow {
     gps_segundos_retraso: settings.gps.staleSeconds,
     gps_segundos_posible_perdida: settings.gps.signalLostSeconds,
     gps_segundos_offline: settings.gps.offlineSeconds,
+    gps_segundos_offline_contacto_apagado: settings.gps.parkedCommunicationSeconds,
     gps_intervalo_refresco_ms: settings.gps.refreshIntervalMs,
     gps_umbral_movimiento_kmh: settings.gps.movingSpeedThresholdKmh,
     ruta_desvio_metros: settings.route.deviationDistanceMeters,

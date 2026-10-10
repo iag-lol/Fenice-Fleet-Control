@@ -42,6 +42,8 @@ export function ClientStatusBadge({
 }
 
 const VEHICLE_TONE: Record<VehicleOperationalStatus, Tone> = {
+  standby: 'neutral',
+  connected: 'active',
   uncertain: 'warning',
   en_ruta: 'moving',
   detenido: 'warning',
@@ -72,10 +74,11 @@ const CONNECTION_TONE: Record<DeviceConnectionState, Tone> = {
   unknown: 'neutral',
 };
 
-export function ConnectionBadge({ state }: { state: DeviceConnectionState }) {
+export function ConnectionBadge({ state, kind = 'position' }: { state: DeviceConnectionState | 'standby'; kind?: 'position' | 'communication' }) {
+  const communicationLabel = state === 'online' ? 'Equipo en línea' : state === 'unknown' ? 'Sin dato de comunicación' : 'Sin comunicación reciente';
   return (
-    <Badge tone={CONNECTION_TONE[state]} dot>
-      {CONNECTION_LABEL[state]}
+    <Badge tone={state === 'standby' ? 'neutral' : CONNECTION_TONE[state]} dot>
+      {state === 'standby' ? 'En espera' : kind === 'communication' ? communicationLabel : CONNECTION_LABEL[state]}
     </Badge>
   );
 }

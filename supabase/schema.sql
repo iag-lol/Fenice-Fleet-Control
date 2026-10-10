@@ -559,6 +559,7 @@ create table if not exists configuracion_operacional (
   gps_segundos_retraso                    integer not null default 60,
   gps_segundos_posible_perdida            integer not null default 180,
   gps_segundos_offline                    integer not null default 600,
+  gps_segundos_offline_contacto_apagado    integer not null default 86400 check (gps_segundos_offline_contacto_apagado between 600 and 604800),
   gps_intervalo_refresco_ms               integer not null default 15000,
   gps_umbral_movimiento_kmh               numeric not null default 3,
   ruta_desvio_metros                      numeric not null default 300,
@@ -577,6 +578,7 @@ create table if not exists configuracion_operacional (
 comment on table configuracion_operacional is 'Umbrales operacionales editables desde /configuracion. Una sola fila.';
 
 alter table configuracion_operacional add column if not exists ruta_velocidad_maxima_legal_kmh numeric not null default 60;
+alter table configuracion_operacional add column if not exists gps_segundos_offline_contacto_apagado integer not null default 86400 check (gps_segundos_offline_contacto_apagado between 600 and 604800);
 
 alter table configuracion_operacional enable row level security;
 

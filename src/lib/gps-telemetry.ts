@@ -3,7 +3,22 @@ import { gpsDisplayText } from './gps-branding';
 import { formatNumber } from './format';
 
 export function latestTelemetry(position?: Position | null, device?: DeviceStatus | null): GpsTelemetry | null {
-  return device?.telemetry ?? position?.telemetry ?? null;
+  const current = position?.telemetry;
+  const status = device?.telemetry;
+  if (!current || !status) return status ?? current ?? null;
+  const time = (t: GpsTelemetry) => Date.parse(t.receivedAt ?? t.measuredAt ?? '') || 0;
+  const base = time(current) > time(status) ? current : status;
+  const other = base === current ? status : current;
+  if (!other.sensors.length) return base;
+  const sensors = new Map<string, GpsSensorReading>();
+  for (const row of [...base.sensors, ...other.sensors]) {
+    const key = `${row.name}:${row.type}:${row.unit}`;
+    const previous = sensors.get(key);
+    const at = Date.parse(row.measuredAt ?? row.receivedAt ?? '') || 0;
+    const before = previous ? Date.parse(previous.measuredAt ?? previous.receivedAt ?? '') || 0 : -1;
+    if (!previous || at > before) sensors.set(key, row);
+  }
+  return { ...base, sensors: [...sensors.values()] };
 }
 export function uniqueSensor(telemetry: GpsTelemetry | null, metric: GpsSensorReading['metric']): GpsSensorReading | null {
   const found = telemetry?.sensors.filter((s) => s.metric === metric) ?? [];

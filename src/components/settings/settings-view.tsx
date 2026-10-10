@@ -308,7 +308,7 @@ export function SettingsView() {
                 }
               />
               <NumberField
-                label="Vehiculo offline"
+                label="Aviso sin comunicación en operación"
                 suffix="s"
                 min={60}
                 max={86400}
@@ -318,6 +318,16 @@ export function SettingsView() {
                     offlineSeconds: numberOr(event.target.value, draft.gps.offlineSeconds),
                   })
                 }
+              />
+              <NumberField
+                label="Aviso con contacto apagado"
+                suffix="h"
+                min={1}
+                max={168}
+                value={draft.gps.parkedCommunicationSeconds / 3600}
+                onChange={(event) => update('gps', {
+                  parkedCommunicationSeconds: Math.round(numberOr(event.target.value, draft.gps.parkedCommunicationSeconds / 3600) * 3600),
+                })}
               />
               <NumberField
                 label="Cadencia de refresco"

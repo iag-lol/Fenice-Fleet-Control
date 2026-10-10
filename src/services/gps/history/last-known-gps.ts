@@ -26,6 +26,7 @@ export function withLastKnownGps(base: GpsProvider, directory: string, namespace
   let writes = Promise.resolve();
   let serialized: string | null = null;
   const warnings = new Map<string, string>();
+  let cachedDevices: DeviceStatus[] = [];
   const usable = (p: Position): boolean => Boolean(p?.valid) && isUsableCoordinate(p) &&
     Number.isFinite(Date.parse(p.timestamp)) && Date.parse(p.timestamp) <= Date.now() + 60_000;
 
@@ -136,7 +137,7 @@ export function withLastKnownGps(base: GpsProvider, directory: string, namespace
       try {
         const devices = await base.getDeviceStatus(id);
         warnings.delete('devices');
-        if (devices.length) return devices;
+        if (devices.length) { cachedDevices = devices; return devices; }
       } catch {
         warnings.set('devices', 'El estado GPS se calcula con la fecha de la última posición disponible.');
       }
@@ -145,9 +146,12 @@ export function withLastKnownGps(base: GpsProvider, directory: string, namespace
       return (saved.vehicles ?? []).filter((v) => !id || v.id === id).flatMap((v): DeviceStatus[] => {
         const p = rememberedPositions().find((p) => p.vehicleId === v.id);
         if (!v.device && !p) return [];
+        const aliases = [v.device?.id, v.device?.imei, v.device?.externalId, !v.device ? p?.deviceId : undefined].filter(Boolean);
+        const cached = cachedDevices.find(d => d.vehicleId === v.id &&
+          (aliases.includes(d.deviceId) || (!!d.imei && d.imei === v.device?.imei)));
         const lastPositionAt = p?.timestamp ?? null;
         const status = evaluateConnectionState(lastPositionAt, settings, now);
-        return [{ deviceId: p?.deviceId ?? v.device!.id, vehicleId: v.id,
+        return [{ ...cached, deviceId: p?.deviceId ?? v.device!.id, vehicleId: v.id,
           connection: status.state, secondsSinceLastPosition: status.secondsSinceLastPosition,
           lastPositionAt, ...(v.device?.imei ? { imei: v.device.imei } : {}) }];
       });

@@ -30,6 +30,8 @@ import {
 import type {
   TridAlertList,
   TridPositionList,
+  TridSensorReading,
+  TridSensorReadingList,
   TridUnit,
 } from './tridtracking-types';
 
@@ -120,6 +122,67 @@ export class TridTrackingGpsProvider implements GpsProvider {
   private unitsPending: Promise<TridUnit[]> | null = null;
   private latest: { data: TridUnit[]; expiresAt: number } | null = null;
   private latestPending: Promise<TridUnit[]> | null = null;
+  private sensorReadings = new Map<string, TridSensorReading>();
+  private sensorCursor: number | undefined;
+  private sensorScope = '';
+  private sensorExpiresAt = 0;
+  private sensorsPending: Promise<void> | null = null;
+
+  /** El endpoint de sensores es independiente del de posiciones. Se consulta
+   * en segundo plano para que una lectura opcional nunca bloquee el mapa. */
+  private refreshSensors(units: TridUnit[]): void {
+    if (this.apiMode !== 'client' || this.sensorsPending) return;
+    const uids = units.map(u => u.Uid?.trim()).filter((uid): uid is string => !!uid).sort();
+    const scope = uids.join(',');
+    if (!scope) return;
+    if (scope !== this.sensorScope) {
+      this.sensorScope = scope; this.sensorCursor = undefined; this.sensorExpiresAt = 0;
+      for (const [key, row] of this.sensorReadings) if (!row.UnitUid || !uids.includes(row.UnitUid)) this.sensorReadings.delete(key);
+    }
+    if (Date.now() < this.sensorExpiresAt) return;
+    const allowed = new Set(uids);
+    this.sensorsPending = (async () => {
+      try {
+        for (let page = 0; page < 3; page++) {
+          const data = await this.client.call<TridSensorReadingList | null>('/api/v1.0/data/sensorreadingslist',
+            { Uid: scope, ...(this.sensorCursor === undefined ? {} : { StartId: String(this.sensorCursor) }) });
+          if (!data || !Array.isArray(data.SensorReadings)) return;
+          for (const row of data.SensorReadings) {
+            if (!row.UnitUid || !allowed.has(row.UnitUid) || !row.Name || typeof row.Value !== 'string') continue;
+            if (row.Name.length > 160 || row.Value.length > 512 || (row.SensorType?.length ?? 0) > 160 || (row.MeasurementSign?.length ?? 0) > 48) continue;
+            const key = `${row.UnitUid}:${row.Name}:${row.SensorType ?? ''}:${row.MeasurementSign ?? ''}`;
+            const before = this.sensorReadings.get(key);
+            const time = Date.parse(toIsoUtc(row.ReadingTimeUtc) ?? toIsoUtc(row.ServerTimeUtc) ?? '');
+            const previous = Date.parse(toIsoUtc(before?.ReadingTimeUtc) ?? toIsoUtc(before?.ServerTimeUtc) ?? '');
+            if (Number.isFinite(time) && time > Date.now() + 60_000) continue;
+            if (!before || (Number.isFinite(time) && (!Number.isFinite(previous) || time >= previous))) {
+              if (!before && this.sensorReadings.size >= 5000) this.sensorReadings.delete(this.sensorReadings.keys().next().value!);
+              this.sensorReadings.set(key, row);
+            }
+          }
+          const cursor = data.StartId;
+          if (!Number.isSafeInteger(cursor) || cursor! < 0 || cursor === this.sensorCursor) break;
+          this.sensorCursor = cursor!;
+          if (data.SensorReadings.length < 2500) break;
+        }
+      } catch { /* Los sensores opcionales no interrumpen la recepcion GPS. */ }
+      finally { this.sensorExpiresAt = Date.now() + 60_000; this.sensorsPending = null; }
+    })();
+  }
+
+  private withSensors(unit: TridUnit): TridUnit {
+    const rows = [...this.sensorReadings.values()].filter(s => s.UnitUid === unit.Uid);
+    if (!rows.length) return unit;
+    const merged = new Map<string, TridSensorReading>();
+    for (const row of [...(unit.SensorReadings ?? []), ...rows]) {
+      const key = `${row.Name}:${row.SensorType ?? ''}:${row.MeasurementSign ?? ''}`;
+      const before = merged.get(key);
+      const at = Date.parse(toIsoUtc(row.ReadingTimeUtc) ?? '');
+      const previous = Date.parse(toIsoUtc(before?.ReadingTimeUtc) ?? '');
+      if (!before || (Number.isFinite(at) && (!Number.isFinite(previous) || at >= previous))) merged.set(key, row);
+    }
+    return { ...unit, SensorReadings: [...merged.values()] };
+  }
 
   constructor() {
     const env = getServerEnv();
@@ -270,7 +333,7 @@ export class TridTrackingGpsProvider implements GpsProvider {
       this.identities(),
     ]);
     return units
-      .map(mapUnitToPosition)
+      .map(unit => mapUnitToPosition(this.withSensors(unit)))
       .filter((p): p is Position => p !== null)
       .map((p) => ({
         ...p,
@@ -420,10 +483,11 @@ export class TridTrackingGpsProvider implements GpsProvider {
       this.identities(),
     ]);
     const now = new Date();
+    this.refreshSensors(unidades);
 
     return unidades
       .map((unidad) =>
-        mapUnitToDeviceStatus(unidad, now, {
+        mapUnitToDeviceStatus(this.withSensors(unidad), now, {
           staleSeconds: settings.gps.staleSeconds,
           lostSeconds: settings.gps.signalLostSeconds,
           offlineSeconds: settings.gps.offlineSeconds,

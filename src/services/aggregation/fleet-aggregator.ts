@@ -6,6 +6,7 @@ import { analyzeJourney } from '@/lib/engines/journey-analysis';
 import { getOperationalSettings } from '@/services/settings/settings-store';
 import { getCommuneName } from '@/data/communes';
 import { deriveVehicleStatus, evaluateConnectionState } from '@/lib/engines/gps-health';
+import { gpsCommunication } from '@/lib/engines/gps-communication';
 import { evaluateRouteProgress, resolveCommune } from '@/lib/engines/route-compliance';
 import { COMMUNES } from '@/data/communes';
 import { isUsableCoordinate, projectOnPolyline } from '@/lib/geo';
@@ -133,6 +134,7 @@ export function buildVehicleSnapshot(
     ? evaluateConnectionState(position?.timestamp ?? device?.lastPositionAt ?? null, settings.gps, now)
     : { state: 'unknown' as const, secondsSinceLastPosition: null };
   const connection = evaluatedConnection.state;
+  const communication = gpsCommunication(device, position, settings.gps, now);
 
   const route = context.routes.find((r) => r.vehicleId === vehicle.id) ?? null;
 
@@ -162,6 +164,8 @@ export function buildVehicleSnapshot(
 
   const activity = resolveVehicleActivity({
     operationalStatus: deriveVehicleStatus({
+      communicationActive: communication.state === 'online',
+      communicationStandby: communication.state === 'standby',
       position,
       connection,
       gps: settings.gps,
@@ -191,6 +195,8 @@ export function buildVehicleSnapshot(
       : null,
     position,
     status: deriveVehicleStatus({
+      communicationActive: communication.state === 'online',
+      communicationStandby: communication.state === 'standby',
       position,
       connection,
       gps: settings.gps,
@@ -200,6 +206,8 @@ export function buildVehicleSnapshot(
       ? {
           ...device,
           connection,
+          communication: communication.state,
+          lastCommunicationAt: communication.lastCommunicationAt,
           secondsSinceLastPosition: evaluatedConnection.secondsSinceLastPosition,
         }
       : null,

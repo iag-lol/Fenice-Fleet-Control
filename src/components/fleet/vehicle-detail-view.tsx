@@ -139,7 +139,7 @@ export function VehicleDetailView({ vehicleId }: { vehicleId: string }) {
             </span>
             <span className="text-ink-faint">{vehicle.depotName}</span>
             <VehicleStatusBadge status={snapshot.status} />
-            {snapshot.device ? <ConnectionBadge state={snapshot.device.connection} /> : null}
+            {snapshot.device && snapshot.status !== 'connected' && snapshot.status !== 'standby' ? <ConnectionBadge state={snapshot.device.connection} /> : null}
           </span>
         }
         actions={

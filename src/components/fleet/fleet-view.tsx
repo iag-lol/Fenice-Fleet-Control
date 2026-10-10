@@ -151,7 +151,7 @@ export function FleetView() {
       cell: (row) =>
         row.device ? (
           <div className="space-y-1">
-            <ConnectionBadge state={row.device.connection} />
+            <ConnectionBadge state={row.device.communication ?? row.device.connection} kind={row.device.communication ? 'communication' : 'position'} />
             <p className="numeric text-2xs text-ink-faint">
               {formatElapsed(row.device.secondsSinceLastPosition)}
             </p>

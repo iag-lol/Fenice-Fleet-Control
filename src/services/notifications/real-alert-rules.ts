@@ -1,4 +1,5 @@
-import type { Position, Route, GpsEvent, AlertSeverity, WorkOrder, Client } from '@/types/core';
+import type { DeviceStatus, Position, Route, GpsEvent, AlertSeverity, WorkOrder, Client } from '@/types/core';
+import { gpsCommunication } from '@/lib/engines/gps-communication';
 import type { OperationalSettings } from '@/config/operational';
 import type { CreateAlertInput } from '@/services/fleet/alert-store';
 import { evaluateConnectionState } from '@/lib/engines/gps-health';
@@ -9,7 +10,16 @@ import { haversineMeters, isUsableCoordinate } from '@/lib/geo';
 import { gpsDisplayText } from '@/lib/gps-branding';
 import { COMMUNES } from '@/data/communes';
 
-export function gpsHealthAlert(vehicleId: Position['vehicleId'], plate: string, position: Position | null, deviceId: string, settings: OperationalSettings, now: Date): CreateAlertInput | null {
+export function gpsHealthAlert(vehicleId: Position['vehicleId'], plate: string, position: Position | null, deviceId: string, settings: OperationalSettings, now: Date, device?: DeviceStatus | null): CreateAlertInput | null {
+  const communication = gpsCommunication(device?.vehicleId === vehicleId ? device : null, position, settings.gps, now);
+  if (communication.state === 'online' || communication.state === 'standby') return null;
+  if (communication.state === 'offline' && communication.lastCommunicationAt) {
+    const occurredAt = new Date(Date.parse(communication.lastCommunicationAt) + communication.offlineAfterSeconds * 1000).toISOString();
+    return { id: `live:gps:${vehicleId}:${deviceId}:${communication.parked ? 'gps_sin_posicion_reciente' : 'gps_offline'}:communication:${communication.lastCommunicationAt}`, type: communication.parked ? 'gps_sin_posicion_reciente' : 'gps_offline',
+      category: 'gps', severity: communication.parked ? 'warning' : 'critical', title: `${plate}: ${communication.parked ? 'sin novedades del GPS' : 'sin comunicación reciente'}`,
+      description: 'No se han recibido comunicaciones recientes del equipo GPS.', timestamp: occurredAt,
+      vehicleId, vehiclePlate: plate, position: null, metadata: { lastCommunicationAt: communication.lastCommunicationAt, deviceId } };
+  }
   const state = evaluateConnectionState(position?.timestamp ?? null, settings.gps, now);
   if (state.state === 'online' || state.state === 'stale') return null;
   if (position && state.state === 'unknown') return null; // Reloj imposible: no inventar una perdida de señal.

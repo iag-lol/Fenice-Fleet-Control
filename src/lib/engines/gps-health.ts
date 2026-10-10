@@ -61,6 +61,9 @@ export const CONNECTION_COLOR: Record<DeviceConnectionState, string> = {
 };
 
 export interface VehicleStatusInput {
+  /** Comunicacion comprobada por heartbeat/recepcion, no por consultar la API. */
+  communicationActive?: boolean;
+  communicationStandby?: boolean;
   position: Position | null;
   connection: DeviceConnectionState;
   gps: OperationalSettings['gps'];
@@ -82,10 +85,10 @@ export function deriveVehicleStatus(input: VehicleStatusInput): VehicleOperation
   // Sin posicion reciente desde el umbral de perdida, aunque el modem siga
   // comunicando. Este estado operativo se muestra como "Sin GPS reciente".
   if (input.connection === 'lost' || input.connection === 'offline' || input.connection === 'unknown' || !input.position) {
-    return 'offline';
+    return input.communicationStandby ? 'standby' : input.communicationActive ? 'connected' : 'offline';
   }
 
-  if (input.position.motionEvidence === 'uncertain' || input.position.speedKnown === false) return 'uncertain';
+  if (input.position.motionEvidence === 'uncertain' || input.position.speedKnown === false) return input.communicationActive ? 'connected' : 'uncertain';
 
   const moving =
     input.position.speed > input.gps.movingSpeedThresholdKmh && input.position.ignition !== 'off';
@@ -95,6 +98,8 @@ export function deriveVehicleStatus(input: VehicleStatusInput): VehicleOperation
 }
 
 export const VEHICLE_STATUS_LABEL: Record<VehicleOperationalStatus, string> = {
+  standby: 'En espera',
+  connected: 'Conectado',
   en_ruta: 'En ruta',
   detenido: 'Detenido',
   inactivo: 'Disponible',
@@ -104,6 +109,8 @@ export const VEHICLE_STATUS_LABEL: Record<VehicleOperationalStatus, string> = {
 };
 
 export const VEHICLE_STATUS_COLOR: Record<VehicleOperationalStatus, string> = {
+  standby: '#64748b',
+  connected: '#15803d',
   en_ruta: '#0e7490',
   detenido: '#b45309',
   inactivo: '#64748b',

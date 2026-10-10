@@ -52,6 +52,12 @@ export interface VehicleActivityResult {
 export function resolveVehicleActivity(input: VehicleActivityInput): VehicleActivityResult {
   const { position, settings } = input;
 
+  if (input.operationalStatus === 'connected' || input.operationalStatus === 'standby') {
+    const critical = input.alerts.find(a => a.severity === 'critical' && a.state !== 'resuelta');
+    return { status: critical ? 'warning' : input.operationalStatus, insideGeofence: null, deviationMeters: null,
+      reason: critical?.title ?? (input.operationalStatus === 'standby' ? 'Ultima lectura con contacto apagado; en espera de novedades.' : 'Comunicacion del equipo activa.') };
+  }
+
   // 1. Sin posición reciente: no se puede afirmar la actividad actual.
   if (input.operationalStatus === 'offline' || position === null) {
     return {
@@ -144,6 +150,8 @@ export function resolveVehicleActivity(input: VehicleActivityInput): VehicleActi
 }
 
 export const ACTIVITY_LABEL: Record<VehicleActivityStatus, string> = {
+  standby: 'En espera',
+  connected: 'Conectado',
   moving: 'En movimiento',
   delivering: 'Entregando',
   stopped: 'Detenido',
@@ -161,6 +169,8 @@ export const ACTIVITY_LABEL: Record<VehicleActivityStatus, string> = {
  * lo que no reporta.
  */
 export const ACTIVITY_COLOR: Record<VehicleActivityStatus, string> = {
+  standby: '#64748b',
+  connected: '#15803d',
   moving: '#15803d',
   delivering: '#0d90ae',
   stopped: '#b45309',

@@ -26,7 +26,7 @@ interface SystemModeResponse extends SystemModeInfo {
  * advertencia, posible perdida de senal y offline.
  */
 export function GpsStatusIndicator({ compact }: { compact?: boolean }) {
-  const { transport, error, lastUpdateAt, sourceResponding, isPaused, refresh } = useLiveFleet();
+  const { transport, error, lastUpdateAt, sourceResponding, isPaused, refresh, payload } = useLiveFleet();
   const secondsSinceUpdate = useSecondsSince(lastUpdateAt);
   const [busy, setBusy] = useState(false);
 
@@ -55,11 +55,16 @@ export function GpsStatusIndicator({ compact }: { compact?: boolean }) {
   }, [isPaused, refresh]);
 
   const simulated = mode?.gps.simulated ?? false;
+  const activeDevices = payload?.vehicles.filter(v => v.vehicle.active && v.device?.communication === 'online').length ?? 0;
+  const knownDevices = payload?.vehicles.filter(v => v.vehicle.active && v.device).length ?? 0;
+  const communicating = sourceResponding && activeDevices > 0;
+  const waitingDevices = payload?.vehicles.filter(v => v.vehicle.active && v.device?.communication === 'standby').length ?? 0;
+  const waiting = sourceResponding && knownDevices > 0 && waitingDevices === knownDevices;
 
   // El escalonamiento es el mismo que aplican los motores del servidor.
   const connection = liveGpsConnection(secondsSinceUpdate, sourceResponding, error !== null,
     mode?.settings.gps ?? DEFAULT_OPERATIONAL_SETTINGS.gps);
-  const severity = connection === 'online' ? 'ok' : connection === 'stale' ? 'warning'
+  const severity = waiting ? 'standby' : communicating ? 'ok' : connection === 'online' ? 'ok' : connection === 'stale' ? 'warning'
     : connection === 'offline' ? 'critical' : connection;
 
   const tone =
@@ -74,7 +79,10 @@ export function GpsStatusIndicator({ compact }: { compact?: boolean }) {
             : 'neutral';
 
   const label =
-    severity === 'critical'
+    waiting ? 'En espera'
+    : communicating && connection !== 'online'
+      ? knownDevices > 1 ? `${activeDevices}/${knownDevices} en línea` : 'Equipo en línea'
+    : severity === 'critical'
       ? !sourceResponding && error ? 'Consulta GPS interrumpida' : 'Sin GPS reciente'
       : severity === 'lost'
         ? 'Sin ubicación reciente'
@@ -124,13 +132,13 @@ export function GpsStatusIndicator({ compact }: { compact?: boolean }) {
         ) : transport === 'sse' || transport === 'websocket' ? (
           <Radio className={cn('h-3 w-3', severity === 'ok' ? 'text-status-active' : 'text-status-warning')} />
         ) : (
-          <Wifi className={cn('h-3 w-3', severity === 'ok' ? 'text-status-active' : 'text-status-warning')} />
+          <Wifi className={cn('h-3 w-3', severity === 'standby' ? 'text-ink-faint' : severity === 'ok' ? 'text-status-active' : 'text-status-warning')} />
         )}
         <span className="hidden text-ink-muted sm:inline">Ultima actualizacion</span>
         <span
           className={cn(
             'numeric font-medium',
-            severity === 'ok'
+            severity === 'ok' || severity === 'standby'
               ? 'text-ink'
               : severity === 'critical'
                 ? 'text-status-dormant'

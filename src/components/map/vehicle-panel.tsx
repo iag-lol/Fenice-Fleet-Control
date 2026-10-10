@@ -374,7 +374,9 @@ export function VehiclePanel({ vehicleId }: { vehicleId: string }) {
                     {formatElapsed(vehicleSnapshot.device?.secondsSinceLastPosition ?? null)}
                   </span>
                   {vehicleSnapshot.device ? (
-                    <ConnectionBadge state={vehicleSnapshot.device.connection} />
+                    (vehicleSnapshot.device.communication === 'online' || vehicleSnapshot.device.communication === 'standby') && vehicleSnapshot.device.connection !== 'online'
+                      ? <span className="text-2xs text-ink-faint">Última ubicación</span>
+                      : <ConnectionBadge state={vehicleSnapshot.device.connection} />
                   ) : null}
                 </span>
               ),

@@ -139,6 +139,8 @@ export interface DeviceStatus {
   lastPositionAt: IsoDateTime | null;
   /** Comunicación recibida del equipo; no renueva la fecha de su fix GNSS. */
   lastCommunicationAt?: IsoDateTime | null;
+  /** Estado del enlace del equipo, independiente de la antiguedad del fix. */
+  communication?: DeviceConnectionState | 'standby';
   /** Segundos transcurridos desde la ultima posicion valida. */
   secondsSinceLastPosition: number | null;
   protocol?: string;
@@ -182,6 +184,8 @@ export interface GpsEvent {
 // ---------------------------------------------------------------------------
 
 export type VehicleOperationalStatus =
+  | 'standby'
+  | 'connected'
   | 'en_ruta'
   | 'detenido'
   | 'inactivo'
@@ -202,6 +206,8 @@ export type VehicleOperationalStatus =
  * "entregando" de "detenido sin motivo".
  */
 export type VehicleActivityStatus =
+  | 'standby'
+  | 'connected'
   | 'moving'
   | 'delivering'
   | 'stopped'

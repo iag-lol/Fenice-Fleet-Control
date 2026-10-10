@@ -16,7 +16,7 @@ async function main(): Promise<void> {
       const gps = getGpsProvider();
       // El catálogo debe acompañar las posiciones cuando se agregan equipos:
       // la recuperación de última ubicación también persiste la flota.
-      await Promise.all([gps.getVehicles(), gps.getAllCurrentPositions()]);
+      await Promise.all([gps.getVehicles(), gps.getAllCurrentPositions(), gps.getDeviceStatus()]);
     }
     catch (error) {
       console.error('GPS pendiente de reconexion:', error instanceof Error ? error.message : error);

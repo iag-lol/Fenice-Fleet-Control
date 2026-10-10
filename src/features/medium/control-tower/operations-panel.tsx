@@ -169,6 +169,8 @@ export function OperationsPanel({
     // Lo que requiere atencion primero: alerta, desvio, detenido, y al final
     // lo que va bien. El operador no deberia tener que buscar el problema.
     const priority: Record<VehicleActivityStatus, number> = {
+      standby: 6,
+      connected: 5,
       warning: 0,
       uncertain: 1,
       deviated: 1,
